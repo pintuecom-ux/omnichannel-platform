@@ -2,22 +2,16 @@ import { create } from 'zustand'
 import type { Conversation, Message } from '@/types'
 
 interface InboxState {
-  // Conversations
   conversations: Conversation[]
   activeConversationId: string | null
-  
-  // Messages for active conversation
   messages: Message[]
-  
-  // UI state
   isLoading: boolean
   platformFilter: 'all' | 'whatsapp' | 'instagram' | 'facebook'
   tabFilter: 'all' | 'unread' | 'pinned' | 'groups'
   searchQuery: string
   isBulkMode: boolean
   selectedIds: Set<string>
-  
-  // Actions
+
   setConversations: (convs: Conversation[]) => void
   addConversation: (conv: Conversation) => void
   updateConversation: (id: string, updates: Partial<Conversation>) => void
@@ -31,9 +25,10 @@ interface InboxState {
   toggleBulkMode: () => void
   toggleSelectConv: (id: string) => void
   clearSelection: () => void
+  setLoading: (v: boolean) => void
 }
 
-export const useInboxStore = create<InboxState>((set, get) => ({
+export const useInboxStore = create<InboxState>((set) => ({
   conversations: [],
   activeConversationId: null,
   messages: [],
@@ -45,70 +40,78 @@ export const useInboxStore = create<InboxState>((set, get) => ({
   selectedIds: new Set(),
 
   setConversations: (conversations) => set({ conversations }),
-  
   addConversation: (conv) => set(state => ({
-    conversations: [conv, ...state.conversations]
+    conversations: [conv, ...state.conversations.filter(c => c.id !== conv.id)]
   })),
-  
   updateConversation: (id, updates) => set(state => ({
-    conversations: state.conversations.map(c => 
-      c.id === id ? { ...c, ...updates } : c
-    )
+    conversations: state.conversations.map(c => c.id === id ? { ...c, ...updates } : c)
   })),
-  
   setActiveConversation: (id) => set({ activeConversationId: id, messages: [] }),
-  
   setMessages: (messages) => set({ messages }),
-  
   addMessage: (msg) => set(state => ({
-    messages: [...state.messages, msg]
+    messages: state.messages.some(m => m.id === msg.id)
+      ? state.messages
+      : [...state.messages, msg]
   })),
-  
   updateMessage: (id, updates) => set(state => ({
     messages: state.messages.map(m => m.id === id ? { ...m, ...updates } : m)
   })),
-  
   setPlatformFilter: (platformFilter) => set({ platformFilter }),
   setTabFilter: (tabFilter) => set({ tabFilter }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
-  
-  toggleBulkMode: () => set(state => ({
-    isBulkMode: !state.isBulkMode,
-    selectedIds: new Set()
-  })),
-  
+  toggleBulkMode: () => set(state => ({ isBulkMode: !state.isBulkMode, selectedIds: new Set() })),
   toggleSelectConv: (id) => set(state => {
     const next = new Set(state.selectedIds)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
+    next.has(id) ? next.delete(id) : next.add(id)
     return { selectedIds: next }
   }),
-  
   clearSelection: () => set({ selectedIds: new Set() }),
+  setLoading: (isLoading) => set({ isLoading }),
 }))
 
-// Selector: filtered conversations
-export const useFilteredConversations = () => {
-  return useInboxStore(state => {
-    let list = state.conversations
-    
-    if (state.platformFilter !== 'all')
-      list = list.filter(c => c.platform === state.platformFilter)
-    
-    if (state.tabFilter === 'unread')
+import { useMemo } from 'react'
+
+export function useFilteredConversations() {
+  const conversations = useInboxStore(state => state.conversations)
+  const platformFilter = useInboxStore(state => state.platformFilter)
+  const tabFilter = useInboxStore(state => state.tabFilter)
+  const searchQuery = useInboxStore(state => state.searchQuery)
+
+  return useMemo(() => {
+    let list = conversations
+
+    if (platformFilter !== 'all') {
+      list = list.filter(c => c.platform === platformFilter)
+    }
+
+    if (tabFilter === 'unread') {
       list = list.filter(c => c.unread_count > 0)
-    else if (state.tabFilter === 'pinned')
+    } else if (tabFilter === 'pinned') {
       list = list.filter(c => c.is_pinned)
-    
-    if (state.searchQuery) {
-      const q = state.searchQuery.toLowerCase()
+    }
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
       list = list.filter(c =>
         c.contact?.name?.toLowerCase().includes(q) ||
         c.last_message?.toLowerCase().includes(q) ||
         c.contact?.phone?.includes(q)
       )
     }
-    
-    return list
-  })
+
+    return [...list].sort(
+      (a, b) =>
+        new Date(b.last_message_at).getTime() -
+        new Date(a.last_message_at).getTime()
+    )
+  }, [conversations, platformFilter, tabFilter, searchQuery])
+}
+
+export function useActiveConversation() {
+  const conversations = useInboxStore(state => state.conversations)
+  const activeId = useInboxStore(state => state.activeConversationId)
+
+  return useMemo(() => {
+    return conversations.find(c => c.id === activeId) ?? null
+  }, [conversations, activeId])
 }
