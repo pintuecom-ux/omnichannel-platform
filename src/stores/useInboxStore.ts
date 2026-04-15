@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useMemo } from 'react'
 import type { Conversation, Message } from '@/types'
 
 interface InboxState {
@@ -40,38 +41,55 @@ export const useInboxStore = create<InboxState>((set) => ({
   selectedIds: new Set(),
 
   setConversations: (conversations) => set({ conversations }),
+
   addConversation: (conv) => set(state => ({
-    conversations: [conv, ...state.conversations.filter(c => c.id !== conv.id)]
+    conversations: [conv, ...state.conversations.filter(c => c.id !== conv.id)],
   })),
+
   updateConversation: (id, updates) => set(state => ({
-    conversations: state.conversations.map(c => c.id === id ? { ...c, ...updates } : c)
+    conversations: state.conversations.map(c =>
+      c.id === id ? { ...c, ...updates } : c
+    ),
   })),
+
   setActiveConversation: (id) => set({ activeConversationId: id, messages: [] }),
   setMessages: (messages) => set({ messages }),
+
   addMessage: (msg) => set(state => ({
-    messages: state.messages.some(m => m.id === msg.id)
+    messages: state.messages.some(m => m.id === msg.id || (msg.external_id && m.external_id === msg.external_id))
       ? state.messages
-      : [...state.messages, msg]
+      : [...state.messages, msg],
   })),
+
   updateMessage: (id, updates) => set(state => ({
-    messages: state.messages.map(m => m.id === id ? { ...m, ...updates } : m)
+    messages: state.messages.map(m => m.id === id ? { ...m, ...updates } : m),
   })),
+
   setPlatformFilter: (platformFilter) => set({ platformFilter }),
   setTabFilter: (tabFilter) => set({ tabFilter }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
-  toggleBulkMode: () => set(state => ({ isBulkMode: !state.isBulkMode, selectedIds: new Set() })),
+
+  toggleBulkMode: () => set(state => ({
+    isBulkMode: !state.isBulkMode,
+    selectedIds: new Set(),
+  })),
+
   toggleSelectConv: (id) => set(state => {
     const next = new Set(state.selectedIds)
     next.has(id) ? next.delete(id) : next.add(id)
     return { selectedIds: next }
   }),
+
   clearSelection: () => set({ selectedIds: new Set() }),
   setLoading: (isLoading) => set({ isLoading }),
 }))
 
-import { useMemo } from 'react'
+// ── SAFE SELECTORS (no infinite loops) ──────────────────────────────────────
+// Each selector reads primitive slices, never creates new arrays inside the
+// selector function. Derived arrays are computed in useMemo in the component.
 
 export function useFilteredConversations() {
+  // Read each slice as a primitive/stable reference
   const conversations = useInboxStore(state => state.conversations)
   const platformFilter = useInboxStore(state => state.platformFilter)
   const tabFilter = useInboxStore(state => state.tabFilter)
@@ -100,18 +118,17 @@ export function useFilteredConversations() {
     }
 
     return [...list].sort(
-      (a, b) =>
-        new Date(b.last_message_at).getTime() -
-        new Date(a.last_message_at).getTime()
+      (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
     )
   }, [conversations, platformFilter, tabFilter, searchQuery])
 }
 
 export function useActiveConversation() {
   const conversations = useInboxStore(state => state.conversations)
-  const activeId = useInboxStore(state => state.activeConversationId)
+  const activeConversationId = useInboxStore(state => state.activeConversationId)
 
-  return useMemo(() => {
-    return conversations.find(c => c.id === activeId) ?? null
-  }, [conversations, activeId])
+  return useMemo(
+    () => conversations.find(c => c.id === activeConversationId) ?? null,
+    [conversations, activeConversationId]
+  )
 }

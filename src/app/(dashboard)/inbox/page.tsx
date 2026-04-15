@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useInboxStore } from '@/stores/useInboxStore'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -12,33 +12,56 @@ export default function InboxPage() {
   const supabase = createClient()
   const { setConversations, activeConversationId } = useInboxStore()
   const { setProfile } = useAuthStore()
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
+    setLoadError(null)
 
-    const { data: profile } = await supabase
+    // Step 1: get session
+    const { data: { session }, error: sessionErr } = await supabase.auth.getSession()
+    if (sessionErr || !session) {
+      setLoadError('Not logged in')
+      return
+    }
+
+    // Step 2: get profile + workspace_id
+    const { data: profile, error: profileErr } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', session.user.id)
       .single()
 
-    if (!profile) return
-    setProfile(profile)
+    if (profileErr || !profile) {
+      setLoadError(`Profile not found for user ${session.user.id}. Run the SQL from Step 3 of the guide.`)
+      console.error('[Inbox] Profile error:', profileErr)
+      return
+    }
 
-    const { data: conversations } = await supabase
+    setProfile(profile)
+    setWorkspaceId(profile.workspace_id)
+
+    // Step 3: load conversations
+    const { data: conversations, error: convErr } = await supabase
       .from('conversations')
       .select(`
         *,
         contact:contacts(*),
         channel:channels(*),
-        assignee:profiles(id, full_name, avatar_url, role, email, workspace_id, is_online, created_at)
+        assignee:profiles!conversations_assigned_to_fkey(id, full_name, avatar_url, role, email, workspace_id, is_online, created_at)
       `)
       .eq('workspace_id', profile.workspace_id)
       .order('last_message_at', { ascending: false })
       .limit(100)
 
-    if (conversations) setConversations(conversations as Conversation[])
+    if (convErr) {
+      console.error('[Inbox] Conversations error:', convErr)
+      setLoadError(`Could not load conversations: ${convErr.message}`)
+      return
+    }
+
+    console.log(`[Inbox] Loaded ${conversations?.length ?? 0} conversations for workspace ${profile.workspace_id}`)
+    setConversations((conversations ?? []) as Conversation[])
   }, [])
 
   useEffect(() => {
@@ -47,36 +70,43 @@ export default function InboxPage() {
 
   // Realtime subscription
   useEffect(() => {
-    let workspaceId: string | null = null
+    if (!workspaceId) return
 
-    const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('workspace_id')
-        .eq('id', session.user.id)
-        .single()
-
-      if (!profile) return
-      workspaceId = profile.workspace_id
-
-      const channel = supabase
-        .channel('inbox-realtime')
-        .on('postgres_changes', {
+    const channel = supabase
+      .channel(`inbox-${workspaceId}`)
+      .on(
+        'postgres_changes',
+        {
           event: '*',
           schema: 'public',
           table: 'conversations',
           filter: `workspace_id=eq.${workspaceId}`,
-        }, () => loadData())
-        .subscribe()
+        },
+        (payload) => {
+          console.log('[Realtime] Conversation change:', payload.eventType)
+          loadData()
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Realtime] Subscription status:', status)
+      })
 
-      return () => { supabase.removeChannel(channel) }
-    }
+    return () => { supabase.removeChannel(channel) }
+  }, [workspaceId, loadData])
 
-    init()
-  }, [loadData])
+  if (loadError) {
+    return (
+      <div className="page-inbox" style={{ alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
+        <i className="fa-solid fa-circle-exclamation" style={{ fontSize: 32, color: 'var(--accent4)', opacity: 0.6 }} />
+        <p style={{ fontSize: 14, color: 'var(--text-secondary)', textAlign: 'center', maxWidth: 400 }}>
+          {loadError}
+        </p>
+        <button className="btn btn-secondary" onClick={loadData} style={{ marginTop: 8 }}>
+          <i className="fa-solid fa-rotate" /> Retry
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="page-inbox">

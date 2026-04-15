@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseWhatsAppWebhook } from '@/lib/platforms/whatsapp'
 
-// Admin client bypasses RLS — only used server-side in webhook
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// ── GET: Meta webhook verification ──────────────────────────────────────────
+// ── GET: Webhook verification ────────────────────────────────
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams
   if (
@@ -21,19 +20,18 @@ export async function GET(req: NextRequest) {
   return new NextResponse('Forbidden', { status: 403 })
 }
 
-// ── POST: Incoming events ────────────────────────────────────────────────────
+// ── POST: Incoming events ────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    // Respond immediately — Meta requires < 5s
-    handleEvents(body).catch(err => console.error('Webhook processing error:', err))
+    // Return 200 immediately — Meta requires response in < 5s
+    handleEvents(body).catch(err => console.error('[WA Webhook Error]', err))
     return NextResponse.json({ status: 'ok' })
   } catch {
     return NextResponse.json({ status: 'error' }, { status: 500 })
   }
 }
 
-// ── Event processing (async, after 200 is returned) ─────────────────────────
 async function handleEvents(body: any) {
   const events = parseWhatsAppWebhook(body)
   for (const ev of events) {
@@ -45,44 +43,98 @@ async function handleEvents(body: any) {
 async function processMessage(ev: any) {
   const { phoneNumberId, data } = ev
 
-  // 1. Find channel
-  const { data: channel } = await admin
+  // ── 1. Find channel ──────────────────────────────────────
+  const { data: channel, error: channelErr } = await admin
     .from('channels')
-    .select('*')
+    .select('id, workspace_id, external_id, access_token')
     .eq('platform', 'whatsapp')
     .eq('external_id', phoneNumberId)
-    .single()
+    .maybeSingle()
 
+  if (channelErr) console.error('[WA] Channel lookup error:', channelErr)
   if (!channel) {
-    console.error(`No WhatsApp channel found for phone_number_id: ${phoneNumberId}`)
+    console.error('[WA] No channel found for phone_number_id:', phoneNumberId)
+    // Log all channels for debugging
+    const { data: allChannels } = await admin.from('channels').select('id, platform, external_id, name')
+    console.error('[WA] Available channels:', allChannels)
     return
   }
 
-  // 2. Find or create contact
-  let contact = await findOrCreateContact(channel.workspace_id, {
-    phone: data.from,
-    name: data.from_name,
-  })
-  if (!contact) return
+  // ── 2. Normalize phone number ────────────────────────────
+  // WhatsApp sends without +, store as-is but search both formats
+  const rawPhone = data.from as string
+  const normalizedPhone = rawPhone.startsWith('+') ? rawPhone.slice(1) : rawPhone
 
-  // 3. Find or create open conversation
-  let conversation = await findOrCreateConversation(channel, contact.id, {
-    platform: 'whatsapp',
-    lastMessage: data.text || `[${data.type}]`,
-    lastMessageAt: data.timestamp,
-  })
-  if (!conversation) return
+  // ── 3. Find or UPSERT contact (prevents duplicates) ──────
+  const { data: contact, error: contactErr } = await admin
+    .from('contacts')
+    .upsert(
+      {
+        workspace_id: channel.workspace_id,
+        phone: normalizedPhone,
+        name: data.from_name || normalizedPhone,
+      },
+      {
+        onConflict: 'workspace_id,phone',
+        ignoreDuplicates: false, // update name if it changed
+      }
+    )
+    .select('id, workspace_id, phone, name')
+    .single()
 
-  // 4. Idempotency — skip if already stored
-  const { data: exists } = await admin
+  if (contactErr) {
+    console.error('[WA] Contact upsert error:', contactErr)
+    return
+  }
+
+  // ── 4. Find or UPSERT conversation ───────────────────────
+  // Use the unique constraint on (channel_id, contact_id)
+  const { data: conversation, error: convErr } = await admin
+    .from('conversations')
+    .upsert(
+      {
+        workspace_id: channel.workspace_id,
+        contact_id: contact.id,
+        channel_id: channel.id,
+        platform: 'whatsapp',
+        status: 'open',
+        last_message: data.text || `[${data.type}]`,
+        last_message_at: data.timestamp,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: 'channel_id,contact_id',
+        ignoreDuplicates: false, // always update last_message
+      }
+    )
+    .select('id, unread_count')
+    .single()
+
+  if (convErr) {
+    console.error('[WA] Conversation upsert error:', convErr)
+    return
+  }
+
+  // Increment unread count separately (upsert can't do math)
+  await admin
+    .from('conversations')
+    .update({ unread_count: (conversation.unread_count || 0) + 1 })
+    .eq('id', conversation.id)
+
+  // ── 5. Idempotency check ─────────────────────────────────
+  const { data: existing } = await admin
     .from('messages')
     .select('id')
     .eq('external_id', data.external_id)
     .maybeSingle()
-  if (exists) return
 
-  // 5. Insert message
-  await admin.from('messages').insert({
+  if (existing) {
+    console.log('[WA] Message already processed:', data.external_id)
+    return
+  }
+
+  // ── 6. Insert message ────────────────────────────────────
+  const { error: msgErr } = await admin.from('messages').insert({
     conversation_id: conversation.id,
     workspace_id: channel.workspace_id,
     external_id: data.external_id,
@@ -92,7 +144,7 @@ async function processMessage(ev: any) {
     status: 'delivered',
     is_note: false,
     meta: {
-      from: data.from,
+      from: normalizedPhone,
       from_name: data.from_name,
       timestamp: data.timestamp,
       image: data.image,
@@ -100,6 +152,9 @@ async function processMessage(ev: any) {
       document: data.document,
     },
   })
+
+  if (msgErr) console.error('[WA] Message insert error:', msgErr)
+  else console.log('[WA] ✅ Message saved for:', normalizedPhone, '|', data.text?.slice(0, 50))
 }
 
 async function processStatus(ev: any) {
@@ -109,93 +164,3 @@ async function processStatus(ev: any) {
     .update({ status: data.status })
     .eq('external_id', data.external_id)
 }
-
-// ── Shared helpers ────────────────────────────────────────────────────────────
-
-async function findOrCreateContact(workspaceId: string, info: { phone?: string; name?: string; facebookId?: string; instagramUsername?: string }) {
-  // Try finding by phone
-  if (info.phone) {
-    const { data: existing } = await admin
-      .from('contacts')
-      .select('*')
-      .eq('workspace_id', workspaceId)
-      .eq('phone', info.phone)
-      .maybeSingle()
-    if (existing) return existing
-  }
-
-  // Try finding by facebook_id
-  if (info.facebookId) {
-    const { data: existing } = await admin
-      .from('contacts')
-      .select('*')
-      .eq('workspace_id', workspaceId)
-      .eq('facebook_id', info.facebookId)
-      .maybeSingle()
-    if (existing) return existing
-  }
-
-  // Create new contact
-  const { data: created } = await admin
-    .from('contacts')
-    .insert({
-      workspace_id: workspaceId,
-      phone: info.phone ?? null,
-      name: info.name ?? info.phone ?? info.facebookId ?? 'Unknown',
-      facebook_id: info.facebookId ?? null,
-      instagram_username: info.instagramUsername ?? null,
-    })
-    .select()
-    .single()
-
-  return created
-}
-
-async function findOrCreateConversation(
-  channel: any,
-  contactId: string,
-  info: { platform: string; lastMessage: string; lastMessageAt: string }
-) {
-  // Look for existing open/pending conversation
-  const { data: existing } = await admin
-    .from('conversations')
-    .select('*')
-    .eq('channel_id', channel.id)
-    .eq('contact_id', contactId)
-    .in('status', ['open', 'pending'])
-    .maybeSingle()
-
-  if (existing) {
-    await admin
-      .from('conversations')
-      .update({
-        last_message: info.lastMessage,
-        last_message_at: info.lastMessageAt,
-        unread_count: (existing.unread_count || 0) + 1,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', existing.id)
-    return existing
-  }
-
-  // Create new conversation
-  const { data: created } = await admin
-    .from('conversations')
-    .insert({
-      workspace_id: channel.workspace_id,
-      contact_id: contactId,
-      channel_id: channel.id,
-      platform: info.platform,
-      status: 'open',
-      last_message: info.lastMessage,
-      last_message_at: info.lastMessageAt,
-      unread_count: 1,
-    })
-    .select()
-    .single()
-
-  return created
-}
-
-// Export helpers for use by other webhook routes
-export { findOrCreateContact, findOrCreateConversation }

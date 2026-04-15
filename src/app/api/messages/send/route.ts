@@ -9,26 +9,38 @@ const admin = adminClient(
 )
 
 export async function POST(req: NextRequest) {
-  // Auth check
+  // Auth
   const supabase = await serverClient()
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { conversation_id, body, type = 'text', template_name, template_vars } = await req.json()
-  if (!conversation_id || (!body && !template_name)) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  const {
+    conversation_id,
+    body,
+    type = 'text',
+    template_name,
+    template_language = 'en_US',
+    template_vars = [],
+  } = await req.json()
+
+  if (!conversation_id) {
+    return NextResponse.json({ error: 'conversation_id required' }, { status: 400 })
+  }
+  if (!body && !template_name) {
+    return NextResponse.json({ error: 'body or template_name required' }, { status: 400 })
   }
 
   // Get conversation + channel + contact
-  const { data: conv } = await admin
+  const { data: conv, error: convErr } = await admin
     .from('conversations')
     .select('*, contact:contacts(*), channel:channels(*)')
     .eq('id', conversation_id)
     .single()
 
-  if (!conv) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+  if (convErr || !conv) {
+    return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+  }
 
-  // Get sender profile
   const { data: profile } = await admin
     .from('profiles')
     .select('workspace_id')
@@ -37,29 +49,43 @@ export async function POST(req: NextRequest) {
 
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
+  // Check that contact has a phone number (required for WA)
+  if (conv.platform === 'whatsapp' && !conv.contact?.phone) {
+    return NextResponse.json({ error: 'Contact has no phone number' }, { status: 400 })
+  }
+
   try {
     let externalId: string | null = null
+    const messageBody = body || `[Template: ${template_name}]`
 
     if (conv.platform === 'whatsapp') {
-      const client = new WhatsAppClient(
+      const waClient = new WhatsAppClient(
         conv.channel.access_token,
         conv.channel.external_id
       )
+
       if (type === 'template' && template_name) {
-        externalId = await client.sendTemplate(conv.contact.phone, template_name, 'en', template_vars)
+        console.log(`[Send] Sending template "${template_name}" to ${conv.contact.phone}`)
+        externalId = await waClient.sendTemplate(
+          conv.contact.phone,
+          template_name,
+          template_language,
+          template_vars
+        )
       } else {
-        externalId = await client.sendText(conv.contact.phone, body)
+        console.log(`[Send] Sending text to ${conv.contact.phone}: "${body?.slice(0, 50)}"`)
+        externalId = await waClient.sendText(conv.contact.phone, body)
       }
     }
 
-    // Instagram & Facebook sending will be added in Phase 1C
+    // Instagram / Facebook — sending added in Phase 1C
     if (conv.platform === 'instagram' || conv.platform === 'facebook') {
-      // Placeholder — mark as sent without external_id for now
+      // For now, save to DB without sending externally
       externalId = null
     }
 
-    // Save message to DB
-    const { data: msg } = await admin
+    // Save outbound message to DB
+    const { data: msg, error: msgErr } = await admin
       .from('messages')
       .insert({
         conversation_id,
@@ -67,19 +93,22 @@ export async function POST(req: NextRequest) {
         external_id: externalId,
         direction: 'outbound',
         content_type: type === 'template' ? 'template' : 'text',
-        body,
+        body: messageBody,
         sender_id: session.user.id,
         status: externalId ? 'sent' : 'queued',
         is_note: false,
+        meta: type === 'template' ? { template_name, template_language } : {},
       })
       .select()
       .single()
 
-    // Update conversation
+    if (msgErr) throw new Error(msgErr.message)
+
+    // Update conversation last_message
     await admin
       .from('conversations')
       .update({
-        last_message: body,
+        last_message: messageBody,
         last_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
@@ -88,7 +117,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: msg })
   } catch (err: any) {
     const errMsg = err?.response?.data?.error?.message || err?.message || 'Failed to send'
-    console.error('Send message error:', errMsg)
+    console.error('[Send API Error]', errMsg, err?.response?.data)
     return NextResponse.json({ error: errMsg }, { status: 500 })
   }
 }
