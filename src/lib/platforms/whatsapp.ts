@@ -78,7 +78,10 @@ export class WhatsAppClient {
       const msg = apiErr
         ? `WhatsApp API error ${apiErr.code}: ${apiErr.message}`
         : err.message
-      console.error('[WA sendTemplate]', msg)
+      console.error('[WA sendTemplate] HTTP status:', err?.response?.status)
+      console.error('[WA sendTemplate] full body:', JSON.stringify(err?.response?.data ?? null))
+      console.error('[WA sendTemplate] phone_number_id used:', this.phoneNumberId)
+      console.error('[WA sendTemplate] to:', phone, '| template:', name, '| lang:', langCode)
       throw new Error(msg)
     }
   }
