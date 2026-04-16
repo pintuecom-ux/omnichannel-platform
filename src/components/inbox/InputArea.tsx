@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useInboxStore, useActiveConversation } from '@/stores/useInboxStore'
 import { createClient } from '@/lib/supabase/client'
 import type { Template } from '@/types'
@@ -12,76 +12,106 @@ const QUICK_REPLIES = [
   'Thank you for your purchase!',
 ]
 
-interface Props {
-  onMessageSent: () => void
-}
+interface Props { onMessageSent: () => void }
 
 export default function InputArea({ onMessageSent }: Props) {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
   const [templates, setTemplates] = useState<Template[]>([])
-  const [templatesLoaded, setTemplatesLoaded] = useState(false)
   const [templateSearch, setTemplateSearch] = useState('')
+  const [tplLoading, setTplLoading] = useState(false)
+  const [tplError, setTplError] = useState('')
+  // Use ref to prevent double-send race condition
+  const isSendingRef = useRef(false)
   const textRef = useRef<HTMLTextAreaElement>(null)
   const supabase = createClient()
   const { activeConversationId, addMessage } = useInboxStore()
   const conversation = useActiveConversation()
 
-  // Load templates when panel opens
+  // Reset template state when conversation changes
   useEffect(() => {
-    if (!showTemplates || templatesLoaded) return
-    loadTemplates()
+    setShowTemplates(false)
+    setTemplates([])
+    setTplError('')
+  }, [activeConversationId])
+
+  const loadTemplates = useCallback(async () => {
+    if (tplLoading) return
+    setTplLoading(true)
+    setTplError('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('workspace_id')
+        .eq('id', session.user.id)
+        .single()
+      if (!profile) return
+
+      const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('workspace_id', profile.workspace_id)
+        .eq('platform', 'whatsapp')
+        .in('status', ['approved', 'draft'])
+        .order('name')
+
+      if (error) {
+        console.error('[Templates] Load error:', error.message)
+        setTplError(`Could not load templates: ${error.message}`)
+      }
+
+      const list: Template[] = data ?? []
+
+      // Always inject hello_world as a built-in fallback
+      const hasHello = list.some(t => t.name === 'hello_world')
+      if (!hasHello) {
+        list.unshift({
+          id: 'builtin-hello-world',
+          workspace_id: profile.workspace_id,
+          platform: 'whatsapp',
+          name: 'hello_world',
+          category: 'Utility',
+          language: 'en_US',
+          body: 'Hello! This is a test message from React Commerce.',
+          header_text: null,
+          footer_text: null,
+          status: 'approved',
+          meta_template_id: 'hello_world',
+          variables: [],
+          created_at: new Date().toISOString(),
+        } as Template)
+      }
+
+      setTemplates(list)
+    } finally {
+      setTplLoading(false)
+    }
+  }, [tplLoading])
+
+  useEffect(() => {
+    if (showTemplates && templates.length === 0) {
+      loadTemplates()
+    }
   }, [showTemplates])
 
-  async function loadTemplates() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    const { data: profile } = await supabase.from('profiles').select('workspace_id').eq('id', session.user.id).single()
-    if (!profile) return
-
-    const { data } = await supabase
-      .from('templates')
-      .select('*')
-      .eq('workspace_id', profile.workspace_id)
-      .in('platform', ['whatsapp'])
-      .in('status', ['approved', 'draft']) // draft for testing
-      .order('name')
-
-    // Always include hello_world for testing
-    const allTemplates = data ?? []
-    const hasHelloWorld = allTemplates.some(t => t.name.toLowerCase().includes('hello'))
-    if (!hasHelloWorld) {
-      allTemplates.unshift({
-        id: 'builtin-hello-world',
-        workspace_id: profile.workspace_id,
-        platform: 'whatsapp',
-        name: 'hello_world',
-        category: 'Utility',
-        language: 'en_US',
-        body: 'Hello! This is a test message from React Commerce.',
-        header_text: null,
-        footer_text: null,
-        status: 'approved',
-        meta_template_id: 'hello_world',
-        variables: [],
-        created_at: new Date().toISOString(),
-      } as Template)
-    }
-
-    setTemplates(allTemplates)
-    setTemplatesLoaded(true)
-  }
-
   async function sendText() {
-    if (!text.trim() || !activeConversationId || sending) return
-    const body = text.trim()
-    setText('')
+    // Use ref to prevent race condition double-sends
+    if (!text.trim() || !activeConversationId || isSendingRef.current) return
+    isSendingRef.current = true
     setSending(true)
 
-    // Optimistic update
+    const body = text.trim()
+    setText('')
+    if (textRef.current) textRef.current.style.height = 'auto'
+
+    // Optimistic message
+    const tempId = `temp-${Date.now()}`
     addMessage({
-      id: `temp-${Date.now()}`,
+      id: tempId,
       conversation_id: activeConversationId,
       workspace_id: '',
       external_id: null,
@@ -101,36 +131,38 @@ export default function InputArea({ onMessageSent }: Props) {
       const res = await fetch('/api/messages/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          conversation_id: activeConversationId,
-          body,
-          type: 'text',
-        }),
+        body: JSON.stringify({ conversation_id: activeConversationId, body, type: 'text' }),
       })
       const json = await res.json()
-      if (!res.ok) console.error('[Send] Error:', json)
-      else onMessageSent()
+      if (!res.ok) {
+        console.error('[Send] Failed:', json.error)
+        // Show the error to the user briefly
+        setText(`[SEND FAILED: ${json.error}]`)
+      } else {
+        onMessageSent()
+      }
     } catch (err) {
-      console.error('[Send] Failed:', err)
+      console.error('[Send] Network error:', err)
     } finally {
+      isSendingRef.current = false
       setSending(false)
     }
   }
 
   async function sendTemplate(template: Template) {
-    if (!activeConversationId || sending) return
+    if (!activeConversationId || isSendingRef.current) return
+    isSendingRef.current = true
     setSending(true)
     setShowTemplates(false)
 
-    // Optimistic message
     addMessage({
-      id: `temp-${Date.now()}`,
+      id: `temp-tpl-${Date.now()}`,
       conversation_id: activeConversationId,
       workspace_id: '',
       external_id: null,
       direction: 'outbound',
       content_type: 'template',
-      body: `[Template: ${template.name}]`,
+      body: template.body,
       media_url: null,
       media_mime: null,
       sender_id: null,
@@ -149,18 +181,21 @@ export default function InputArea({ onMessageSent }: Props) {
           body: template.body,
           type: 'template',
           template_name: template.name,
-          template_language: template.language || 'en_US',
+          template_language: template.language ?? 'en_US',
         }),
       })
       const json = await res.json()
-      if (!res.ok) console.error('[Template Send] Error:', json)
-      else {
-        console.log('[Template Send] ✅ Sent:', template.name)
+      if (!res.ok) {
+        console.error('[Template Send] Failed:', json.error)
+        alert(`Template send failed: ${json.error}`)
+      } else {
+        console.log('[Template Send] ✅', template.name)
         onMessageSent()
       }
     } catch (err) {
-      console.error('[Template Send] Failed:', err)
+      console.error('[Template Send] Network error:', err)
     } finally {
+      isSendingRef.current = false
       setSending(false)
     }
   }
@@ -179,25 +214,31 @@ export default function InputArea({ onMessageSent }: Props) {
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
   }
 
-  const isWhatsApp = conversation?.platform === 'whatsapp'
+  const isWA = conversation?.platform === 'whatsapp'
   const platformLabel = conversation
-    ? { whatsapp: 'WhatsApp', instagram: 'Instagram DM', facebook: 'Facebook' }[conversation.platform]
+    ? ({ whatsapp: 'WhatsApp', instagram: 'Instagram DM', facebook: 'Facebook' })[conversation.platform]
     : 'message'
 
-  const filteredTemplates = templates.filter(t =>
-    !templateSearch || t.name.toLowerCase().includes(templateSearch.toLowerCase()) || t.body.toLowerCase().includes(templateSearch.toLowerCase())
+  const filteredTpls = templates.filter(t =>
+    !templateSearch ||
+    t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
+    t.body.toLowerCase().includes(templateSearch.toLowerCase())
   )
 
   return (
     <div className="chat-input-area" style={{ position: 'relative' }}>
-      {/* Template Panel */}
+
+      {/* Template panel */}
       {showTemplates && (
         <div className="templates-panel open">
           <div className="templates-header">
-            <span><i className="fa-solid fa-bolt" style={{ color: 'var(--accent)', marginRight: 5 }} />Templates</span>
+            <span>
+              <i className="fa-solid fa-bolt" style={{ color: 'var(--accent)', marginRight: 5 }} />
+              Templates
+            </span>
             <input
-              type="text"
               className="tpl-search"
+              type="text"
               placeholder="Search templates…"
               value={templateSearch}
               onChange={e => setTemplateSearch(e.target.value)}
@@ -208,33 +249,39 @@ export default function InputArea({ onMessageSent }: Props) {
             </button>
           </div>
 
-          {!templatesLoaded ? (
-            <div style={{ padding: '16px', textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
+          {tplLoading && (
+            <div style={{ padding: 16, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
+              <i className="fa-solid fa-spinner" style={{ animation: 'spin 1s linear infinite', marginRight: 6 }} />
               Loading templates…
             </div>
-          ) : filteredTemplates.length === 0 ? (
-            <div style={{ padding: '16px', textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
+          )}
+          {!tplLoading && tplError && (
+            <div style={{ padding: 16, fontSize: 12, color: '#e84040' }}>
+              {tplError}
+              <button onClick={loadTemplates} style={{ marginLeft: 8, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12 }}>
+                Retry
+              </button>
+            </div>
+          )}
+          {!tplLoading && !tplError && filteredTpls.length === 0 && (
+            <div style={{ padding: 16, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
               No templates found.{' '}
               <a href="/templates" style={{ color: 'var(--accent)' }}>Create one →</a>
             </div>
-          ) : (
-            filteredTemplates.map(t => (
-              <div
-                key={t.id}
-                className="tpl-item"
-                onClick={() => sendTemplate(t)}
-              >
-                <div className="tpl-name">
-                  {t.name}
-                  <span className="tpl-tag">{t.category}</span>
-                  <span style={{ fontSize: 10, color: t.status === 'approved' ? 'var(--accent)' : 'var(--accent3)', marginLeft: 'auto' }}>
-                    {t.status}
-                  </span>
-                </div>
-                <div className="tpl-body">{t.body}</div>
-              </div>
-            ))
           )}
+          {!tplLoading && filteredTpls.map(t => (
+            <div key={t.id} className="tpl-item" onClick={() => sendTemplate(t)}>
+              <div className="tpl-name">
+                <i className="fa-solid fa-bolt" style={{ color: 'var(--accent)', fontSize: 10, marginRight: 4 }} />
+                {t.name}
+                <span className="tpl-tag" style={{ marginLeft: 8 }}>{t.category}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: t.status === 'approved' ? 'var(--accent)' : 'var(--accent3)' }}>
+                  {t.status}
+                </span>
+              </div>
+              <div className="tpl-body">{t.body}</div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -249,30 +296,22 @@ export default function InputArea({ onMessageSent }: Props) {
 
       {/* Toolbar */}
       <div className="input-toolbar">
-        <button className="tool-btn" title="Emoji">
-          <i className="fa-regular fa-face-smile" />
-        </button>
-        <button className="tool-btn" title="Attach file">
-          <i className="fa-solid fa-paperclip" />
-        </button>
+        <button className="tool-btn" title="Emoji"><i className="fa-regular fa-face-smile" /></button>
+        <button className="tool-btn" title="Attach"><i className="fa-solid fa-paperclip" /></button>
         <button
           className="tool-btn"
-          title={isWhatsApp ? 'Templates (WhatsApp only)' : 'Templates only available on WhatsApp'}
-          style={{ color: isWhatsApp ? 'var(--accent)' : 'var(--text-muted)' }}
-          onClick={() => { if (isWhatsApp) setShowTemplates(v => !v) }}
-          disabled={!isWhatsApp}
+          title={isWA ? 'Templates' : 'Templates — WhatsApp only'}
+          style={{ color: isWA ? 'var(--accent)' : 'var(--text-muted)', cursor: isWA ? 'pointer' : 'not-allowed' }}
+          onClick={() => { if (isWA) setShowTemplates(v => !v) }}
         >
           <i className="fa-solid fa-bolt" />
         </button>
-        <button className="tool-btn" title="AI Compose" style={{ color: 'var(--accent)' }}>
+        <button className="tool-btn" style={{ color: 'var(--accent)' }} title="AI Compose">
           <i className="fa-solid fa-wand-magic-sparkles" />
         </button>
-
-        {/* WhatsApp-specific notice */}
-        {isWhatsApp && (
+        {isWA && (
           <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <i className="fa-brands fa-whatsapp" style={{ color: '#25d366' }} />
-            24hr window active
+            <i className="fa-brands fa-whatsapp" style={{ color: '#25d366' }} /> 24hr window
           </span>
         )}
       </div>
@@ -282,7 +321,7 @@ export default function InputArea({ onMessageSent }: Props) {
         <textarea
           ref={textRef}
           className="input-box"
-          placeholder={`Type a message via ${platformLabel}… (Enter to send)`}
+          placeholder={`Type a message via ${platformLabel}… (Enter to send, Shift+Enter for new line)`}
           value={text}
           onChange={e => { setText(e.target.value); autoResize() }}
           onKeyDown={handleKeyDown}
@@ -296,7 +335,7 @@ export default function InputArea({ onMessageSent }: Props) {
           className="send-btn"
           onClick={sendText}
           disabled={sending || !text.trim()}
-          title="Send message"
+          title="Send"
           style={{ opacity: (sending || !text.trim()) ? 0.5 : 1 }}
         >
           {sending
@@ -306,9 +345,7 @@ export default function InputArea({ onMessageSent }: Props) {
         </button>
       </div>
 
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
+      <style>{`@keyframes spin { to { transform:rotate(360deg) } }`}</style>
     </div>
   )
 }
