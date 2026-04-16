@@ -15,11 +15,10 @@ export class WhatsAppClient {
 
   constructor(token: string, phoneNumberId: string) {
     // If the token from DB looks expired/empty, fall back to env var
-    this.token = (token && token.length > 20)
-      ? token
-      : process.env.WHATSAPP_TOKEN ?? ''
+this.token = token ?? process.env.WHATSAPP_TOKEN ?? ''
 
-    this.phoneNumberId = phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID ?? ''
+this.phoneNumberId =
+  phoneNumberId ?? process.env.WHATSAPP_PHONE_NUMBER_ID ?? ''
 
     if (!this.token) console.error('[WA] WARNING: No token available')
     if (!this.phoneNumberId) console.error('[WA] WARNING: No phone_number_id available')
