@@ -28,8 +28,16 @@ export default function InboxPage() {
       .single()
 
     if (profileErr || !profile) {
-      console.error('[Inbox] Profile error:', profileErr?.message)
-      setLoadError(`Profile not found. Run supabase-fix-final.sql Block 3 in Supabase SQL Editor.`)
+      const code = profileErr?.code
+      const msg = profileErr?.message ?? 'unknown error'
+      console.error('[Inbox] Profile error:', code, msg)
+
+      // PGRST116 = "no rows returned" by .single() — genuine missing profile
+      if (code === 'PGRST116') {
+        setLoadError(`Profile row missing for user ${session.user.id}.\nCheck the profiles table in Supabase.`)
+      } else {
+        setLoadError(`Could not load profile.\nError [${code}]: ${msg}`)
+      }
       return
     }
 
