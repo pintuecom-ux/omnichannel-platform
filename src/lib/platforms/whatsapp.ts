@@ -1,17 +1,29 @@
 import axios from 'axios'
 
-const BASE = 'https://graph.facebook.com/v19.0'
+// Updated to v25.0 to match Meta's current API
+// (your Postman was using v25.0, code was on v19.0)
+const BASE = 'https://graph.facebook.com/v25.0'
 
-// Normalize phone for WhatsApp API (no +, digits only)
 export function normalizePhone(phone: string): string {
+  // Remove +, spaces, dashes, parentheses — WA API wants raw digits
   return phone.replace(/[\s\-\+\(\)]/g, '')
 }
 
 export class WhatsAppClient {
-  constructor(
-    private token: string,
-    private phoneNumberId: string
-  ) {}
+  private token: string
+  private phoneNumberId: string
+
+  constructor(token: string, phoneNumberId: string) {
+    // If the token from DB looks expired/empty, fall back to env var
+    this.token = (token && token.length > 20)
+      ? token
+      : process.env.WHATSAPP_TOKEN ?? ''
+
+    this.phoneNumberId = phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID ?? ''
+
+    if (!this.token) console.error('[WA] WARNING: No token available')
+    if (!this.phoneNumberId) console.error('[WA] WARNING: No phone_number_id available')
+  }
 
   private get headers() {
     return {
@@ -22,6 +34,8 @@ export class WhatsAppClient {
 
   async sendText(to: string, body: string): Promise<string> {
     const phone = normalizePhone(to)
+    console.log(`[WA] sendText → ${phone} | phoneNumberId: ${this.phoneNumberId}`)
+
     try {
       const res = await axios.post(
         `${BASE}/${this.phoneNumberId}/messages`,
@@ -36,14 +50,16 @@ export class WhatsAppClient {
       )
       const msgId = res.data?.messages?.[0]?.id
       if (!msgId) throw new Error('No message_id in API response')
+      console.log(`[WA] sendText ✅ message_id: ${msgId}`)
       return msgId
     } catch (err: any) {
       const apiErr = err?.response?.data?.error
-      const msg = apiErr
-        ? `WhatsApp API error ${apiErr.code}: ${apiErr.message}`
+      const detail = apiErr
+        ? `code ${apiErr.code} (${apiErr.error_subcode ?? 'no subcode'}): ${apiErr.message}`
         : err.message
-      console.error('[WA sendText]', msg)
-      throw new Error(msg)
+      console.error(`[WA] sendText FAILED — ${detail}`)
+      console.error(`[WA] to: ${phone} | phoneNumberId: ${this.phoneNumberId} | tokenStart: ${this.token.slice(0, 20)}`)
+      throw new Error(`WhatsApp API error — ${detail}`)
     }
   }
 
@@ -54,35 +70,38 @@ export class WhatsAppClient {
     components: any[] = []
   ): Promise<string> {
     const phone = normalizePhone(to)
+    console.log(`[WA] sendTemplate "${name}" → ${phone}`)
+
     try {
+      const payload: any = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: phone,
+        type: 'template',
+        template: {
+          name,
+          language: { code: langCode },
+        },
+      }
+      if (components.length > 0) payload.template.components = components
+
       const res = await axios.post(
         `${BASE}/${this.phoneNumberId}/messages`,
-        {
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: phone,
-          type: 'template',
-          template: {
-            name,
-            language: { code: langCode },
-            ...(components.length > 0 ? { components } : {}),
-          },
-        },
+        payload,
         { headers: this.headers }
       )
       const msgId = res.data?.messages?.[0]?.id
       if (!msgId) throw new Error('No message_id in API response')
+      console.log(`[WA] sendTemplate ✅ message_id: ${msgId}`)
       return msgId
     } catch (err: any) {
       const apiErr = err?.response?.data?.error
-      const msg = apiErr
-        ? `WhatsApp API error ${apiErr.code}: ${apiErr.message}`
+      const detail = apiErr
+        ? `code ${apiErr.code} (${apiErr.error_subcode ?? 'no subcode'}): ${apiErr.message}`
         : err.message
-      console.error('[WA sendTemplate] HTTP status:', err?.response?.status)
-      console.error('[WA sendTemplate] full body:', JSON.stringify(err?.response?.data ?? null))
-      console.error('[WA sendTemplate] phone_number_id used:', this.phoneNumberId)
-      console.error('[WA sendTemplate] to:', phone, '| template:', name, '| lang:', langCode)
-      throw new Error(msg)
+      console.error(`[WA] sendTemplate FAILED — ${detail}`)
+      console.error(`[WA] to: ${phone} | template: ${name} | lang: ${langCode} | phoneNumberId: ${this.phoneNumberId}`)
+      throw new Error(`WhatsApp API error — ${detail}`)
     }
   }
 
@@ -94,12 +113,13 @@ export class WhatsAppClient {
         { headers: this.headers }
       )
     } catch (err: any) {
-      console.warn('[WA markRead] Failed (non-critical):', err?.response?.data?.error?.message ?? err.message)
+      // Non-critical — log and continue
+      console.warn('[WA] markRead failed (non-critical):', err?.response?.data?.error?.message ?? err.message)
     }
   }
 }
 
-// ── Webhook payload parser ────────────────────────────────────────────────────
+// ── Webhook parser ────────────────────────────────────────────────────────────
 
 export interface ParsedWAEvent {
   type: 'message' | 'status'
@@ -116,7 +136,6 @@ export function parseWhatsAppWebhook(body: any): ParsedWAEvent[] {
       if (!val) continue
       const phoneNumberId: string = val.metadata?.phone_number_id ?? ''
 
-      // Incoming messages
       for (const msg of val.messages ?? []) {
         const contact = (val.contacts ?? []).find((c: any) => c.wa_id === msg.from)
         events.push({
@@ -128,18 +147,17 @@ export function parseWhatsAppWebhook(body: any): ParsedWAEvent[] {
             from_name: contact?.profile?.name ?? msg.from,
             timestamp: new Date(parseInt(msg.timestamp) * 1000).toISOString(),
             type: msg.type,
-            text:     msg.text?.body    ?? null,
-            image:    msg.image         ?? null,
-            audio:    msg.audio         ?? null,
-            document: msg.document      ?? null,
-            sticker:  msg.sticker       ?? null,
-            location: msg.location      ?? null,
-            reaction: msg.reaction      ?? null,
+            text:     msg.text?.body ?? null,
+            image:    msg.image      ?? null,
+            audio:    msg.audio      ?? null,
+            document: msg.document   ?? null,
+            sticker:  msg.sticker    ?? null,
+            location: msg.location   ?? null,
+            reaction: msg.reaction   ?? null,
           },
         })
       }
 
-      // Status updates
       for (const st of val.statuses ?? []) {
         events.push({
           type: 'status',
