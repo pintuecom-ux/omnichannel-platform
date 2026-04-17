@@ -146,7 +146,6 @@ export default function MessageBubble({ message: msg }: Props) {
   return (
     <div className="msg-group fade-in">
       <div className={`msg-row ${isOut ? 'out' : 'in'}`}>
-        {!isOut && <InboundAvatar msg={msg} />}
         <div className="bubble">
           <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.body}</span>
           <div className="bubble-meta">

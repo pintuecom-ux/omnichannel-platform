@@ -492,22 +492,22 @@ html, body {
 
 /* MESSAGE BUBBLES */
 .msg-group { display: flex; flex-direction: column; gap: 3px; }
-.msg-row { display: flex; align-items: flex-end; gap: 8px; }
+.msg-row { display: flex; align-items: flex-end; gap: 15px; margin-bottom: 10px;}
 .msg-row.out { justify-content: flex-end; }
 .msg-row.in  { justify-content: flex-start; }
 .msg-row.out .bubble {
   background: var(--bubble-out);
   border: 1px solid var(--bubble-out-border);
-  border-radius: 16px 16px 4px 16px;
+  border-radius: 10px 10px 10px 4px;
 }
 .msg-row.in .bubble {
   background: var(--bubble-in);
   border: 1px solid var(--border);
-  border-radius: 16px 16px 16px 4px;
+  border-radius: 10px 10px 10px 4px;
 }
 .bubble {
-  max-width: 65%; padding: 9px 12px;
-  font-size: 13.5px; line-height: 1.5;
+  max-width: 65%; padding: 6px 6px;
+  font-size: 13.5px;
   color: var(--text-primary); word-break: break-word;
 }
 .bubble.has-media { padding: 6px; }

@@ -48,7 +48,7 @@ export default function ChatWindow() {
     loadMessages()
   }, [loadMessages])
 
-  // Subscribe to new messages for active conversation
+  // Subscribe to new messages + conversation changes (belt-and-suspenders for missed events)
   useEffect(() => {
     if (!activeConversationId) return
 
@@ -72,6 +72,20 @@ export default function ChatWindow() {
         filter: `conversation_id=eq.${activeConversationId}`,
       }, (payload) => {
         updateMessage(payload.new.id, payload.new as Partial<Message>)
+      })
+      // When unread_count rises on the conversation, an inbound message may have
+      // slipped through the INSERT subscription — do a full reload to catch it.
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'conversations',
+        filter: `id=eq.${activeConversationId}`,
+      }, (payload) => {
+        const prev = payload.old as any
+        const next = payload.new as any
+        if ((next.unread_count ?? 0) > (prev.unread_count ?? 0)) {
+          loadMessages()
+        }
       })
       .subscribe()
 
@@ -169,9 +183,9 @@ export default function ChatWindow() {
         </div>
       </div>
 
-      {/* Workspace tabs */}
+      {/* Workspace tabs — Comments only for Instagram/Facebook (not WhatsApp) */}
       <div className="workspace-tabs">
-        {(['messages', 'notes', 'comments'] as const).map(tab => (
+        {(['messages', 'notes', ...(platform !== 'whatsapp' ? ['comments'] : [])] as ('messages' | 'notes' | 'comments')[]).map(tab => (
           <div
             key={tab}
             className={`ws-tab ${activeTab === tab ? 'active' : ''}`}
@@ -238,7 +252,7 @@ export default function ChatWindow() {
         <NoteInput conversationId={activeConversationId!} onSaved={loadMessages} />
       )}
 
-      {activeTab === 'comments' && (
+      {activeTab === 'comments' && platform !== 'whatsapp' && (
         <CommentReplyInput conversationId={activeConversationId!} onSaved={loadMessages} />
       )}
     </div>
