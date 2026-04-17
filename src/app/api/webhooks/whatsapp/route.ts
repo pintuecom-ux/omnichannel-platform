@@ -7,7 +7,6 @@ const admin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// ── GET: Webhook verification ────────────────────────────────
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams
   if (
@@ -20,108 +19,58 @@ export async function GET(req: NextRequest) {
   return new NextResponse('Forbidden', { status: 403 })
 }
 
-// ── POST: Incoming events ────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    // Return 200 immediately — Meta requires response in < 5s
-    handleEvents(body).catch(err => console.error('[WA Webhook Error]', err))
+
+    // CRITICAL FIX: Process SYNCHRONOUSLY before returning 200
+    // Previous code used .catch() which runs AFTER the response —
+    // Vercel kills the function as soon as the response is sent on free tier.
+    // Now we await processing, then return 200.
+    // This still completes well within Meta's 5s requirement.
+    await handleEvents(body)
+
     return NextResponse.json({ status: 'ok' })
-  } catch {
-    return NextResponse.json({ status: 'error' }, { status: 500 })
+  } catch (err) {
+    console.error('[WA Webhook] Fatal error:', err)
+    // Still return 200 so Meta doesn't retry indefinitely
+    return NextResponse.json({ status: 'error_logged' })
   }
 }
 
 async function handleEvents(body: any) {
   const events = parseWhatsAppWebhook(body)
-  for (const ev of events) {
-    if (ev.type === 'message') await processMessage(ev)
-    else if (ev.type === 'status') await processStatus(ev)
-  }
+
+  // Process all events in parallel where possible
+  await Promise.all(events.map(ev => {
+    if (ev.type === 'message') return processMessage(ev).catch(e => console.error('[WA] processMessage error:', e))
+    if (ev.type === 'status')  return processStatus(ev).catch(e => console.error('[WA] processStatus error:', e))
+    return Promise.resolve()
+  }))
 }
 
 async function processMessage(ev: any) {
   const { phoneNumberId, data } = ev
 
-  // ── 1. Find channel ──────────────────────────────────────
-  const { data: channel, error: channelErr } = await admin
+  // 1. Find channel
+  const { data: channel } = await admin
     .from('channels')
     .select('id, workspace_id, external_id, access_token')
     .eq('platform', 'whatsapp')
     .eq('external_id', phoneNumberId)
     .maybeSingle()
 
-  if (channelErr) console.error('[WA] Channel lookup error:', channelErr)
   if (!channel) {
-    console.error('[WA] No channel found for phone_number_id:', phoneNumberId)
-    // Log all channels for debugging
-    const { data: allChannels } = await admin.from('channels').select('id, platform, external_id, name')
-    console.error('[WA] Available channels:', allChannels)
+    console.error(`[WA] No channel for phone_number_id: ${phoneNumberId}`)
+    const { data: all } = await admin.from('channels').select('id, platform, external_id')
+    console.error('[WA] Channels in DB:', JSON.stringify(all))
     return
   }
 
-  // ── 2. Normalize phone number ────────────────────────────
-  // WhatsApp sends without +, store as-is but search both formats
-  const rawPhone = data.from as string
-  const normalizedPhone = rawPhone.startsWith('+') ? rawPhone.slice(1) : rawPhone
+  // 2. Normalize phone (WA sends without +)
+  const phone = (data.from as string).replace(/^\+/, '')
 
-  // ── 3. Find or UPSERT contact (prevents duplicates) ──────
-  const { data: contact, error: contactErr } = await admin
-    .from('contacts')
-    .upsert(
-      {
-        workspace_id: channel.workspace_id,
-        phone: normalizedPhone,
-        name: data.from_name || normalizedPhone,
-      },
-      {
-        onConflict: 'workspace_id,phone',
-        ignoreDuplicates: false, // update name if it changed
-      }
-    )
-    .select('id, workspace_id, phone, name')
-    .single()
-
-  if (contactErr) {
-    console.error('[WA] Contact upsert error:', contactErr)
-    return
-  }
-
-  // ── 4. Find or UPSERT conversation ───────────────────────
-  // Use the unique constraint on (channel_id, contact_id)
-  const { data: conversation, error: convErr } = await admin
-    .from('conversations')
-    .upsert(
-      {
-        workspace_id: channel.workspace_id,
-        contact_id: contact.id,
-        channel_id: channel.id,
-        platform: 'whatsapp',
-        status: 'open',
-        last_message: data.text || `[${data.type}]`,
-        last_message_at: data.timestamp,
-        updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict: 'channel_id,contact_id',
-        ignoreDuplicates: false, // always update last_message
-      }
-    )
-    .select('id, unread_count')
-    .single()
-
-  if (convErr) {
-    console.error('[WA] Conversation upsert error:', convErr)
-    return
-  }
-
-  // Increment unread count separately (upsert can't do math)
-  await admin
-    .from('conversations')
-    .update({ unread_count: (conversation.unread_count || 0) + 1 })
-    .eq('id', conversation.id)
-
-  // ── 5. Idempotency check ─────────────────────────────────
+  // 3. Idempotency check FIRST — skip everything if already processed
   const { data: existing } = await admin
     .from('messages')
     .select('id')
@@ -129,32 +78,99 @@ async function processMessage(ev: any) {
     .maybeSingle()
 
   if (existing) {
-    console.log('[WA] Message already processed:', data.external_id)
+    console.log('[WA] Duplicate, skipping:', data.external_id)
     return
   }
 
-  // ── 6. Insert message ────────────────────────────────────
-  const { error: msgErr } = await admin.from('messages').insert({
-    conversation_id: conversation.id,
-    workspace_id: channel.workspace_id,
-    external_id: data.external_id,
-    direction: 'inbound',
-    content_type: data.type === 'text' ? 'text' : data.type,
-    body: data.text,
-    status: 'delivered',
-    is_note: false,
-    meta: {
-      from: normalizedPhone,
-      from_name: data.from_name,
-      timestamp: data.timestamp,
-      image: data.image,
-      audio: data.audio,
-      document: data.document,
-    },
-  })
+  // 4. Upsert contact + find/create conversation in parallel
+  const [contactResult, existingConvResult] = await Promise.all([
+    admin.from('contacts').upsert(
+      { workspace_id: channel.workspace_id, phone, name: data.from_name || phone },
+      { onConflict: 'workspace_id,phone', ignoreDuplicates: false }
+    ).select('id').single(),
 
-  if (msgErr) console.error('[WA] Message insert error:', msgErr)
-  else console.log('[WA] ✅ Message saved for:', normalizedPhone, '|', data.text?.slice(0, 50))
+    // Try to find existing open conversation to avoid needing contact.id first
+    admin.from('conversations')
+      .select('id, unread_count, contact_id')
+      .eq('channel_id', channel.id)
+      .in('status', ['open', 'pending'])
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  if (contactResult.error) {
+    console.error('[WA] Contact upsert error:', contactResult.error)
+    return
+  }
+  const contact = contactResult.data
+
+  let conversationId: string
+  let currentUnread = 0
+
+  if (existingConvResult.data && existingConvResult.data.contact_id === contact.id) {
+    // Reuse existing conversation
+    conversationId = existingConvResult.data.id
+    currentUnread = existingConvResult.data.unread_count || 0
+  } else {
+    // Create or upsert conversation
+    const { data: conv, error: convErr } = await admin
+      .from('conversations')
+      .upsert(
+        {
+          workspace_id: channel.workspace_id,
+          contact_id: contact.id,
+          channel_id: channel.id,
+          platform: 'whatsapp',
+          status: 'open',
+          last_message: data.text || `[${data.type}]`,
+          last_message_at: data.timestamp,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'channel_id,contact_id', ignoreDuplicates: false }
+      )
+      .select('id, unread_count')
+      .single()
+
+    if (convErr || !conv) {
+      console.error('[WA] Conversation upsert error:', convErr)
+      return
+    }
+    conversationId = conv.id
+    currentUnread = conv.unread_count || 0
+  }
+
+  // 5. Insert message + update conversation in parallel
+  const [msgResult] = await Promise.all([
+    admin.from('messages').insert({
+      conversation_id: conversationId,
+      workspace_id: channel.workspace_id,
+      external_id: data.external_id,
+      direction: 'inbound',
+      content_type: data.type === 'text' ? 'text' : data.type,
+      body: data.text,
+      status: 'delivered',
+      is_note: false,
+      meta: {
+        from: phone,
+        from_name: data.from_name,
+        image: data.image,
+        audio: data.audio,
+        document: data.document,
+      },
+    }),
+    admin.from('conversations').update({
+      last_message: data.text || `[${data.type}]`,
+      last_message_at: data.timestamp,
+      unread_count: currentUnread + 1,
+      updated_at: new Date().toISOString(),
+    }).eq('id', conversationId),
+  ])
+
+  if (msgResult.error) {
+    console.error('[WA] Message insert error:', msgResult.error)
+  } else {
+    console.log(`[WA] ✅ Saved: "${data.text?.slice(0, 40)}" from ${phone}`)
+  }
 }
 
 async function processStatus(ev: any) {

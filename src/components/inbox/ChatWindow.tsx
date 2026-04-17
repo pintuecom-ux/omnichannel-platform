@@ -10,50 +10,75 @@ import type { Message } from '@/types'
 const STATUS_CYCLE = ['open', 'pending', 'closed'] as const
 const STATUS_LABEL = { open: 'Open', pending: 'Pending', closed: 'Closed' }
 
+// Group messages: consecutive same-direction messages within 5 minutes = same group
+function groupMessages(messages: Message[]) {
+  const groups: { msgs: Message[]; isLast: boolean }[] = []
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i]
+    const prev = messages[i - 1]
+    const next = messages[i + 1]
+    const sameAsPrev = prev &&
+      prev.direction === msg.direction &&
+      new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60 * 1000
+    const sameAsNext = next &&
+      next.direction === msg.direction &&
+      new Date(next.created_at).getTime() - new Date(msg.created_at).getTime() < 5 * 60 * 1000
+
+    groups.push({
+      msgs: [msg],
+      isLast: !sameAsNext,
+    })
+  }
+  return groups
+}
+
 export default function ChatWindow() {
   const supabase = createClient()
-  const { activeConversationId, messages, setMessages, addMessage, updateMessage, updateConversation } = useInboxStore()
+  const {
+    activeConversationId, messages, setMessages,
+    addMessage, updateMessage, updateConversation,
+  } = useInboxStore()
   const conversation = useActiveConversation()
+  // Only show Notes for WhatsApp — Comments only for IG/FB
+  const platform = conversation?.platform ?? 'whatsapp'
+  const isWA = platform === 'whatsapp'
   const [activeTab, setActiveTab] = useState<'messages' | 'notes' | 'comments'>('messages')
   const [status, setStatus] = useState<'open' | 'pending' | 'closed'>('open')
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  // Reset to messages tab when switching conversations
+  useEffect(() => { setActiveTab('messages') }, [activeConversationId])
+
   const loadMessages = useCallback(async () => {
     if (!activeConversationId) return
-
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('messages')
       .select('*, sender:profiles(id, full_name, avatar_url, role, email, workspace_id, is_online, created_at)')
       .eq('conversation_id', activeConversationId)
       .order('created_at', { ascending: true })
       .limit(200)
 
+    if (error) { console.error('[ChatWindow] loadMessages error:', error.message); return }
     if (data) setMessages(data as Message[])
 
-    // Mark conversation as read
-    await supabase
-      .from('conversations')
-      .update({ unread_count: 0 })
-      .eq('id', activeConversationId)
-
+    // Mark as read
+    await supabase.from('conversations').update({ unread_count: 0 }).eq('id', activeConversationId)
     updateConversation(activeConversationId, { unread_count: 0 })
-  }, [activeConversationId])
+  }, [activeConversationId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!conversation) return
     setStatus(conversation.status as 'open' | 'pending' | 'closed')
   }, [conversation?.status])
 
-  useEffect(() => {
-    loadMessages()
-  }, [loadMessages])
+  useEffect(() => { loadMessages() }, [loadMessages])
 
-  // Subscribe to new messages + conversation changes (belt-and-suspenders for missed events)
+  // Realtime subscription with reconnect handler
   useEffect(() => {
     if (!activeConversationId) return
 
-    const channel = supabase
-      .channel(`messages-${activeConversationId}`)
+    const ch = supabase
+      .channel(`msg-${activeConversationId}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -61,9 +86,8 @@ export default function ChatWindow() {
         filter: `conversation_id=eq.${activeConversationId}`,
       }, (payload) => {
         const msg = payload.new as Message
-        if (!msg.id.startsWith('temp-')) {
-          addMessage(msg)
-        }
+        // Don't add temp/optimistic messages via realtime
+        if (!msg.id.startsWith('temp-')) addMessage(msg)
       })
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -73,28 +97,21 @@ export default function ChatWindow() {
       }, (payload) => {
         updateMessage(payload.new.id, payload.new as Partial<Message>)
       })
-      // When unread_count rises on the conversation, an inbound message may have
-      // slipped through the INSERT subscription — do a full reload to catch it.
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'conversations',
-        filter: `id=eq.${activeConversationId}`,
-      }, (payload) => {
-        const prev = payload.old as any
-        const next = payload.new as any
-        if ((next.unread_count ?? 0) > (prev.unread_count ?? 0)) {
+      .subscribe((status) => {
+        // KEY FIX: When realtime reconnects, reload all messages
+        // This catches any messages that arrived during a connection gap
+        if (status === 'SUBSCRIBED') {
+          console.log('[Realtime] Subscribed to messages, reloading...')
           loadMessages()
         }
       })
-      .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
-  }, [activeConversationId])
+    return () => { supabase.removeChannel(ch) }
+  }, [activeConversationId, loadMessages]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom on new messages
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
   }, [messages.length])
 
   async function cycleStatus() {
@@ -113,37 +130,38 @@ export default function ChatWindow() {
     || conversation.contact?.instagram_username
     || 'Unknown'
 
-  const platform = conversation.platform
   const platformIcon = { whatsapp: 'fa-brands fa-whatsapp', instagram: 'fa-brands fa-instagram', facebook: 'fa-brands fa-facebook' }[platform]
-  const platformCls = { whatsapp: 'pp-wa', instagram: 'pp-ig', facebook: 'pp-fb' }[platform]
+  const platformCls  = { whatsapp: 'pp-wa', instagram: 'pp-ig', facebook: 'pp-fb' }[platform]
   const platformLabel = { whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook' }[platform]
-  const badgeCls = { whatsapp: 'pb-wa', instagram: 'pb-ig', facebook: 'pb-fb' }[platform]
+  const badgeCls     = { whatsapp: 'pb-wa', instagram: 'pb-ig', facebook: 'pb-fb' }[platform]
 
-  // Group messages by date for display
-  const grouped: { date: string; msgs: Message[] }[] = []
-  const displayMessages = messages.filter(m => {
-    if (activeTab === 'notes') return m.is_note
+  // Build date-grouped + message-grouped display
+  interface DateGroup { date: string; msgs: Message[] }
+  const dateGroups: DateGroup[] = []
+  const displayMsgs = messages.filter(m => {
+    if (activeTab === 'notes')    return m.is_note
     if (activeTab === 'comments') return m.content_type === 'comment'
     return !m.is_note && m.content_type !== 'comment'
   })
-
-  for (const msg of displayMessages) {
+  for (const msg of displayMsgs) {
     const d = formatMessageDate(msg.created_at)
-    const last = grouped[grouped.length - 1]
-    if (!last || last.date !== d) grouped.push({ date: d, msgs: [msg] })
+    const last = dateGroups[dateGroups.length - 1]
+    if (!last || last.date !== d) dateGroups.push({ date: d, msgs: [msg] })
     else last.msgs.push(msg)
   }
 
+  // Tabs: WhatsApp only shows Messages + Notes. IG/FB also show Comments.
+  const tabs = isWA
+    ? (['messages', 'notes'] as const)
+    : (['messages', 'notes', 'comments'] as const)
+
   return (
     <div id="main-workspace">
-      {/* Chat header */}
+      {/* Header */}
       <div className="chat-header">
         <div className="chat-contact">
           <div className="avatar-wrap">
-            <div
-              className="avatar"
-              style={{ background: '#1a6b3a', width: 36, height: 36, fontSize: 13, fontWeight: 700, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}
-            >
+            <div className="avatar" style={{ background: '#1a6b3a', width: 40, height: 40, fontSize: 14, fontWeight: 700, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
               {contactName.slice(0, 2).toUpperCase()}
             </div>
             <div className={`platform-badge ${badgeCls}`}>
@@ -157,35 +175,24 @@ export default function ChatWindow() {
                 <i className={platformIcon} /> {platformLabel}
               </span>
               {conversation.status === 'open' && (
-                <span style={{ color: 'var(--accent)', fontSize: 11 }}>● Active</span>
+                <span style={{ color: 'var(--accent)', fontSize: 11 }}>● Online</span>
               )}
             </div>
           </div>
         </div>
-
         <div className="chat-header-actions">
           <div className={`status-pill ${status}`} onClick={cycleStatus}>
             <i className="fa-solid fa-circle" style={{ fontSize: '7px' }} />
             <span>{STATUS_LABEL[status]}</span>
           </div>
-          <button className="icon-btn cs-tooltip" data-tip="Calls — Coming Soon">
-            <i className="fa-solid fa-phone" />
-          </button>
-          <button className="icon-btn cs-tooltip" data-tip="Video — Coming Soon">
-            <i className="fa-solid fa-video" />
-          </button>
-          <button className="icon-btn" title="Search in chat">
-            <i className="fa-solid fa-magnifying-glass" />
-          </button>
-          <button className="icon-btn" title="More options">
-            <i className="fa-solid fa-ellipsis-vertical" />
-          </button>
+          <button className="icon-btn" title="Search"><i className="fa-solid fa-magnifying-glass" /></button>
+          <button className="icon-btn" title="More"><i className="fa-solid fa-ellipsis-vertical" /></button>
         </div>
       </div>
 
-      {/* Workspace tabs — Comments only for Instagram/Facebook (not WhatsApp) */}
+      {/* Tabs */}
       <div className="workspace-tabs">
-        {(['messages', 'notes', ...(platform !== 'whatsapp' ? ['comments'] : [])] as ('messages' | 'notes' | 'comments')[]).map(tab => (
+        {tabs.map(tab => (
           <div
             key={tab}
             className={`ws-tab ${activeTab === tab ? 'active' : ''}`}
@@ -202,8 +209,7 @@ export default function ChatWindow() {
             )}
             {tab === 'comments' && (
               <>
-                <i className={platformIcon} style={{ color: platform === 'instagram' ? '#e1306c' : platform === 'facebook' ? '#1877f2' : 'var(--accent)' }} />
-                {' '}Comments
+                <i className={platformIcon} style={{ color: platform === 'instagram' ? '#e1306c' : '#1877f2' }} /> Comments
                 {messages.filter(m => m.content_type === 'comment').length > 0 && (
                   <span className="tab-badge">{messages.filter(m => m.content_type === 'comment').length}</span>
                 )}
@@ -213,48 +219,50 @@ export default function ChatWindow() {
         ))}
       </div>
 
-      {/* Messages area */}
+      {/* Messages */}
       <div className="workspace-content">
         {activeTab === 'notes' && (
-          <div className="note-intro">
-            <i className="fa-solid fa-lock" />
-            Internal notes — visible to team members only. Never sent to customer.
-          </div>
+          <div className="note-intro"><i className="fa-solid fa-lock" /> Internal notes — never sent to customer.</div>
         )}
 
-        {grouped.length === 0 ? (
+        {dateGroups.length === 0 ? (
           <div className="empty-state">
-            <i className={`fa-brands ${platformIcon.replace('fa-brands ', '')}`} style={{ fontSize: 32, opacity: 0.2 }} />
-            <p>
-              {activeTab === 'messages' && 'No messages yet. Send the first message below.'}
-              {activeTab === 'notes' && 'No internal notes yet.'}
-              {activeTab === 'comments' && 'No comments to show for this contact.'}
+            <i className="fa-brands fa-whatsapp" style={{ fontSize: 48, opacity: 0.15 }} />
+            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              {activeTab === 'messages' ? 'No messages yet. Send the first message below.' :
+               activeTab === 'notes'    ? 'No notes yet.' : 'No comments yet.'}
             </p>
           </div>
         ) : (
-          grouped.map(group => (
+          dateGroups.map(group => (
             <div key={group.date}>
               <div className="date-divider"><span>{group.date}</span></div>
-              {group.msgs.map(msg => (
-                <MessageBubble key={msg.id} message={msg} />
-              ))}
+              {group.msgs.map((msg, i) => {
+                const prev = group.msgs[i - 1]
+                const next = group.msgs[i + 1]
+                const isFirstInGroup = !prev || prev.direction !== msg.direction
+                  || new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime() > 5 * 60 * 1000
+                const isLastInGroup = !next || next.direction !== msg.direction
+                  || new Date(next.created_at).getTime() - new Date(msg.created_at).getTime() > 5 * 60 * 1000
+                return (
+                  <MessageBubble
+                    key={msg.id}
+                    message={msg}
+                    isFirstInGroup={isFirstInGroup}
+                    isLastInGroup={isLastInGroup}
+                  />
+                )
+              })}
             </div>
           ))
         )}
-
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
+      {/* Input areas */}
       {activeTab === 'messages' && <InputArea onMessageSent={loadMessages} />}
-
-      {activeTab === 'notes' && (
-        <NoteInput conversationId={activeConversationId!} onSaved={loadMessages} />
-      )}
-
-      {activeTab === 'comments' && platform !== 'whatsapp' && (
-        <CommentReplyInput conversationId={activeConversationId!} onSaved={loadMessages} />
-      )}
+      {activeTab === 'notes' && <NoteInput conversationId={activeConversationId!} onSaved={loadMessages} />}
+      {activeTab === 'comments' && <CommentReplyInput onSaved={loadMessages} />}
     </div>
   )
 }
@@ -288,12 +296,12 @@ function NoteInput({ conversationId, onSaved }: { conversationId: string; onSave
       <div className="input-row">
         <textarea
           className="input-box"
-          placeholder="Add an internal note… (Enter to save, Shift+Enter for new line)"
+          placeholder="Add an internal note… (Enter to save)"
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save() } }}
           rows={1}
-          style={{ borderColor: 'rgba(245,158,11,0.3)' }}
+          style={{ borderColor: 'rgba(245,158,11,0.4)' }}
         />
         <button className="send-btn" style={{ background: 'var(--accent3)' }} onClick={save}>
           <i className="fa-solid fa-plus" />
@@ -303,16 +311,8 @@ function NoteInput({ conversationId, onSaved }: { conversationId: string; onSave
   )
 }
 
-function CommentReplyInput({ conversationId, onSaved }: { conversationId: string; onSaved: () => void }) {
+function CommentReplyInput({ onSaved }: { onSaved: () => void }) {
   const [text, setText] = useState('')
-
-  async function send() {
-    if (!text.trim()) return
-    // Will be wired to Instagram/Facebook reply API in Phase 1C
-    alert('Comment reply: ' + text)
-    setText('')
-  }
-
   return (
     <div className="notes-input-area">
       <div className="input-row">
@@ -323,9 +323,7 @@ function CommentReplyInput({ conversationId, onSaved }: { conversationId: string
           onChange={e => setText(e.target.value)}
           rows={1}
         />
-        <button className="send-btn" onClick={send}>
-          <i className="fa-solid fa-paper-plane" />
-        </button>
+        <button className="send-btn"><i className="fa-solid fa-paper-plane" /></button>
       </div>
     </div>
   )
