@@ -17,6 +17,7 @@ interface Props { onMessageSent: () => void }
 export default function InputArea({ onMessageSent }: Props) {
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
   const [showTemplates, setShowTemplates] = useState(false)
   const [templates, setTemplates] = useState<Template[]>([])
   const [templateSearch, setTemplateSearch] = useState('')
@@ -136,9 +137,10 @@ export default function InputArea({ onMessageSent }: Props) {
       const json = await res.json()
       if (!res.ok) {
         console.error('[Send] Failed:', json.error)
-        // Show the error to the user briefly
-        setText(`[SEND FAILED: ${json.error}]`)
+        setSendError(json.error)
+        setTimeout(() => setSendError(null), 6000)
       } else {
+        setSendError(null)
         onMessageSent()
       }
     } catch (err) {
@@ -187,7 +189,8 @@ export default function InputArea({ onMessageSent }: Props) {
       const json = await res.json()
       if (!res.ok) {
         console.error('[Template Send] Failed:', json.error)
-        alert(`Template send failed: ${json.error}`)
+        setSendError(json.error)
+        setTimeout(() => setSendError(null), 6000)
       } else {
         console.log('[Template Send] ✅', template.name)
         onMessageSent()
@@ -282,6 +285,22 @@ export default function InputArea({ onMessageSent }: Props) {
               <div className="tpl-body">{t.body}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Send error banner */}
+      {sendError && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '7px 12px', background: 'rgba(232,64,64,0.12)',
+          borderTop: '1px solid rgba(232,64,64,0.25)',
+          fontSize: 12, color: '#e84040',
+        }}>
+          <i className="fa-solid fa-circle-exclamation" />
+          <span style={{ flex: 1 }}>{sendError}</span>
+          <button onClick={() => setSendError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e84040', padding: 0 }}>
+            <i className="fa-solid fa-xmark" />
+          </button>
         </div>
       )}
 
