@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { parseWhatsAppWebhook } from '@/lib/platforms/whatsapp'
+import { parseWhatsAppWebhook, WhatsAppClient } from '@/lib/platforms/whatsapp'
 
 const admin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,31 +22,22 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-
-    // CRITICAL FIX: Process SYNCHRONOUSLY before returning 200
-    // Previous code used .catch() which runs AFTER the response —
-    // Vercel kills the function as soon as the response is sent on free tier.
-    // Now we await processing, then return 200.
-    // This still completes well within Meta's 5s requirement.
+    // Process synchronously BEFORE returning 200 — Vercel kills async work after response
     await handleEvents(body)
-
     return NextResponse.json({ status: 'ok' })
   } catch (err) {
-    console.error('[WA Webhook] Fatal error:', err)
-    // Still return 200 so Meta doesn't retry indefinitely
+    console.error('[WA Webhook] Fatal:', err)
     return NextResponse.json({ status: 'error_logged' })
   }
 }
 
 async function handleEvents(body: any) {
   const events = parseWhatsAppWebhook(body)
-
-  // Process all events in parallel where possible
-  await Promise.all(events.map(ev => {
-    if (ev.type === 'message') return processMessage(ev).catch(e => console.error('[WA] processMessage error:', e))
-    if (ev.type === 'status')  return processStatus(ev).catch(e => console.error('[WA] processStatus error:', e))
-    return Promise.resolve()
-  }))
+  await Promise.all(events.map(ev =>
+    ev.type === 'message'
+      ? processMessage(ev).catch(e => console.error('[WA] processMessage error:', e))
+      : processStatus(ev).catch(e => console.error('[WA] processStatus error:', e))
+  ))
 }
 
 async function processMessage(ev: any) {
@@ -55,122 +46,128 @@ async function processMessage(ev: any) {
   // 1. Find channel
   const { data: channel } = await admin
     .from('channels')
-    .select('id, workspace_id, external_id, access_token')
+    .select('id, workspace_id, access_token')
     .eq('platform', 'whatsapp')
     .eq('external_id', phoneNumberId)
     .maybeSingle()
 
   if (!channel) {
     console.error(`[WA] No channel for phone_number_id: ${phoneNumberId}`)
-    const { data: all } = await admin.from('channels').select('id, platform, external_id')
-    console.error('[WA] Channels in DB:', JSON.stringify(all))
     return
   }
 
-  // 2. Normalize phone (WA sends without +)
-  const phone = (data.from as string).replace(/^\+/, '')
-
-  // 3. Idempotency check FIRST — skip everything if already processed
-  const { data: existing } = await admin
+  // 2. Idempotency — skip if already stored
+  const { data: exists } = await admin
     .from('messages')
     .select('id')
     .eq('external_id', data.external_id)
     .maybeSingle()
+  if (exists) return
 
-  if (existing) {
-    console.log('[WA] Duplicate, skipping:', data.external_id)
-    return
-  }
-
-  // 4. Upsert contact + find/create conversation in parallel
-  const [contactResult, existingConvResult] = await Promise.all([
-    admin.from('contacts').upsert(
+  // 3. Upsert contact
+  const phone = data.from.replace(/^\+/, '')
+  const { data: contact, error: contactErr } = await admin
+    .from('contacts')
+    .upsert(
       { workspace_id: channel.workspace_id, phone, name: data.from_name || phone },
       { onConflict: 'workspace_id,phone', ignoreDuplicates: false }
-    ).select('id').single(),
+    )
+    .select('id')
+    .single()
 
-    // Try to find existing open conversation to avoid needing contact.id first
-    admin.from('conversations')
-      .select('id, unread_count, contact_id')
-      .eq('channel_id', channel.id)
-      .in('status', ['open', 'pending'])
-      .limit(1)
-      .maybeSingle(),
-  ])
-
-  if (contactResult.error) {
-    console.error('[WA] Contact upsert error:', contactResult.error)
+  if (contactErr || !contact) {
+    console.error('[WA] Contact upsert error:', contactErr)
     return
   }
-  const contact = contactResult.data
 
-  let conversationId: string
-  let currentUnread = 0
-
-  if (existingConvResult.data && existingConvResult.data.contact_id === contact.id) {
-    // Reuse existing conversation
-    conversationId = existingConvResult.data.id
-    currentUnread = existingConvResult.data.unread_count || 0
-  } else {
-    // Create or upsert conversation
-    const { data: conv, error: convErr } = await admin
-      .from('conversations')
-      .upsert(
-        {
-          workspace_id: channel.workspace_id,
-          contact_id: contact.id,
-          channel_id: channel.id,
-          platform: 'whatsapp',
-          status: 'open',
-          last_message: data.text || `[${data.type}]`,
-          last_message_at: data.timestamp,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'channel_id,contact_id', ignoreDuplicates: false }
-      )
-      .select('id, unread_count')
-      .single()
-
-    if (convErr || !conv) {
-      console.error('[WA] Conversation upsert error:', convErr)
-      return
-    }
-    conversationId = conv.id
-    currentUnread = conv.unread_count || 0
-  }
-
-  // 5. Insert message + update conversation in parallel
-  const [msgResult] = await Promise.all([
-    admin.from('messages').insert({
-      conversation_id: conversationId,
-      workspace_id: channel.workspace_id,
-      external_id: data.external_id,
-      direction: 'inbound',
-      content_type: data.type === 'text' ? 'text' : data.type,
-      body: data.text,
-      status: 'delivered',
-      is_note: false,
-      meta: {
-        from: phone,
-        from_name: data.from_name,
-        image: data.image,
-        audio: data.audio,
-        document: data.document,
+  // 4. Upsert conversation
+  const { data: conv, error: convErr } = await admin
+    .from('conversations')
+    .upsert(
+      {
+        workspace_id: channel.workspace_id,
+        contact_id: contact.id,
+        channel_id: channel.id,
+        platform: 'whatsapp',
+        status: 'open',
+        last_message: data.text || `[${data.type}]`,
+        last_message_at: data.timestamp,
+        updated_at: new Date().toISOString(),
       },
-    }),
-    admin.from('conversations').update({
-      last_message: data.text || `[${data.type}]`,
-      last_message_at: data.timestamp,
-      unread_count: currentUnread + 1,
-      updated_at: new Date().toISOString(),
-    }).eq('id', conversationId),
-  ])
+      { onConflict: 'channel_id,contact_id', ignoreDuplicates: false }
+    )
+    .select('id, unread_count')
+    .single()
 
-  if (msgResult.error) {
-    console.error('[WA] Message insert error:', msgResult.error)
-  } else {
-    console.log(`[WA] ✅ Saved: "${data.text?.slice(0, 40)}" from ${phone}`)
+  if (convErr || !conv) {
+    console.error('[WA] Conversation upsert error:', convErr)
+    return
   }
+
+  // Increment unread count
+  await admin
+    .from('conversations')
+    .update({ unread_count: (conv.unread_count || 0) + 1 })
+    .eq('id', conv.id)
+
+  // 5. Resolve media URL if this is a media message
+  // Meta sends a media_id — we need to call WA API to get the actual download URL
+  let mediaUrl: string | null = null
+  let mediaMime: string | null = null
+
+  const mediaObj = data.image ?? data.audio ?? data.video ?? data.document ?? data.sticker ?? null
+  if (mediaObj?.id) {
+    try {
+      const waClient = new WhatsAppClient(channel.access_token, phoneNumberId)
+      const { url, mime_type } = await waClient.getMediaUrl(mediaObj.id)
+
+      // Option A (simple, no storage cost): Store the temporary WA URL directly
+      // It's valid for 5 minutes but the message is already saved by then, so
+      // we store the WA URL and let the browser fetch it when rendering.
+      // Option B (permanent): Download → re-upload to Supabase Storage
+      // We'll use Option B for persistence:
+      const bytes = await waClient.downloadMedia(url)
+      const ext = mime_type?.split('/')[1]?.split(';')[0] ?? 'bin'
+      const path = `${channel.workspace_id}/${conv.id}/${data.external_id}.${ext}`
+
+      const { error: storageErr } = await admin.storage
+        .from('media')
+        .upload(path, bytes, { contentType: mime_type, upsert: true })
+
+      if (storageErr) {
+        console.warn('[WA] Storage upload failed, using WA URL directly:', storageErr.message)
+        mediaUrl = url
+      } else {
+        const { data: pub } = admin.storage.from('media').getPublicUrl(path)
+        mediaUrl = pub.publicUrl
+      }
+      mediaMime = mime_type
+    } catch (e: any) {
+      console.warn('[WA] Media fetch error (non-critical):', e.message)
+    }
+  }
+
+  // 6. Insert message
+  const { error: msgErr } = await admin.from('messages').insert({
+    conversation_id: conv.id,
+    workspace_id: channel.workspace_id,
+    external_id: data.external_id,
+    direction: 'inbound',
+    content_type: data.type === 'text' ? 'text' : data.type,
+    body: data.text ?? (mediaObj?.caption ?? null),
+    media_url: mediaUrl,
+    media_mime: mediaMime,
+    status: 'delivered',
+    is_note: false,
+    meta: {
+      from: phone,
+      from_name: data.from_name,
+      filename: data.document?.filename ?? null,
+    },
+  })
+
+  if (msgErr) console.error('[WA] Message insert error:', msgErr)
+  else console.log(`[WA] ✅ Saved ${data.type} from ${phone}`)
 }
 
 async function processStatus(ev: any) {
