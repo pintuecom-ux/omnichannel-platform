@@ -1,3 +1,15 @@
+/**
+ * /api/templates
+ *
+ * Meta WhatsApp Business Management API v25.0
+ *
+ * GET    ?sync=true  → fetch ALL templates from Meta (cursor pagination), upsert into Supabase, return merged list
+ * GET               → fast local Supabase read only
+ * POST              → create new template on Meta + save to Supabase (supports JSON + multipart for media)
+ * PATCH             → edit existing template in-place via POST /{meta_template_id} (Meta's edit endpoint)
+ * DELETE            → delete from Meta by name (+ optional hsm_id) then remove from Supabase
+ */
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as serverClient } from '@/lib/supabase/server'
 import { createClient as adminClient } from '@supabase/supabase-js'
@@ -10,239 +22,396 @@ const admin = adminClient(
 
 const WA_BASE = 'https://graph.facebook.com/v25.0'
 
-// ── GET: Load templates from local DB; if ?sync=true also fetch from Meta ────
-export async function GET(req: NextRequest) {
+// ── Auth helper ───────────────────────────────────────────────────────────────
+async function getAuth(req: NextRequest) {
   const supabase = await serverClient()
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session) return null
+  return session
+}
 
-  const { data: profile } = await admin
-    .from('profiles').select('workspace_id').eq('id', session.user.id).single()
-  if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+async function getWorkspaceId(userId: string): Promise<string | null> {
+  const { data } = await admin.from('profiles').select('workspace_id').eq('id', userId).single()
+  return data?.workspace_id ?? null
+}
 
-  // Check if WABA is configured (for UI indicator)
-  const { data: channel } = await admin
+async function getChannel(workspaceId: string) {
+  const { data } = await admin
     .from('channels')
-    .select('access_token, meta')
-    .eq('workspace_id', profile.workspace_id)
+    .select('id, access_token, meta, external_id')
+    .eq('workspace_id', workspaceId)
     .eq('platform', 'whatsapp')
     .maybeSingle()
+  const token  = data?.access_token ?? process.env.WHATSAPP_TOKEN ?? ''
+  const wabaId = data?.meta?.waba_id ?? process.env.WHATSAPP_WABA_ID ?? ''
+  const phoneId = data?.external_id ?? process.env.WHATSAPP_PHONE_NUMBER_ID ?? ''
+  return { token, wabaId, phoneId, hasWaba: !!(wabaId && token) }
+}
 
-  const token = channel?.access_token ?? process.env.WHATSAPP_TOKEN
-  const wabaId = channel?.meta?.waba_id ?? process.env.WHATSAPP_WABA_ID
-  const hasWaba = !!(wabaId && token)
+// ── Parse request body (JSON or multipart) ───────────────────────────────────
+async function parseBody(req: NextRequest) {
+  const ct = req.headers.get('content-type') ?? ''
+  if (!ct.includes('multipart/form-data')) {
+    return { fields: await req.json(), mediaFile: null as File | null }
+  }
+  const form = await req.formData()
+  const fields: Record<string, any> = {}
+  for (const [k, v] of form.entries()) {
+    if (typeof v === 'string') {
+      // Try to parse JSON fields
+      if (['buttons', 'body_examples', 'header_examples'].includes(k)) {
+        try { fields[k] = JSON.parse(v) } catch { fields[k] = [] }
+      } else {
+        fields[k] = v
+      }
+    }
+  }
+  const mediaFile = form.get('media_file') as File | null
+  return { fields, mediaFile }
+}
 
-  const shouldSync = req.nextUrl.searchParams.get('sync') === 'true'
+// ── Upload file to Supabase Storage, return public URL ───────────────────────
+async function uploadToStorage(file: File, workspaceId: string): Promise<string | null> {
+  try {
+    const buf  = Buffer.from(await file.arrayBuffer())
+    const safe = file.name.replace(/[^a-z0-9._-]/gi, '_')
+    const path = `${workspaceId}/templates/${Date.now()}_${safe}`
+    const { error } = await admin.storage.from('media').upload(path, buf, { contentType: file.type, upsert: true })
+    if (error) { console.warn('[TPL] Storage upload error:', error.message); return null }
+    const { data: pub } = admin.storage.from('media').getPublicUrl(path)
+    return pub.publicUrl
+  } catch (e: any) {
+    console.error('[TPL] Storage error:', e.message)
+    return null
+  }
+}
 
-  // ── Default: just return local DB (fast, no Meta call) ───────────────────
-  if (!shouldSync || !hasWaba) {
-    const { data: local } = await admin
+// ── Upload media to WhatsApp servers, return media_id (for template header handle) ─
+// Meta requires a media "handle" (not a URL) for media header examples.
+// We upload via the phone number's media endpoint to get a handle.
+async function uploadMediaToWA(
+  file: File,
+  token: string,
+  phoneNumberId: string
+): Promise<string | null> {
+  try {
+    const FormDataNode = (await import('form-data')).default
+    const form = new FormDataNode()
+    const buf  = Buffer.from(await file.arrayBuffer())
+    form.append('file', buf, { filename: file.name, contentType: file.type })
+    form.append('type', file.type)
+    form.append('messaging_product', 'whatsapp')
+    const res = await axios.post(
+      `${WA_BASE}/${phoneNumberId}/media`,
+      form,
+      { headers: { Authorization: `Bearer ${token}`, ...form.getHeaders() } }
+    )
+    return res.data?.id ?? null
+  } catch (e: any) {
+    console.warn('[TPL] WA media upload failed:', e?.response?.data?.error?.message ?? e.message)
+    return null
+  }
+}
+
+// ── Build Meta components array from form fields ──────────────────────────────
+function buildComponents(f: {
+  template_type?:  string
+  header_type?:    string
+  header_text?:    string
+  header_handle?:  string   // WA media_id or public URL
+  header_examples?: string[]
+  body_text:       string
+  body_examples?:  string[]
+  footer_text?:    string
+  buttons?:        any[]
+  // Auth specific
+  add_security_recommendation?: boolean
+  code_expiration_minutes?: number
+}) {
+  const comps: any[] = []
+  const ht = (f.header_type ?? 'NONE').toUpperCase()
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  if (ht !== 'NONE' && ht !== '') {
+    if (f.template_type === 'AUTHENTICATION') {
+      // Auth templates have no header
+    } else if (ht === 'TEXT') {
+      const hComp: any = { type: 'HEADER', format: 'TEXT', text: f.header_text ?? '' }
+      if (f.header_examples?.length) {
+        hComp.example = { header_text: f.header_examples }
+      }
+      comps.push(hComp)
+    } else if (ht === 'LOCATION') {
+      comps.push({ type: 'HEADER', format: 'LOCATION' })
+    } else if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(ht)) {
+      const hComp: any = { type: 'HEADER', format: ht }
+      if (f.header_handle) {
+        hComp.example = { header_handle: [f.header_handle] }
+      }
+      comps.push(hComp)
+    }
+  }
+
+  // ── Body ──────────────────────────────────────────────────────────────────
+  if (f.template_type === 'AUTHENTICATION') {
+    const bodyComp: any = { type: 'BODY' }
+    if (f.add_security_recommendation) bodyComp.add_security_recommendation = true
+    comps.push(bodyComp)
+  } else {
+    const bodyComp: any = { type: 'BODY', text: f.body_text }
+    const examples = (f.body_examples ?? []).filter(Boolean)
+    if (examples.length > 0) {
+      bodyComp.example = { body_text: [examples] }
+    }
+    comps.push(bodyComp)
+  }
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  if (f.template_type === 'AUTHENTICATION' && f.code_expiration_minutes) {
+    comps.push({ type: 'FOOTER', code_expiration_minutes: f.code_expiration_minutes })
+  } else if (f.footer_text?.trim()) {
+    comps.push({ type: 'FOOTER', text: f.footer_text })
+  }
+
+  // ── Buttons ───────────────────────────────────────────────────────────────
+  const btns = f.buttons ?? []
+  if (btns.length > 0) {
+    const mapped = btns.map((b: any) => {
+      switch (b.type) {
+        case 'QUICK_REPLY':   return { type: 'QUICK_REPLY',   text: b.text }
+        case 'URL':           return { type: 'URL',           text: b.text, url: b.url, ...(b.url_example ? { example: [b.url_example] } : {}) }
+        case 'PHONE_NUMBER':  return { type: 'PHONE_NUMBER',  text: b.text, phone_number: b.phone }
+        case 'OTP':           return { type: 'OTP', otp_type: b.otp_type ?? 'COPY_CODE', text: b.text ?? 'Copy Code' }
+        case 'CATALOG':       return { type: 'CATALOG',       text: b.text }
+        case 'MPM':           return { type: 'MPM',           text: b.text }
+        default:              return b
+      }
+    })
+    comps.push({ type: 'BUTTONS', buttons: mapped })
+  }
+
+  return comps
+}
+
+// ── Extract readable body text from Meta components ──────────────────────────
+function extractBody(components: any[]): string {
+  return components?.find(c => c.type === 'BODY')?.text ?? ''
+}
+
+// ── Map a Meta template object to our local DB schema ────────────────────────
+function metaToLocal(t: any, workspaceId: string) {
+  const components = t.components ?? []
+  const header     = components.find((c: any) => c.type === 'HEADER')
+  const body       = extractBody(components)
+  const footer     = components.find((c: any) => c.type === 'FOOTER')
+  const btnComp    = components.find((c: any) => c.type === 'BUTTONS')
+
+  return {
+    workspace_id:     workspaceId,
+    platform:         'whatsapp',
+    name:             t.name,
+    category:         t.category,             // keep Meta casing e.g. "MARKETING"
+    language:         t.language,
+    body,
+    header_text:      header?.format === 'TEXT' ? (header.text ?? null) : null,
+    footer_text:      footer?.text ?? null,
+    status:           t.status.toLowerCase(),  // "approved" / "pending" etc.
+    meta_template_id: String(t.id),
+    variables:        [],
+    meta: {
+      // Preserve the COMPLETE Meta structure so we can always reconstruct
+      components,
+      header_type:       header?.format ?? 'NONE',
+      header_media_url:  null,                 // set after Supabase Storage upload
+      buttons:           btnComp?.buttons ?? [],
+      quality_score:     t.quality_score   ?? null,
+      rejected_reason:   t.rejected_reason ?? null,
+      parameter_format:  t.parameter_format ?? 'POSITIONAL',
+      template_type:     'STANDARD',           // may be overridden for AUTH
+    },
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GET — fast local read, or full Meta sync if ?sync=true
+// ═════════════════════════════════════════════════════════════════════════════
+export async function GET(req: NextRequest) {
+  const session = await getAuth(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const wsId = await getWorkspaceId(session.user.id)
+  if (!wsId)  return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+
+  const { token, wabaId, hasWaba } = await getChannel(wsId)
+  const doSync = req.nextUrl.searchParams.get('sync') === 'true'
+
+  // ── Local-only (default) ──────────────────────────────────────────────────
+  if (!doSync || !hasWaba) {
+    const { data } = await admin
       .from('templates')
       .select('*')
-      .eq('workspace_id', profile.workspace_id)
+      .eq('workspace_id', wsId)
       .order('created_at', { ascending: false })
     return NextResponse.json({
-      templates: local ?? [],
-      source: 'local',
-      has_waba: hasWaba,
-      missing: !wabaId ? 'WABA_ID' : !token ? 'TOKEN' : null,
+      templates: data ?? [],
+      source:    'local',
+      has_waba:  hasWaba,
+      missing:   !wabaId ? 'WABA_ID' : !token ? 'TOKEN' : null,
     })
   }
 
-  // ── sync=true: Fetch from Meta, upsert into local DB, return merged ───────
-  let metaTemplates: any[] = []
+  // ── Meta full sync (cursor-paginated) ─────────────────────────────────────
+  let metaAll:   any[]         = []
   let syncError: string | null = null
 
   try {
-    const res = await axios.get(
-      `${WA_BASE}/${wabaId}/message_templates`,
-      {
-        params: {
-          fields: 'id,name,status,category,language,components,quality_score,rejected_reason',
-          limit: 100,
-        },
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    )
-    metaTemplates = res.data?.data ?? []
-
-    // Upsert each Meta template into local DB
-    for (const t of metaTemplates) {
-      const bodyComp  = t.components?.find((c: any) => c.type === 'BODY')
-      const header    = t.components?.find((c: any) => c.type === 'HEADER')
-      const footer    = t.components?.find((c: any) => c.type === 'FOOTER')?.text ?? null
-      const buttons   = t.components?.find((c: any) => c.type === 'BUTTONS')?.buttons ?? []
-      const body      = bodyComp?.text ?? ''
-
-      await admin.from('templates').upsert({
-        workspace_id: profile.workspace_id,
-        platform: 'whatsapp',
-        name: t.name,
-        category: t.category,
-        language: t.language,
-        body,
-        header_text: header?.format === 'TEXT' ? header.text : null,
-        footer_text: footer,
-        status: t.status.toLowerCase(),
-        meta_template_id: t.id,
-        variables: [],
-        meta: {
-          header_type: header?.format ?? 'NONE',
-          buttons,
-          quality_score: t.quality_score,
-          rejected_reason: t.rejected_reason ?? null,
-          components: t.components,
-        },
-      }, { onConflict: 'meta_template_id', ignoreDuplicates: false })
+    // Fetch ALL pages from Meta
+    let nextUrl: string | null = `${WA_BASE}/${wabaId}/message_templates`
+    let params: Record<string, any> | undefined = {
+      fields: 'id,name,status,category,language,components,quality_score,rejected_reason,parameter_format',
+      limit:  250,
     }
 
-    // Delete local templates not present in Meta anymore (only synced ones)
-    if (metaTemplates.length > 0) {
-      const metaIds = metaTemplates.map(t => t.id)
-      await admin
+    while (nextUrl) {
+      const res: any = await axios.get(nextUrl, {
+        params:  params,
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      metaAll  = metaAll.concat(res.data?.data ?? [])
+      nextUrl  = res.data?.paging?.next ?? null
+      params   = undefined  // next URL already includes query params
+    }
+
+    console.log(`[TPL SYNC] Fetched ${metaAll.length} templates from Meta`)
+
+    // Upsert each Meta template into Supabase
+    for (const t of metaAll) {
+      const record = metaToLocal(t, wsId)
+
+      // Check for existing row by meta_template_id
+      const { data: existing } = await admin
         .from('templates')
-        .delete()
-        .eq('workspace_id', profile.workspace_id)
+        .select('id, meta')
+        .eq('workspace_id', wsId)
+        .eq('meta_template_id', String(t.id))
+        .maybeSingle()
+
+      if (existing) {
+        // Preserve our stored media URL during sync
+        if (existing.meta?.header_media_url) {
+          record.meta.header_media_url = existing.meta.header_media_url
+        }
+        await admin.from('templates').update(record).eq('id', existing.id)
+      } else {
+        await admin.from('templates').insert(record)
+      }
+    }
+
+    // Delete local rows that no longer exist on Meta
+    if (metaAll.length > 0) {
+      const metaIds = metaAll.map(t => String(t.id))
+      const { data: localSynced } = await admin
+        .from('templates')
+        .select('id, meta_template_id')
+        .eq('workspace_id', wsId)
         .not('meta_template_id', 'is', null)
-        .not('meta_template_id', 'in', `(${metaIds.map(id => `'${id}'`).join(',')})`)
+
+      if (localSynced) {
+        const staleIds = localSynced
+          .filter(r => !metaIds.includes(String(r.meta_template_id)))
+          .map(r => r.id)
+        if (staleIds.length > 0) {
+          await admin.from('templates').delete().in('id', staleIds)
+          console.log(`[TPL SYNC] Removed ${staleIds.length} stale local templates`)
+        }
+      }
     }
   } catch (err: any) {
     syncError = err?.response?.data?.error?.message ?? err.message
-    console.error('[Templates API] Meta sync error:', syncError)
+    console.error('[TPL SYNC] Meta error:', syncError)
   }
 
+  // Return merged list
   const { data: all } = await admin
     .from('templates')
     .select('*')
-    .eq('workspace_id', profile.workspace_id)
+    .eq('workspace_id', wsId)
     .order('created_at', { ascending: false })
 
   return NextResponse.json({
-    templates: all ?? [],
-    meta_count: metaTemplates.length,
-    source: 'meta_synced',
-    has_waba: hasWaba,
-    sync_error: syncError,
+    templates:   all ?? [],
+    meta_count:  metaAll.length,
+    source:      'meta_synced',
+    has_waba:    hasWaba,
+    sync_error:  syncError,
   })
 }
 
-// ── POST: Create template on Meta + save locally ─────────────────────────────
-// Supports both JSON and multipart/form-data (for media header file uploads)
+// ═════════════════════════════════════════════════════════════════════════════
+// POST — create new template
+// ═════════════════════════════════════════════════════════════════════════════
 export async function POST(req: NextRequest) {
-  const supabase = await serverClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const session = await getAuth(req)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: profile } = await admin
-    .from('profiles').select('workspace_id').eq('id', session.user.id).single()
-  if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+  const wsId = await getWorkspaceId(session.user.id)
+  if (!wsId)  return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
-  const { data: channel } = await admin
-    .from('channels').select('access_token, meta').eq('workspace_id', profile.workspace_id).eq('platform', 'whatsapp').maybeSingle()
+  const { token, wabaId, phoneId } = await getChannel(wsId)
+  const { fields: f, mediaFile }   = await parseBody(req)
 
-  const token = channel?.access_token ?? process.env.WHATSAPP_TOKEN
-  const wabaId = channel?.meta?.waba_id ?? process.env.WHATSAPP_WABA_ID
+  // Validate
+  const name = (f.name ?? '').toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+  if (!name)              return NextResponse.json({ error: 'name is required' }, { status: 400 })
+  if (!f.category)        return NextResponse.json({ error: 'category is required' }, { status: 400 })
+  if (!f.language)        return NextResponse.json({ error: 'language is required' }, { status: 400 })
+  if (!f.body_text && f.template_type !== 'AUTHENTICATION') {
+    return NextResponse.json({ error: 'body_text is required' }, { status: 400 })
+  }
 
-  // Parse body — supports both JSON and FormData (for media uploads)
-  const ct = req.headers.get('content-type') ?? ''
-  let fields: any = {}
-  let mediaFile: File | null = null
+  // ── Upload media if provided ───────────────────────────────────────────────
+  let storageUrl:   string | null = null
+  let headerHandle: string | null = null
 
-  if (ct.includes('multipart/form-data')) {
-    const form = await req.formData()
-    fields = {
-      name:          form.get('name') as string,
-      category:      form.get('category') as string,
-      language:      form.get('language') as string,
-      header_type:   form.get('header_type') as string,
-      header_text:   form.get('header_text') as string,
-      header_url:    form.get('header_url') as string ?? '',
-      body_text:     form.get('body_text') as string,
-      footer_text:   form.get('footer_text') as string ?? '',
-      buttons:       JSON.parse((form.get('buttons') as string) ?? '[]'),
-      body_examples: JSON.parse((form.get('body_examples') as string) ?? '[]'),
+  if (mediaFile && mediaFile.size > 0) {
+    storageUrl = await uploadToStorage(mediaFile, wsId)
+    // Also upload to WA servers to get a handle for the template example
+    if (token && phoneId) {
+      const waId = await uploadMediaToWA(mediaFile, token, phoneId)
+      if (waId) headerHandle = waId
     }
-    mediaFile = form.get('media_file') as File | null
-  } else {
-    fields = await req.json()
+    // Fall back to storage URL as handle if WA upload failed
+    if (!headerHandle && storageUrl) headerHandle = storageUrl
+  } else if (f.header_url) {
+    headerHandle = f.header_url
+    storageUrl   = f.header_url
   }
 
-  let {
-    name, category, language,
-    header_type, header_text, header_url,
-    body_text, footer_text,
-    buttons = [],
-    body_examples = [],
-  } = fields
-
-  if (!name || !category || !language || !body_text) {
-    return NextResponse.json({ error: 'name, category, language, body_text are required' }, { status: 400 })
-  }
-
-  // ── Upload media file to Supabase Storage if provided ────────────────────
-  if (mediaFile && mediaFile.size > 0 && header_type !== 'NONE' && header_type !== 'TEXT') {
-    try {
-      const buffer = Buffer.from(await mediaFile.arrayBuffer())
-      const ext = mediaFile.name.split('.').pop()?.split('?')[0] ?? 'bin'
-      const storagePath = `${profile.workspace_id}/templates/${Date.now()}_${mediaFile.name.replace(/[^a-z0-9._-]/gi, '_')}`
-      const { error: upErr } = await admin.storage
-        .from('media')
-        .upload(storagePath, buffer, { contentType: mediaFile.type, upsert: true })
-      if (!upErr) {
-        const { data: pub } = admin.storage.from('media').getPublicUrl(storagePath)
-        header_url = pub.publicUrl
-      } else {
-        console.warn('[Templates] Storage upload error:', upErr.message)
-      }
-    } catch (err: any) {
-      console.error('[Templates] Media upload error:', err.message)
-    }
-  }
-
-  // ── Build Meta components array ───────────────────────────────────────────
-  const components: any[] = []
-
-  if (header_type && header_type !== 'NONE') {
-    const hComp: any = { type: 'HEADER', format: header_type }
-    if (header_type === 'TEXT') {
-      hComp.text = header_text ?? ''
-    } else if (header_url) {
-      hComp.example = { header_handle: [header_url] }
-    }
-    components.push(hComp)
-  }
-
-  const bodyComp: any = { type: 'BODY', text: body_text }
-  if (body_examples.length > 0) {
-    bodyComp.example = { body_text: [body_examples] }
-  }
-  components.push(bodyComp)
-
-  if (footer_text?.trim()) {
-    components.push({ type: 'FOOTER', text: footer_text })
-  }
-
-  if (buttons.length > 0) {
-    components.push({
-      type: 'BUTTONS',
-      buttons: buttons.map((b: any) => {
-        if (b.type === 'QUICK_REPLY')  return { type: 'QUICK_REPLY',  text: b.text }
-        if (b.type === 'URL')          return { type: 'URL',          text: b.text, url: b.url }
-        if (b.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone }
-        return b
-      }),
-    })
-  }
+  // ── Build components ───────────────────────────────────────────────────────
+  const components = buildComponents({
+    template_type:                f.template_type,
+    header_type:                  f.header_type,
+    header_text:                  f.header_text,
+    header_handle:                headerHandle ?? undefined,
+    header_examples:              f.header_examples,
+    body_text:                    f.body_text ?? '',
+    body_examples:                f.body_examples,
+    footer_text:                  f.footer_text,
+    buttons:                      f.buttons,
+    add_security_recommendation:  f.add_security_recommendation,
+    code_expiration_minutes:      f.code_expiration_minutes ? Number(f.code_expiration_minutes) : undefined,
+  })
 
   const metaPayload = {
-    name: name.toLowerCase().replace(/\s+/g, '_'),
-    category: category.toUpperCase(),
-    language,
+    name,
+    category:   f.category.toUpperCase(),
+    language:   f.language,
     components,
   }
 
-  let metaTemplateId: string | null = null
-  let metaStatus = 'pending'
+  // ── Submit to Meta ─────────────────────────────────────────────────────────
+  let metaId:    string | null = null
+  let metaStatus = 'draft'
   let metaError: string | null = null
 
   if (wabaId && token) {
@@ -252,85 +421,247 @@ export async function POST(req: NextRequest) {
         metaPayload,
         { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
       )
-      metaTemplateId = res.data?.id ?? null
+      metaId     = String(res.data?.id ?? '')
       metaStatus = res.data?.status?.toLowerCase() ?? 'pending'
+      console.log(`[TPL] Created on Meta: ${name} (${metaId}) → ${metaStatus}`)
     } catch (err: any) {
       metaError = err?.response?.data?.error?.message ?? err.message
-      console.error('[Templates] Meta create error:', metaError)
+      console.error('[TPL] Meta create error:', metaError)
       metaStatus = 'draft'
     }
   } else {
-    metaStatus = 'draft'
-    metaError = 'No WABA_ID or token configured — saved locally as draft'
+    metaError = wabaId ? 'Missing token' : 'WHATSAPP_WABA_ID not set — saved as draft'
   }
 
-  const { data: saved, error: dbErr } = await admin
-    .from('templates')
-    .insert({
-      workspace_id: profile.workspace_id,
-      platform: 'whatsapp',
-      name: metaPayload.name,
-      category: category.toUpperCase(),
-      language,
-      body: body_text,
-      header_text: header_type === 'TEXT' ? header_text : null,
-      footer_text: footer_text || null,
-      status: metaStatus,
-      meta_template_id: metaTemplateId,
-      variables: [],
-      meta: {
-        header_type: header_type ?? 'NONE',
-        header_media_url: header_url || null,
-        buttons,
-        components,
-        meta_error: metaError,
-      },
-    })
-    .select()
-    .single()
+  // ── Save to Supabase ───────────────────────────────────────────────────────
+  const { data: saved, error: dbErr } = await admin.from('templates').insert({
+    workspace_id:     wsId,
+    platform:         'whatsapp',
+    name,
+    category:         f.category.toUpperCase(),
+    language:         f.language,
+    body:             f.body_text ?? '',
+    header_text:      f.header_type === 'TEXT' ? (f.header_text ?? null) : null,
+    footer_text:      f.footer_text || null,
+    status:           metaStatus,
+    meta_template_id: metaId,
+    variables:        [],
+    meta: {
+      components,
+      template_type:                f.template_type ?? 'STANDARD',
+      header_type:                  f.header_type ?? 'NONE',
+      header_media_url:             storageUrl ?? null,
+      buttons:                      f.buttons ?? [],
+      add_security_recommendation:  f.add_security_recommendation ?? false,
+      code_expiration_minutes:      f.code_expiration_minutes ?? null,
+      meta_error:                   metaError,
+    },
+  }).select().single()
 
   if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
 
-  return NextResponse.json({
-    template: saved,
-    meta_id: metaTemplateId,
-    meta_status: metaStatus,
-    meta_error: metaError,
-  })
+  return NextResponse.json({ template: saved, meta_id: metaId, meta_status: metaStatus, meta_error: metaError })
 }
 
-// ── DELETE: Remove from Meta + local DB ─────────────────────────────────────
-export async function DELETE(req: NextRequest) {
-  const supabase = await serverClient()
-  const { data: { session } } = await supabase.auth.getSession()
+// ═════════════════════════════════════════════════════════════════════════════
+// PATCH — edit existing template
+//
+// Meta edit rules (from API docs):
+//   • Endpoint: POST /v25.0/{meta_template_id}  (NOT the WABA endpoint)
+//   • Body: { name, components, language, category }
+//   • Only APPROVED, REJECTED, PAUSED can be edited
+//   • APPROVED: max 10 edits/30 days, 1/24h; category locked; name locked
+//   • REJECTED / PAUSED: unlimited edits
+//   • After edit → status becomes "pending" again
+// ═════════════════════════════════════════════════════════════════════════════
+export async function PATCH(req: NextRequest) {
+  const session = await getAuth(req)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: profile } = await admin
-    .from('profiles').select('workspace_id').eq('id', session.user.id).single()
-  if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+  const wsId = await getWorkspaceId(session.user.id)
+  if (!wsId)  return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
-  const { template_id, template_name } = await req.json()
+  const { token, wabaId, phoneId } = await getChannel(wsId)
+  const { fields: f, mediaFile }   = await parseBody(req)
+
+  const localId = f.template_id
+  if (!localId) return NextResponse.json({ error: 'template_id required' }, { status: 400 })
+
+  // Load current row
+  const { data: current } = await admin.from('templates').select('*').eq('id', localId).single()
+  if (!current) return NextResponse.json({ error: 'Template not found' }, { status: 404 })
+
+  const isApproved = current.status === 'approved'
+
+  // ── Upload new media if provided ───────────────────────────────────────────
+  let storageUrl   = current.meta?.header_media_url ?? null
+  let headerHandle = f.header_url || storageUrl
+
+  if (mediaFile && mediaFile.size > 0) {
+    const uploaded = await uploadToStorage(mediaFile, wsId)
+    if (uploaded) {
+      storageUrl   = uploaded
+      headerHandle = uploaded
+      // Try to get a WA media handle too
+      if (token && phoneId) {
+        const waId = await uploadMediaToWA(mediaFile, token, phoneId)
+        if (waId) headerHandle = waId
+      }
+    }
+  }
+
+  // ── Build updated components ───────────────────────────────────────────────
+  const components = buildComponents({
+    template_type:                f.template_type ?? current.meta?.template_type,
+    header_type:                  f.header_type   ?? current.meta?.header_type,
+    header_text:                  f.header_text   ?? current.header_text,
+    header_handle:                headerHandle ?? undefined,
+    header_examples:              f.header_examples,
+    body_text:                    f.body_text ?? current.body ?? '',
+    body_examples:                f.body_examples,
+    footer_text:                  f.footer_text ?? current.footer_text,
+    buttons:                      f.buttons     ?? current.meta?.buttons,
+    add_security_recommendation:  f.add_security_recommendation ?? current.meta?.add_security_recommendation,
+    code_expiration_minutes:      f.code_expiration_minutes ?? current.meta?.code_expiration_minutes,
+  })
+
+  // Use existing name/category (locked for approved; can change for rejected/paused)
+  const finalName     = isApproved ? current.name     : (f.name     ?? current.name)
+  const finalCategory = isApproved ? current.category : (f.category ?? current.category)
+  const finalLanguage = f.language ?? current.language
+
+  let metaError:    string | null = null
+  let editStrategy  = 'local_only'
+  let newMetaId     = current.meta_template_id
+
+  // ── Call Meta edit endpoint ────────────────────────────────────────────────
+  if (current.meta_template_id && token) {
+    try {
+      // Edit endpoint: POST /v25.0/{meta_template_id}
+      await axios.post(
+        `${WA_BASE}/${current.meta_template_id}`,
+        {
+          name:       finalName,
+          components,
+          language:   finalLanguage,
+          category:   finalCategory.toUpperCase(),
+        },
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      )
+      editStrategy = 'inplace'
+      console.log(`[TPL] Edited on Meta: ${finalName} (${current.meta_template_id})`)
+    } catch (err: any) {
+      metaError = err?.response?.data?.error?.message ?? err.message
+      console.error('[TPL] Meta edit error:', metaError)
+
+      // If in-place edit failed (e.g. pending templates can't be edited), try delete+recreate
+      if (wabaId && !isApproved) {
+        try {
+          await axios.delete(`${WA_BASE}/${wabaId}/message_templates`, {
+            params:  { hsm_id: current.meta_template_id, name: current.name },
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          const reCreate = await axios.post(
+            `${WA_BASE}/${wabaId}/message_templates`,
+            { name: finalName, category: finalCategory.toUpperCase(), language: finalLanguage, components },
+            { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+          )
+          newMetaId    = String(reCreate.data?.id ?? '')
+          metaError    = null
+          editStrategy = 'recreated'
+          console.log(`[TPL] Recreated on Meta: ${finalName} (${newMetaId})`)
+        } catch (reErr: any) {
+          metaError = reErr?.response?.data?.error?.message ?? reErr.message
+          console.error('[TPL] Meta recreate error:', metaError)
+        }
+      }
+    }
+  } else if (!current.meta_template_id && wabaId && token) {
+    // Draft → try to submit for the first time
+    try {
+      const res = await axios.post(
+        `${WA_BASE}/${wabaId}/message_templates`,
+        { name: finalName, category: finalCategory.toUpperCase(), language: finalLanguage, components },
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      )
+      newMetaId    = String(res.data?.id ?? '')
+      editStrategy = 'submitted'
+      console.log(`[TPL] Submitted draft to Meta: ${finalName} (${newMetaId})`)
+    } catch (err: any) {
+      metaError = err?.response?.data?.error?.message ?? err.message
+    }
+  }
+
+  // ── Update Supabase ────────────────────────────────────────────────────────
+  const { data: updated, error: dbErr } = await admin
+    .from('templates')
+    .update({
+      name:             finalName,
+      category:         finalCategory.toUpperCase(),
+      language:         finalLanguage,
+      body:             f.body_text ?? current.body ?? '',
+      header_text:      (f.header_type ?? current.meta?.header_type) === 'TEXT' ? (f.header_text ?? current.header_text) : null,
+      footer_text:      f.footer_text ?? current.footer_text,
+      status:           metaError && editStrategy === 'local_only' ? current.status : 'pending',
+      meta_template_id: newMetaId,
+      meta: {
+        ...current.meta,
+        components,
+        template_type:               f.template_type ?? current.meta?.template_type ?? 'STANDARD',
+        header_type:                 f.header_type   ?? current.meta?.header_type ?? 'NONE',
+        header_media_url:            storageUrl,
+        buttons:                     f.buttons ?? current.meta?.buttons ?? [],
+        add_security_recommendation: f.add_security_recommendation ?? current.meta?.add_security_recommendation,
+        code_expiration_minutes:     f.code_expiration_minutes ?? current.meta?.code_expiration_minutes,
+        meta_error:                  metaError,
+      },
+    })
+    .eq('id', localId)
+    .select().single()
+
+  if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
+
+  return NextResponse.json({ template: updated, meta_error: metaError, edit_strategy: editStrategy })
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// DELETE — remove from Meta (by hsm_id + name) and Supabase
+// ═════════════════════════════════════════════════════════════════════════════
+export async function DELETE(req: NextRequest) {
+  const session = await getAuth(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const wsId = await getWorkspaceId(session.user.id)
+  if (!wsId)  return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+
+  const { token, wabaId } = await getChannel(wsId)
+  const { template_id, template_name, meta_template_id } = await req.json()
+
   if (!template_id) return NextResponse.json({ error: 'template_id required' }, { status: 400 })
 
-  const { data: channel } = await admin
-    .from('channels').select('access_token, meta').eq('workspace_id', profile.workspace_id).eq('platform', 'whatsapp').maybeSingle()
-  const token = channel?.access_token ?? process.env.WHATSAPP_TOKEN
-  const wabaId = channel?.meta?.waba_id ?? process.env.WHATSAPP_WABA_ID
+  let metaDeleted = false
+  let metaError:  string | null = null
 
   if (wabaId && token && template_name) {
     try {
+      // Use hsm_id (= meta_template_id) if available for precise single-language delete
+      const params: Record<string, string> = { name: template_name }
+      if (meta_template_id) params.hsm_id = String(meta_template_id)
+
       await axios.delete(
         `${WA_BASE}/${wabaId}/message_templates`,
-        {
-          params: { name: template_name },
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { params, headers: { Authorization: `Bearer ${token}` } }
       )
+      metaDeleted = true
+      console.log(`[TPL] Deleted from Meta: ${template_name} (${meta_template_id ?? 'no id'})`)
     } catch (err: any) {
-      console.warn('[Templates] Meta delete failed:', err?.response?.data?.error?.message)
+      metaError = err?.response?.data?.error?.message ?? err.message
+      console.warn('[TPL] Meta delete warning:', metaError)
+      // Still delete locally
     }
   }
 
   await admin.from('templates').delete().eq('id', template_id)
-  return NextResponse.json({ success: true })
+
+  return NextResponse.json({ success: true, meta_deleted: metaDeleted, meta_error: metaError })
 }
