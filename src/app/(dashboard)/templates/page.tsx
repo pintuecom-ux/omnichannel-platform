@@ -633,17 +633,11 @@ export default function TemplatesPage() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
                         <div className="tpl-card-category">{t.category}</div>
-                        {tType !== 'STANDARD' && (
-                          <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--accent2)', textTransform: 'uppercase', letterSpacing: '0.05em', border: '1px solid rgba(0,168,232,0.3)', padding: '1px 5px', borderRadius: 5 }}>{tType}</span>
-                        )}
-                        {quality && (
-                          <span style={{ fontSize: 9, color: quality === 'GREEN' ? 'var(--accent)' : quality === 'YELLOW' ? 'var(--accent3)' : '#e84040', fontWeight: 600 }}>● {quality}</span>
-                        )}
                       </div>
                       <div className="tpl-card-name">{t.name}</div>
                       <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
                         {t.language}
-                        {t.meta_template_id && <span style={{ marginLeft: 5 }}>· <i className="fa-brands fa-meta" style={{ marginRight: 2 }} />{t.meta_template_id.slice(0, 8)}</span>}
+                        {t.meta_template_id && <span style={{ marginLeft: 5 }}>· <i className="fa-brands fa-meta" style={{ marginRight: 2 }} />{t.meta_template_id}</span>}
                       </div>
                     </div>
                     <span className={`tpl-card-channel ${t.platform === 'whatsapp' ? 'tpl-ch-wa' : t.platform === 'instagram' ? 'tpl-ch-ig' : 'tpl-ch-fb'}`}>
