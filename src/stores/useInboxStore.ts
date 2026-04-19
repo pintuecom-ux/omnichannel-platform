@@ -12,6 +12,8 @@ interface InboxState {
   searchQuery: string
   isBulkMode: boolean
   selectedIds: Set<string>
+  // NEW: reply-to state
+  replyToMessage: Message | null
 
   setConversations: (convs: Conversation[]) => void
   addConversation: (conv: Conversation) => void
@@ -27,6 +29,8 @@ interface InboxState {
   toggleSelectConv: (id: string) => void
   clearSelection: () => void
   setLoading: (v: boolean) => void
+  // NEW: reply actions
+  setReplyTo: (msg: Message | null) => void
 }
 
 export const useInboxStore = create<InboxState>((set) => ({
@@ -39,6 +43,7 @@ export const useInboxStore = create<InboxState>((set) => ({
   searchQuery: '',
   isBulkMode: false,
   selectedIds: new Set(),
+  replyToMessage: null,
 
   setConversations: (conversations) => set({ conversations }),
 
@@ -52,7 +57,7 @@ export const useInboxStore = create<InboxState>((set) => ({
     ),
   })),
 
-  setActiveConversation: (id) => set({ activeConversationId: id, messages: [] }),
+  setActiveConversation: (id) => set({ activeConversationId: id, messages: [], replyToMessage: null }),
   setMessages: (messages) => set({ messages }),
 
   addMessage: (msg) => set(state => ({
@@ -82,6 +87,9 @@ export const useInboxStore = create<InboxState>((set) => ({
 
   clearSelection: () => set({ selectedIds: new Set() }),
   setLoading: (isLoading) => set({ isLoading }),
+
+  // NEW: set or clear the message being replied to
+  setReplyTo: (replyToMessage) => set({ replyToMessage }),
 }))
 
 // ── SAFE SELECTORS (no infinite loops) ──────────────────────────────────────

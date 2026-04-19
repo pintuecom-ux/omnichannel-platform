@@ -20,6 +20,8 @@ export default function SettingsPage() {
   const [inviteRole, setInviteRole] = useState('agent')
   const [cannedResponses, setCannedResponses] = useState<any[]>([])
   const [newCanned, setNewCanned] = useState({ shortcut: '', message: '' })
+  // Copied state for snippet copy buttons
+  const [copied, setCopied] = useState<string | null>(null)
 
   useEffect(() => { load() }, [])
 
@@ -45,6 +47,14 @@ export default function SettingsPage() {
 
   function nav(s: Section, sub: SubPage) { setSection(s); setSubPage(sub) }
 
+  function copySnippet(text: string, key: string) {
+    navigator.clipboard.writeText(text)
+    setCopied(key)
+    setTimeout(() => setCopied(null), 2000)
+  }
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://your-app.vercel.app'
+
   const PCFG: Record<string, { icon: string; color: string; label: string }> = {
     whatsapp:  { icon: 'fa-brands fa-whatsapp',  color: '#25d366', label: 'WhatsApp Business API' },
     instagram: { icon: 'fa-brands fa-instagram', color: '#e1306c', label: 'Instagram DM' },
@@ -55,43 +65,75 @@ export default function SettingsPage() {
     {
       id: 'channels', label: 'Channels', icon: 'fa-solid fa-plug', desc: 'Connect and manage messaging channels',
       subs: [
-        { id: 'channels-connected', label: 'Connected Channels', icon: 'fa-solid fa-circle-check' },
-        { id: 'channels-whatsapp', label: 'WhatsApp Setup', icon: 'fa-brands fa-whatsapp' },
-        { id: 'channels-webhook', label: 'Webhook & API', icon: 'fa-solid fa-webhook' },
+        { id: 'channels-connected',  label: 'Connected Channels',  icon: 'fa-solid fa-circle-check' },
+        { id: 'channels-whatsapp',   label: 'WhatsApp Setup',      icon: 'fa-brands fa-whatsapp' },
+        { id: 'channels-facebook',   label: 'Facebook Setup',      icon: 'fa-brands fa-facebook' },
+        { id: 'channels-instagram',  label: 'Instagram Setup',     icon: 'fa-brands fa-instagram' },
+        { id: 'channels-webhook',    label: 'Webhook & API',       icon: 'fa-solid fa-webhook' },
       ],
     },
     {
       id: 'configuration', label: 'Configuration', icon: 'fa-solid fa-sliders', desc: 'Workflows, quick replies, business hours',
       subs: [
-        { id: 'config-canned', label: 'Canned Responses', icon: 'fa-solid fa-comment-dots' },
-        { id: 'config-profile', label: 'My Profile', icon: 'fa-solid fa-user' },
-        { id: 'config-workspace', label: 'Workspace', icon: 'fa-solid fa-building' },
+        { id: 'config-canned',    label: 'Canned Responses', icon: 'fa-solid fa-comment-dots' },
+        { id: 'config-profile',   label: 'My Profile',       icon: 'fa-solid fa-user' },
+        { id: 'config-workspace', label: 'Workspace',        icon: 'fa-solid fa-building' },
       ],
     },
     {
       id: 'team', label: 'Team Management', icon: 'fa-solid fa-users', desc: 'Manage agents, roles, and groups',
       subs: [
-        { id: 'team-members', label: 'Users & Roles', icon: 'fa-solid fa-user-shield' },
-        { id: 'team-invite', label: 'Invite Member', icon: 'fa-solid fa-user-plus' },
+        { id: 'team-members', label: 'Users & Roles',  icon: 'fa-solid fa-user-shield' },
+        { id: 'team-invite',  label: 'Invite Member',  icon: 'fa-solid fa-user-plus' },
       ],
     },
     {
       id: 'data', label: 'Data & Security', icon: 'fa-solid fa-shield-halved', desc: 'Import, export, and manage security',
       subs: [
         { id: 'data-import', label: 'Import Contacts', icon: 'fa-solid fa-file-import' },
-        { id: 'data-export', label: 'Export Data', icon: 'fa-solid fa-file-export' },
+        { id: 'data-export', label: 'Export Data',     icon: 'fa-solid fa-file-export' },
       ],
     },
     {
       id: 'account', label: 'Account & Billing', icon: 'fa-solid fa-credit-card', desc: 'Plans, billing, workspace settings',
       subs: [
-        { id: 'account-info', label: 'Account Info', icon: 'fa-solid fa-circle-info' },
+        { id: 'account-info', label: 'Account Info',    icon: 'fa-solid fa-circle-info' },
         { id: 'account-plan', label: 'Plans & Pricing', icon: 'fa-solid fa-gem' },
       ],
     },
   ]
 
   const activeSec = SIDEBAR.find(s => s.id === section)!
+
+  // ── Shared SQL snippet renderer ─────────────────────────────────────────────
+  function SqlSnippet({ sql, id }: { sql: string; id: string }) {
+    return (
+      <div style={{ position: 'relative' }}>
+        <pre style={{ fontSize: 11, color: 'var(--accent)', background: 'var(--bg-surface)', padding: '8px 36px 8px 12px', borderRadius: 8, border: '1px solid var(--border)', overflowX: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
+          {sql}
+        </pre>
+        <button
+          onClick={() => copySnippet(sql, id)}
+          style={{ position: 'absolute', top: 6, right: 6, background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 7px', cursor: 'pointer', fontSize: 11, color: copied === id ? 'var(--accent)' : 'var(--text-muted)' }}
+          title="Copy"
+        >
+          <i className={`fa-solid ${copied === id ? 'fa-check' : 'fa-copy'}`} />
+        </button>
+      </div>
+    )
+  }
+
+  // ── Info box ────────────────────────────────────────────────────────────────
+  function InfoBox({ color, icon, children }: { color: string; icon: string; children: React.ReactNode }) {
+    return (
+      <div style={{ background: `${color}11`, border: `1px solid ${color}33`, borderRadius: 10, padding: 14, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+        <div style={{ fontWeight: 600, color, marginBottom: 6 }}>
+          <i className={icon} style={{ marginRight: 6 }} />Setup steps
+        </div>
+        {children}
+      </div>
+    )
+  }
 
   return (
     <div className="generic-page" style={{ flexDirection: 'row', padding: 0, overflow: 'hidden' }}>
@@ -104,12 +146,7 @@ export default function SettingsPage() {
           <div key={s.id}>
             <div
               onClick={() => { nav(s.id, s.subs[0].id) }}
-              style={{
-                padding: '9px 16px', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10,
-                background: section === s.id ? 'var(--bg-active)' : 'none',
-                borderLeft: section === s.id ? '3px solid var(--accent)' : '3px solid transparent',
-                transition: 'all 0.15s',
-              }}
+              style={{ padding: '9px 16px', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 10, background: section === s.id ? 'var(--bg-active)' : 'none', borderLeft: section === s.id ? '3px solid var(--accent)' : '3px solid transparent', transition: 'all 0.15s' }}
             >
               <i className={s.icon} style={{ color: section === s.id ? 'var(--accent)' : 'var(--text-muted)', marginTop: 1, fontSize: 14, width: 16 }} />
               <div>
@@ -121,14 +158,7 @@ export default function SettingsPage() {
               <div
                 key={sub.id}
                 onClick={() => setSubPage(sub.id)}
-                style={{
-                  padding: '7px 16px 7px 44px', cursor: 'pointer', fontSize: 12,
-                  display: 'flex', alignItems: 'center', gap: 7,
-                  background: subPage === sub.id ? 'var(--accent-glow)' : 'none',
-                  color: subPage === sub.id ? 'var(--accent)' : 'var(--text-secondary)',
-                  fontWeight: subPage === sub.id ? 600 : 400,
-                  transition: 'all 0.15s',
-                }}
+                style={{ padding: '7px 16px 7px 44px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 7, background: subPage === sub.id ? 'var(--accent-glow)' : 'none', color: subPage === sub.id ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: subPage === sub.id ? 600 : 400, transition: 'all 0.15s' }}
               >
                 <i className={sub.icon} style={{ fontSize: 11 }} />
                 {sub.label}
@@ -153,7 +183,7 @@ export default function SettingsPage() {
                 const cfg = PCFG[p]
                 const ch = channels.find(c => c.platform === p)
                 return (
-                  <div key={p} style={{ background: 'var(--bg-panel)', border: `1px solid ${ch?.is_active ? 'rgba(37,211,102,0.3)' : 'var(--border)'}`, borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                  <div key={p} onClick={() => nav('channels', `channels-${p}`)} style={{ background: 'var(--bg-panel)', border: `1px solid ${ch?.is_active ? 'rgba(37,211,102,0.3)' : 'var(--border)'}`, borderRadius: 12, padding: 16, textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.15s' }}>
                     <i className={cfg.icon} style={{ fontSize: 28, color: cfg.color, display: 'block', marginBottom: 8 }} />
                     <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{cfg.label}</div>
                     {ch?.is_active
@@ -170,17 +200,23 @@ export default function SettingsPage() {
                   <i className={cfg.icon} style={{ fontSize: 22, color: cfg.color, width: 28 }} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{ch.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Phone ID: {ch.external_id}</div>
-                    {ch.meta?.waba_id && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>WABA ID: {ch.meta.waba_id}</div>}
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>ID: {ch.external_id}</div>
+                    {ch.meta?.waba_id && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>WABA: {ch.meta.waba_id}</div>}
+                    {ch.meta?.page_id && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Page ID: {ch.meta.page_id}</div>}
                   </div>
                   <span className="pill green">Active</span>
                 </div>
               )
             })}
+            {channels.filter(c => c.is_active).length === 0 && (
+              <div style={{ padding: 20, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-surface)', borderRadius: 12, border: '1px solid var(--border)' }}>
+                No channels connected yet. Click a platform above to set one up.
+              </div>
+            )}
           </div>
         )}
 
-        {/* ── CHANNELS: WhatsApp Setup ── */}
+        {/* ── CHANNELS: WhatsApp ── */}
         {subPage === 'channels-whatsapp' && (
           <div style={{ maxWidth: 600 }}>
             <div className="form-section">
@@ -188,55 +224,195 @@ export default function SettingsPage() {
                 <i className="fa-brands fa-whatsapp" style={{ color: '#25d366' }} />WhatsApp Business API Setup
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 16 }}>
-                Your WhatsApp channel is configured. To update the access token or add the WABA ID for template management, run these SQL commands in Supabase:
+                Your WhatsApp channel is configured via environment variables. Use the SQL below to update tokens.
               </div>
 
               <div className="form-group">
                 <div className="form-label">Update Access Token</div>
-                <pre style={{ fontSize: 11, color: 'var(--accent)', background: 'var(--bg-surface)', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', overflowX: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
-{`UPDATE channels
-SET access_token = 'YOUR_PERMANENT_TOKEN'
-WHERE platform = 'whatsapp'
-  AND workspace_id = '${workspaceId}';`}
-                </pre>
+                <SqlSnippet id="wa-token" sql={`UPDATE channels\nSET access_token = 'YOUR_PERMANENT_TOKEN'\nWHERE platform = 'whatsapp'\n  AND workspace_id = '${workspaceId}';`} />
               </div>
 
               <div className="form-group">
                 <div className="form-label">Set WABA ID (for template management)</div>
-                <pre style={{ fontSize: 11, color: 'var(--accent)', background: 'var(--bg-surface)', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', overflowX: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
-{`UPDATE channels
-SET meta = jsonb_set(
-  COALESCE(meta,'{}'),
-  '{waba_id}',
-  '"YOUR_WABA_ID_HERE"'
-)
-WHERE platform = 'whatsapp'
-  AND workspace_id = '${workspaceId}';`}
-                </pre>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                  Find your WABA ID in Meta Business Manager → Business Settings → WhatsApp Accounts
+                <SqlSnippet id="wa-waba" sql={`UPDATE channels\nSET meta = jsonb_set(\n  COALESCE(meta,'{}'),\n  '{waba_id}',\n  '"YOUR_WABA_ID_HERE"'\n)\nWHERE platform = 'whatsapp'\n  AND workspace_id = '${workspaceId}';`} />
+              </div>
+
+              <div className="form-group">
+                <div className="form-label">Environment Variables (Vercel / .env.local)</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8 }}>
+                  <code style={{ color: 'var(--accent3)' }}>WHATSAPP_WABA_ID</code> = Your WABA ID<br />
+                  <code style={{ color: 'var(--accent3)' }}>WHATSAPP_TOKEN</code> = Permanent system user token<br />
+                  <code style={{ color: 'var(--accent3)' }}>WHATSAPP_PHONE_NUMBER_ID</code> = Phone Number ID
+                </div>
+              </div>
+
+              <InfoBox color="#25d366" icon="fa-solid fa-info-circle">
+                1. Go to <strong>business.facebook.com</strong><br />
+                2. Settings → Users → System Users → Generate Token<br />
+                3. Permissions: <code>whatsapp_business_messaging</code> + <code>whatsapp_business_management</code><br />
+                4. This token never expires ✓
+              </InfoBox>
+            </div>
+          </div>
+        )}
+
+        {/* ── CHANNELS: Facebook ── */}
+        {subPage === 'channels-facebook' && (
+          <div style={{ maxWidth: 640 }}>
+            <div className="form-section">
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <i className="fa-brands fa-facebook" style={{ color: '#1877f2' }} />Facebook Page Setup
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 20 }}>
+                Connect your Facebook Business Page to receive Messenger DMs and post comments in your inbox.
+              </div>
+
+              {/* Step 1 */}
+              <div className="form-group">
+                <div className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#1877f2', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>1</span>
+                  Create a Meta App at developers.facebook.com
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+                  • App type: <strong>Business</strong><br />
+                  • Add product: <strong>Messenger</strong><br />
+                  • Under Messenger → Settings, link your Facebook Page and note the <strong>Page ID</strong>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="form-group">
+                <div className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#1877f2', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>2</span>
+                  Get a Long-Lived Page Access Token
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+                  • Graph API Explorer → select your app → Generate Token<br />
+                  • Exchange for long-lived token via <code>/oauth/access_token?grant_type=fb_exchange_token</code><br />
+                  • Get Page Token via <code>/me/accounts</code>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="form-group">
+                <div className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#1877f2', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>3</span>
+                  Add the channel to your workspace (run in Supabase SQL Editor)
+                </div>
+                <SqlSnippet id="fb-insert" sql={`INSERT INTO channels (workspace_id, platform, name, external_id, access_token, is_active, meta)\nVALUES (\n  '${workspaceId}',\n  'facebook',\n  'My Facebook Page',           -- your page name\n  'YOUR_PAGE_ID',               -- numeric page ID\n  'YOUR_PAGE_ACCESS_TOKEN',     -- long-lived page token\n  true,\n  '{"page_id": "YOUR_PAGE_ID"}'\n);`} />
+              </div>
+
+              {/* Step 4 */}
+              <div className="form-group">
+                <div className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#1877f2', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>4</span>
+                  Add to .env.local / Vercel environment
+                </div>
+                <SqlSnippet id="fb-env" sql={`META_APP_ID=your_app_id\nMETA_APP_SECRET=your_app_secret\nMETA_WEBHOOK_VERIFY_TOKEN=omnichannel_meta_verify_2024`} />
+              </div>
+
+              {/* Step 5 */}
+              <div className="form-group">
+                <div className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#1877f2', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>5</span>
+                  Configure Webhook in Meta App Dashboard
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 10 }}>
+                  • Object: <strong>Page</strong> → Callback URL:
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <code style={{ flex: 1, color: 'var(--accent)', background: 'var(--bg-surface)', padding: '7px 12px', borderRadius: 8, fontSize: 12, border: '1px solid var(--border)', wordBreak: 'break-all', display: 'block' }}>
+                    {origin}/api/webhooks/facebook
+                  </code>
+                  <button className="btn btn-secondary" style={{ fontSize: 11, flexShrink: 0 }} onClick={() => copySnippet(`${origin}/api/webhooks/facebook`, 'fb-url')}>
+                    <i className={`fa-solid ${copied === 'fb-url' ? 'fa-check' : 'fa-copy'}`} />
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, marginTop: 10 }}>
+                  • Verify Token: <code style={{ color: 'var(--accent3)' }}>omnichannel_meta_verify_2024</code><br />
+                  • Subscribe fields: <strong>messages</strong>, <strong>feed</strong> (for comments), <strong>message_deliveries</strong>
+                </div>
+              </div>
+
+              <InfoBox color="#1877f2" icon="fa-brands fa-facebook">
+                Required permissions for App Review:<br />
+                <code>pages_messaging</code>, <code>pages_manage_metadata</code>, <code>pages_read_engagement</code>, <code>pages_manage_posts</code>
+              </InfoBox>
+            </div>
+          </div>
+        )}
+
+        {/* ── CHANNELS: Instagram ── */}
+        {subPage === 'channels-instagram' && (
+          <div style={{ maxWidth: 640 }}>
+            <div className="form-section">
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <i className="fa-brands fa-instagram" style={{ color: '#e1306c' }} />Instagram Setup
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 20 }}>
+                Connect your Instagram Professional account to receive DMs and post comments. Instagram must be linked to a Facebook Page.
+              </div>
+
+              <div className="form-group">
+                <div className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#e1306c', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>1</span>
+                  Prerequisites
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+                  • Instagram account must be <strong>Professional</strong> (Business or Creator)<br />
+                  • Must be linked to a <strong>Facebook Page</strong> (Page Settings → Instagram)<br />
+                  • Your Meta App must have <strong>Messenger</strong> product added<br />
+                  • Under Messenger Settings, connect the Instagram account
                 </div>
               </div>
 
               <div className="form-group">
-                <div className="form-label">Also add to Vercel Environment Variables</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8 }}>
-                  <code style={{ color: 'var(--accent3)' }}>WHATSAPP_WABA_ID</code> = Your WABA ID<br/>
-                  <code style={{ color: 'var(--accent3)' }}>WHATSAPP_TOKEN</code> = Your permanent system user token
+                <div className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#e1306c', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>2</span>
+                  Find your Instagram Account ID
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 8 }}>
+                  Run this in Graph API Explorer (replace PAGE_ID and PAGE_ACCESS_TOKEN):
+                </div>
+                <SqlSnippet id="ig-id" sql={`GET /v22.0/{PAGE_ID}?fields=instagram_business_account\n    &access_token={PAGE_ACCESS_TOKEN}\n\n# Returns: { "instagram_business_account": { "id": "IG_ACCOUNT_ID" } }`} />
+              </div>
+
+              <div className="form-group">
+                <div className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#e1306c', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>3</span>
+                  Add the channel to your workspace
+                </div>
+                <SqlSnippet id="ig-insert" sql={`INSERT INTO channels (workspace_id, platform, name, external_id, access_token, is_active, meta)\nVALUES (\n  '${workspaceId}',\n  'instagram',\n  'My Instagram',               -- your IG handle or name\n  'YOUR_IG_ACCOUNT_ID',         -- numeric IG business account ID\n  'YOUR_PAGE_ACCESS_TOKEN',     -- same long-lived page token from Facebook step\n  true,\n  '{"ig_account_id": "YOUR_IG_ACCOUNT_ID"}'\n);`} />
+              </div>
+
+              <div className="form-group">
+                <div className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 20, height: 20, borderRadius: '50%', background: '#e1306c', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>4</span>
+                  Configure Webhook in Meta App Dashboard
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, marginBottom: 8 }}>
+                  • Object: <strong>Instagram</strong> → Callback URL:
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <code style={{ flex: 1, color: 'var(--accent)', background: 'var(--bg-surface)', padding: '7px 12px', borderRadius: 8, fontSize: 12, border: '1px solid var(--border)', wordBreak: 'break-all', display: 'block' }}>
+                    {origin}/api/webhooks/instagram
+                  </code>
+                  <button className="btn btn-secondary" style={{ fontSize: 11, flexShrink: 0 }} onClick={() => copySnippet(`${origin}/api/webhooks/instagram`, 'ig-url')}>
+                    <i className={`fa-solid ${copied === 'ig-url' ? 'fa-check' : 'fa-copy'}`} />
+                  </button>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8, marginTop: 10 }}>
+                  • Verify Token: <code style={{ color: 'var(--accent3)' }}>omnichannel_meta_verify_2024</code><br />
+                  • Subscribe fields: <strong>messages</strong>, <strong>comments</strong>, <strong>mentions</strong>
                 </div>
               </div>
 
-              <div style={{ background: 'rgba(37,211,102,0.08)', border: '1px solid rgba(37,211,102,0.2)', borderRadius: 10, padding: 14, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-                <div style={{ fontWeight: 600, color: 'var(--accent)', marginBottom: 6 }}>
-                  <i className="fa-solid fa-info-circle" style={{ marginRight: 6 }} />How to get a permanent token
-                </div>
-                1. Go to <strong>business.facebook.com</strong><br/>
-                2. Settings → Users → System Users<br/>
-                3. Add System User (role: Admin)<br/>
-                4. Click "Generate New Token" → select your App<br/>
-                5. Permissions: <code>whatsapp_business_messaging</code> + <code>whatsapp_business_management</code><br/>
-                6. This token never expires ✓
-              </div>
+              <InfoBox color="#e1306c" icon="fa-brands fa-instagram">
+                Required permissions for App Review:<br />
+                <code>instagram_basic</code>, <code>instagram_manage_messages</code>, <code>instagram_manage_comments</code>, <code>pages_manage_metadata</code>
+                <br /><br />
+                <strong>Note:</strong> IG DMs are inbound-only. Users must message you first. The 24-hour window applies — replies must be sent within 24 hours of the last user message.
+              </InfoBox>
             </div>
           </div>
         )}
@@ -246,42 +422,45 @@ WHERE platform = 'whatsapp'
           <div style={{ maxWidth: 580 }}>
             <div className="form-section">
               <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 16 }}>
-                <i className="fa-solid fa-webhook" style={{ color: 'var(--accent)', marginRight: 8 }} />Webhook Configuration
+                <i className="fa-solid fa-webhook" style={{ color: 'var(--accent)', marginRight: 8 }} />Webhook URLs & Configuration
               </div>
+
+              {[
+                { label: 'WhatsApp Webhook URL', path: '/api/webhooks/whatsapp', key: 'wh-wa', color: '#25d366', fields: ['messages', 'message_deliveries', 'message_reads', 'message_reactions'] },
+                { label: 'Facebook Webhook URL', path: '/api/webhooks/facebook', key: 'wh-fb', color: '#1877f2', fields: ['messages', 'feed', 'message_deliveries'] },
+                { label: 'Instagram Webhook URL', path: '/api/webhooks/instagram', key: 'wh-ig', color: '#e1306c', fields: ['messages', 'comments', 'mentions'] },
+              ].map(({ label, path, key, color, fields }) => (
+                <div key={key} className="form-group">
+                  <div className="form-label">{label}</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <code style={{ flex: 1, color: 'var(--accent)', background: 'var(--bg-surface)', padding: '8px 12px', borderRadius: 8, fontSize: 12, border: '1px solid var(--border)', wordBreak: 'break-all', display: 'block' }}>
+                      {origin}{path}
+                    </code>
+                    <button className="btn btn-secondary" style={{ fontSize: 11, flexShrink: 0 }} onClick={() => copySnippet(`${origin}${path}`, key)}>
+                      <i className={`fa-solid ${copied === key ? 'fa-check' : 'fa-copy'}`} />
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                    {fields.map(f => (
+                      <span key={f} className="pill green" style={{ fontSize: 10 }}>{f}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
               <div className="form-group">
-                <div className="form-label">WhatsApp Webhook URL</div>
+                <div className="form-label">Verify Token (all three webhooks share this)</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <code style={{ flex: 1, color: 'var(--accent)', background: 'var(--bg-surface)', padding: '8px 12px', borderRadius: 8, fontSize: 12, border: '1px solid var(--border)', wordBreak: 'break-all', display: 'block' }}>
-                    {typeof window !== 'undefined' ? window.location.origin : 'https://your-app.vercel.app'}/api/webhooks/whatsapp
+                  <code style={{ fontSize: 12, color: 'var(--accent3)', background: 'var(--bg-surface)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)', flex: 1 }}>
+                    omnichannel_meta_verify_2024
                   </code>
-                  <button className="btn btn-secondary" style={{ fontSize: 11, flexShrink: 0 }} onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/api/webhooks/whatsapp`); alert('Copied!') }}>
-                    <i className="fa-solid fa-copy" />
+                  <button className="btn btn-secondary" style={{ fontSize: 11, flexShrink: 0 }} onClick={() => copySnippet('omnichannel_meta_verify_2024', 'verify-token')}>
+                    <i className={`fa-solid ${copied === 'verify-token' ? 'fa-check' : 'fa-copy'}`} />
                   </button>
                 </div>
-              </div>
-              <div className="form-group">
-                <div className="form-label">Verify Token</div>
-                <code style={{ fontSize: 12, color: 'var(--accent3)', background: 'var(--bg-surface)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)', display: 'block' }}>omnichannel_verify_2024</code>
-              </div>
-              <div className="form-group">
-                <div className="form-label">Subscribed Fields</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {['messages','message_deliveries','message_reads','message_reactions'].map(f => (
-                    <span key={f} className="pill green" style={{ fontSize: 11 }}>{f}</span>
-                  ))}
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                  This must match <code>META_WEBHOOK_VERIFY_TOKEN</code> in your environment variables.
                 </div>
-              </div>
-              <div className="form-group">
-                <div className="form-label">Instagram Webhook URL</div>
-                <code style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'var(--bg-surface)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)', display: 'block', wordBreak: 'break-all' }}>
-                  {typeof window !== 'undefined' ? window.location.origin : ''}/api/webhooks/instagram
-                </code>
-              </div>
-              <div className="form-group">
-                <div className="form-label">Facebook Webhook URL</div>
-                <code style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'var(--bg-surface)', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)', display: 'block', wordBreak: 'break-all' }}>
-                  {typeof window !== 'undefined' ? window.location.origin : ''}/api/webhooks/facebook
-                </code>
               </div>
             </div>
           </div>
@@ -314,7 +493,6 @@ WHERE platform = 'whatsapp'
               }}>
                 <i className="fa-solid fa-plus" /> Add Response
               </button>
-
               {[...cannedResponses, ...['Sending details now', 'Order is confirmed ✓', "We'll follow up shortly", 'Please share your order ID', 'Thank you for your purchase!'].map((m, i) => ({ id: `default-${i}`, shortcut: `/quick${i + 1}`, message: m }))].map(cr => (
                 <div key={cr.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 6 }}>
                   <code style={{ fontSize: 11, color: 'var(--accent3)', flexShrink: 0 }}>{cr.shortcut}</code>
@@ -439,15 +617,7 @@ WHERE platform = 'whatsapp'
               {inviteEmail && (
                 <div>
                   <div className="form-label">Run this SQL after they sign up:</div>
-                  <pre style={{ fontSize: 11, color: 'var(--accent)', background: 'var(--bg-surface)', padding: '8px 12px', borderRadius: 8, lineHeight: 1.7, overflowX: 'auto', border: '1px solid var(--border)', whiteSpace: 'pre-wrap' }}>
-{`UPDATE profiles
-SET workspace_id = '${workspaceId}',
-    role = '${inviteRole}'
-WHERE email = '${inviteEmail}';`}
-                  </pre>
-                  <button className="btn btn-secondary" style={{ marginTop: 6, fontSize: 12 }} onClick={() => { navigator.clipboard.writeText(`UPDATE profiles SET workspace_id = '${workspaceId}', role = '${inviteRole}' WHERE email = '${inviteEmail}';`); alert('Copied!') }}>
-                    <i className="fa-solid fa-copy" /> Copy SQL
-                  </button>
+                  <SqlSnippet id="invite-sql" sql={`UPDATE profiles\nSET workspace_id = '${workspaceId}',\n    role = '${inviteRole}'\nWHERE email = '${inviteEmail}';`} />
                 </div>
               )}
             </div>
@@ -462,7 +632,7 @@ WHERE email = '${inviteEmail}';`}
                 <i className="fa-solid fa-file-import" style={{ color: 'var(--accent)', marginRight: 8 }} />Import Contacts
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.8 }}>
-                Import contacts from a CSV file. Required columns: <code>name</code>, <code>phone</code>.<br/>
+                Import contacts from a CSV file. Required columns: <code>name</code>, <code>phone</code>.<br />
                 Optional: <code>email</code>, <code>instagram</code>, <code>facebook</code>, <code>tags</code> (semicolon-separated)
               </div>
               <a href="/contacts" className="btn btn-primary" style={{ textDecoration: 'none', display: 'inline-flex' }}>
@@ -495,7 +665,7 @@ WHERE email = '${inviteEmail}';`}
           </div>
         )}
 
-        {/* ── ACCOUNT ── */}
+        {/* ── ACCOUNT: Info ── */}
         {subPage === 'account-info' && (
           <div style={{ maxWidth: 480 }}>
             <div className="form-section">
@@ -515,9 +685,9 @@ WHERE email = '${inviteEmail}';`}
                 <i className="fa-solid fa-server" style={{ fontSize: 32, color: 'var(--accent)', display: 'block', marginBottom: 10 }} />
                 <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 6 }}>Self-Hosted</div>
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-                  You're running React Commerce on your own infrastructure.<br/>
-                  WhatsApp Cloud API: <strong style={{ color: 'var(--accent)' }}>Free up to 1,000 conversations/month</strong><br/>
-                  Supabase: <strong style={{ color: 'var(--accent)' }}>Free tier: 500MB storage</strong><br/>
+                  WhatsApp Cloud API: <strong style={{ color: 'var(--accent)' }}>Free up to 1,000 conversations/month</strong><br />
+                  Facebook/Instagram: <strong style={{ color: 'var(--accent)' }}>Free (no per-message cost)</strong><br />
+                  Supabase: <strong style={{ color: 'var(--accent)' }}>Free tier: 500MB storage</strong><br />
                   Vercel: <strong style={{ color: 'var(--accent)' }}>Free hobby plan</strong>
                 </div>
               </div>
