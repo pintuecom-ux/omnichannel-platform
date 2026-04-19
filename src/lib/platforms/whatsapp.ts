@@ -24,7 +24,7 @@ export class WhatsAppClient {
   constructor(token: string, phoneNumberId: string) {
     // FIX BUG-09: use empty-string check instead of fragile length check
     this.token        = (token && token.trim().length > 0 ? token : null) ?? process.env.WHATSAPP_TOKEN ?? ''
-    this.phoneNumberId = phoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID ?? ''
+    this.phoneNumberId = phoneNumberId || (process.env.WHATSAPP_PHONE_NUMBER_ID ?? '')
 
     if (!this.token)        console.warn('[WA] No token available')
     if (!this.phoneNumberId) console.warn('[WA] No phone_number_id available')
