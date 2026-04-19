@@ -14,6 +14,16 @@ const FLOW_CATEGORIES = [
   'CONTACT_US', 'CUSTOMER_SUPPORT', 'SURVEY', 'OTHER',
 ] as const
 
+function metaToBuilder(flowJson: any) {
+  const screens = flowJson?.screens ?? []
+
+  return screens.map((screen: any) => ({
+    id: screen.id,
+    title: screen.title || screen.id,
+    blocks: []
+  }))
+}
+
 // Starter Flow JSON templates
 const FLOW_STARTERS: Record<string, any> = {
   blank: {
@@ -462,17 +472,25 @@ const [builderState, setBuilderState] = useState<any[]>([
       setShowCreate(false); setNewName(''); setNewCats(['OTHER']); setStarterTpl('blank')
       await load(false)
       // Auto-open JSON editor to let user customize
-      if (json.flow) setEditFlow(json.flow)
+      if (json.flow) {
+  const starterJson = FLOW_STARTERS[starterTpl] ?? FLOW_STARTERS.blank
+
+  setBuilderState(metaToBuilder(starterJson))
+  setEditFlow(json.flow)
+}
     } finally { setCreating(false) }
   }
 
   // ── Open JSON editor ──────────────────────────────────────────────────────
-  function openEditor(flow: any) {
-    const json = flow.flow_json ?? FLOW_STARTERS.blank
-    setJsonText(JSON.stringify(json, null, 2))
-    setJsonError(null)
-    setEditFlow(flow)
-  }
+function openEditor(flow: any) {
+  const json = flow.flow_json ?? FLOW_STARTERS.blank
+
+  setJsonText(JSON.stringify(json, null, 2))
+  setJsonError(null)
+  setEditFlow(flow)
+
+  setBuilderState(metaToBuilder(json))
+}
 
   // ── Save JSON ─────────────────────────────────────────────────────────────
  async function saveJson() {
