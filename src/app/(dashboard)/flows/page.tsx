@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import FlowBuilder from '@/components/flows/FlowBuilder'
+import { convertToMetaJSON } from '@/lib/flowConverter'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -382,6 +384,13 @@ function SendFlowModal({ flow, onClose }: { flow: any; onClose: () => void }) {
 // Main Flows Page
 // ─────────────────────────────────────────────────────────────────────────────
 export default function FlowsPage() {
+const [builderState, setBuilderState] = useState<any[]>([
+  {
+    id: 'WELCOME',
+    title: 'Welcome',
+    blocks: []
+  }
+])
   const [flows,       setFlows]       = useState<any[]>([])
   const [loading,     setLoading]     = useState(true)
   const [syncing,     setSyncing]     = useState(false)
@@ -466,34 +475,51 @@ export default function FlowsPage() {
   }
 
   // ── Save JSON ─────────────────────────────────────────────────────────────
-  async function saveJson() {
-    if (!editFlow) return
-    let parsed: any
-    try { parsed = JSON.parse(jsonText) }
-    catch (e: any) { setJsonError(`Invalid JSON: ${e.message}`); return }
-    setSaving(true); setJsonError(null)
-    try {
-      const res = await fetch('/api/flows', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action:       'update_json',
-          flow_id:      editFlow.id,
-          meta_flow_id: editFlow.meta_flow_id,
-          flow_json:    parsed,
-        }),
-      })
-      const json = await res.json()
-      if (!res.ok) { setJsonError(json.error || 'Save failed'); return }
-      if (json.flow?.validation_errors?.length > 0) {
-        setJsonError(`Meta validation: ${JSON.stringify(json.flow.validation_errors)}`)
-      } else {
-        setEditFlow(json.flow)
-        setFlows(prev => prev.map(f => f.id === json.flow.id ? json.flow : f))
-        if (!json.meta_error) setJsonError(null)
-      }
-    } finally { setSaving(false) }
+ async function saveJson() {
+  if (!editFlow) return
+
+  const parsed = convertToMetaJSON(builderState)
+
+  setSaving(true)
+  setJsonError(null)
+
+  try {
+    const res = await fetch('/api/flows', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'update_json',
+        flow_id: editFlow.id,
+        meta_flow_id: editFlow.meta_flow_id,
+        flow_json: parsed,
+      }),
+    })
+
+    const json = await res.json()
+
+    if (!res.ok) {
+      setJsonError(json.error || 'Save failed')
+      return
+    }
+
+    if (json.flow?.validation_errors?.length > 0) {
+      setJsonError(
+        `Meta validation: ${JSON.stringify(json.flow.validation_errors)}`
+      )
+    } else {
+      setEditFlow(json.flow)
+      setFlows((prev:any) =>
+        prev.map((f:any) =>
+          f.id === json.flow.id ? json.flow : f
+        )
+      )
+      if (!json.meta_error) setJsonError(null)
+    }
+
+  } finally {
+    setSaving(false)
   }
+}
 
   // ── Publish ───────────────────────────────────────────────────────────────
   async function publishFlow(flow: any) {
@@ -875,16 +901,12 @@ export default function FlowsPage() {
 
               {/* Editor */}
               <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-                <textarea
-                  value={jsonText}
-                  onChange={e => { setJsonText(e.target.value); setJsonError(null) }}
-                  spellCheck={false}
-                  style={{
-                    width: '100%', height: '100%', padding: '16px', resize: 'none', border: 'none', outline: 'none',
-                    background: '#0d1117', color: '#e8edf5', fontFamily: "'Fira Code', 'Cascadia Code', 'Consolas', monospace",
-                    fontSize: 12.5, lineHeight: 1.6, boxSizing: 'border-box', minHeight: 380,
-                  }}
-                />
+                <div style={{ height:'70vh' }}>
+                  <FlowBuilder
+                    value={builderState}
+                    onChange={setBuilderState}
+                  />
+                </div>
               </div>
             </div>
 
