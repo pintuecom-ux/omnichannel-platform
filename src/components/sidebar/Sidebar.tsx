@@ -11,7 +11,8 @@ const NAV = [
   { id: 'lists',     icon: 'fa-solid fa-list-ul',         label: 'Lists',            soon: true,          section: 'Audience' },
   { id: 'segments',  icon: 'fa-solid fa-filter',          label: 'Segments',         soon: true,          section: 'Audience' },
   { id: 'broadcast', icon: 'fa-solid fa-satellite-dish',  label: 'Broadcast',        soon: true,          section: 'Automation' },
-  { id: 'flows',     icon: 'fa-solid fa-diagram-project', label: 'Flows / Bots',     soon: true,          section: 'Automation' },
+  // FIX BUG-11: removed soon:true, added href so Flows page is accessible
+  { id: 'flows',     icon: 'fa-solid fa-diagram-project', label: 'WA Flows',         href: '/flows',      section: 'Automation' },
   { id: 'aibots',    icon: 'fa-solid fa-robot',           label: 'AI Bots',          soon: true,          section: 'Automation' },
   { id: 'planner',   icon: 'fa-solid fa-calendar-days',   label: 'Content Planner',  soon: true,          section: 'Publishing' },
   { id: 'templates', icon: 'fa-solid fa-file-code',       label: 'Templates',        href: '/templates',  section: 'Publishing' },
@@ -24,7 +25,7 @@ const NAV = [
 ] as const
 
 export default function Sidebar() {
-  const router = useRouter()
+  const router   = useRouter()
   const pathname = usePathname()
   const sections = [...new Set(NAV.map(n => n.section))]
 
@@ -54,8 +55,8 @@ export default function Sidebar() {
           <div className="sidebar-section" key={section}>
             <div className="sidebar-section-label">{section}</div>
             {NAV.filter(n => n.section === section).map(item => {
-              const isSoon = 'soon' in item && item.soon
-              const href = 'href' in item ? item.href : undefined
+              const isSoon  = 'soon' in item && item.soon
+              const href    = 'href' in item ? item.href : undefined
               const isActive = href ? pathname?.startsWith(href) : false
               return (
                 <div
@@ -66,8 +67,8 @@ export default function Sidebar() {
                 >
                   <span className="nav-icon"><i className={item.icon} /></span>
                   <span className="nav-label">{item.label}</span>
-                  {'badge' in item && item.badge > 0 && !isSoon && (
-                    <span className="nav-badge" id={`badge-${item.id}`}>{item.badge}</span>
+                  {'badge' in item && (item as any).badge > 0 && !isSoon && (
+                    <span className="nav-badge" id={`badge-${item.id}`}>{(item as any).badge}</span>
                   )}
                   {isSoon && <span className="cs-badge">Soon</span>}
                 </div>
