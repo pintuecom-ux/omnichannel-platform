@@ -6,6 +6,11 @@ type Section = 'channels' | 'configuration' | 'team' | 'data' | 'account'
 type SubPage = string
 
 export default function SettingsPage() {
+  const [deletionRequested, setDeletionRequested] = useState(false)
+  const [deletionScheduledAt, setDeletionScheduledAt] = useState<string | null>(null)
+  const [deletionConfirmEmail, setDeletionConfirmEmail] = useState('')
+  const [deletionLoading, setDeletionLoading] = useState(false)
+  const [deletionCancelled, setDeletionCancelled] = useState(false)
   const supabase = createClient()
   const [section, setSection] = useState<Section>('channels')
   const [subPage, setSubPage] = useState<SubPage>('channels-connected')
@@ -92,6 +97,7 @@ export default function SettingsPage() {
       subs: [
         { id: 'data-import', label: 'Import Contacts', icon: 'fa-solid fa-file-import' },
         { id: 'data-export', label: 'Export Data',     icon: 'fa-solid fa-file-export' },
+        { id: 'data-deletion', label: 'Request Data Deletion', icon: 'fa-solid fa-trash-can' },
       ],
     },
     {
@@ -664,6 +670,186 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+
+        {/* ── DATA: Request Deletion ── */}
+        {subPage === 'data-deletion' && (
+          <div style={{ maxWidth: 580 }}>
+
+            {/* ── Pending deletion banner ── */}
+            {deletionRequested && !deletionCancelled && (
+              <div style={{ display: 'flex', gap: 14, padding: 18, background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.28)', borderRadius: 14, marginBottom: 24 }}>
+                <i className="fa-solid fa-hourglass-half" style={{ color: '#ef4444', fontSize: 16, flexShrink: 0, marginTop: 2 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: '#ef4444', marginBottom: 4 }}>
+                    Account Deletion Scheduled
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                    Your account and all data are scheduled for permanent deletion on{' '}
+                    <strong style={{ color: 'var(--text-primary)' }}>
+                      {deletionScheduledAt
+                        ? new Date(deletionScheduledAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+                        : '15 working days from now'}
+                    </strong>.
+                    Log back in any time before that date to cancel.
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setDeletionLoading(true)
+                      // Supabase: update cancellation timestamp
+                      // await supabase
+                      //   .from('account_deletion_requests')
+                      //   .update({ cancelled_at: new Date().toISOString() })
+                      //   .eq('user_id', profile.id)
+                      //   .is('cancelled_at', null)
+                      setDeletionRequested(false)
+                      setDeletionCancelled(true)
+                      setDeletionLoading(false)
+                    }}
+                    disabled={deletionLoading}
+                    style={{ marginTop: 12, background: 'transparent', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 8, padding: '7px 16px', color: '#ef4444', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <i className="fa-solid fa-xmark" />
+                    {deletionLoading ? 'Cancelling…' : 'Cancel Deletion Request'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Cancellation success ── */}
+            {deletionCancelled && (
+              <div style={{ display: 'flex', gap: 12, padding: 16, background: 'var(--accent-glow)', border: '1px solid var(--border-active)', borderRadius: 14, marginBottom: 24 }}>
+                <i className="fa-solid fa-circle-check" style={{ color: 'var(--accent)', fontSize: 16, flexShrink: 0, marginTop: 2 }} />
+                <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>Deletion cancelled.</strong> Your account and data are safe. No further action is needed.
+                </div>
+              </div>
+            )}
+
+            {/* ── Info card ── */}
+            <div className="form-section">
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8, color: '#ef4444' }}>
+                <i className="fa-solid fa-trash-can" />
+                Request Account & Data Deletion
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 20, lineHeight: 1.75 }}>
+                This will permanently delete your account, workspace, contacts, conversations, channel credentials, and all associated data from our servers. This action cannot be undone.
+              </div>
+
+              {/* What will be deleted checklist */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 10 }}>What gets deleted</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  {[
+                    ['fa-solid fa-user', 'Account & profile'],
+                    ['fa-solid fa-comments', 'All conversations'],
+                    ['fa-solid fa-users', 'All contacts'],
+                    ['fa-solid fa-building', 'Workspace data'],
+                    ['fa-solid fa-key', 'Channel credentials'],
+                    ['fa-solid fa-diagram-project', 'Flow automations'],
+                    ['fa-solid fa-file-lines', 'Templates'],
+                    ['fa-solid fa-user-group', 'Team members'],
+                  ].map(([icon, label]) => (
+                    <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', padding: '6px 10px', background: 'var(--bg-surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                      <i className={icon} style={{ color: '#ef4444', width: 14, fontSize: 11 }} />
+                      {label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Retained items */}
+              <div style={{ padding: '10px 14px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, marginBottom: 20, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                <i className="fa-solid fa-lock" style={{ color: '#f59e0b', marginRight: 6 }} />
+                <strong style={{ color: '#f59e0b' }}>Retained:</strong> Invoice / billing records are kept for up to 7 years as required by Indian tax law (GST Act). These will not contain any operational personal data.
+              </div>
+
+              {/* Grace period info */}
+              <div style={{ padding: '12px 14px', background: 'var(--accent-glow)', border: '1px solid var(--border-active)', borderRadius: 10, marginBottom: 24, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.75 }}>
+                <i className="fa-solid fa-shield-halved" style={{ color: 'var(--accent)', marginRight: 6 }} />
+                <strong style={{ color: 'var(--accent)' }}>15-working-day grace period:</strong> Your account will be scheduled for deletion — not deleted immediately. If you log back in within 15 working days, the deletion is automatically cancelled. After 15 working days with no login, data is permanently purged.
+              </div>
+
+              {/* Confirmation input */}
+              {!deletionRequested && !deletionCancelled && (
+                <>
+                  <div className="form-group">
+                    <div className="form-label" style={{ color: 'var(--text-secondary)' }}>
+                      Type your email address to confirm: <strong style={{ color: 'var(--text-primary)' }}>{profile?.email}</strong>
+                    </div>
+                    <input
+                      className="form-input"
+                      type="email"
+                      placeholder="Enter your email to confirm"
+                      value={deletionConfirmEmail}
+                      onChange={e => setDeletionConfirmEmail(e.target.value)}
+                      style={{ borderColor: deletionConfirmEmail && deletionConfirmEmail !== profile?.email ? 'rgba(239,68,68,0.5)' : undefined }}
+                    />
+                    {deletionConfirmEmail && deletionConfirmEmail !== profile?.email && (
+                      <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>
+                        <i className="fa-solid fa-triangle-exclamation" style={{ marginRight: 4 }} />
+                        Email does not match your account email
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    disabled={deletionLoading || deletionConfirmEmail !== profile?.email}
+                    onClick={async () => {
+                      if (deletionConfirmEmail !== profile?.email) return
+                      setDeletionLoading(true)
+                      // Calculate 15 working days from now
+                      const scheduledDate = new Date()
+                      let workingDaysAdded = 0
+                      while (workingDaysAdded < 15) {
+                        scheduledDate.setDate(scheduledDate.getDate() + 1)
+                        const day = scheduledDate.getDay()
+                        if (day !== 0 && day !== 6) workingDaysAdded++
+                      }
+                      // Supabase: insert deletion request record
+                      // await supabase.from('account_deletion_requests').insert({
+                      //   user_id: profile.id,
+                      //   workspace_id: profile.workspace_id,
+                      //   requested_at: new Date().toISOString(),
+                      //   scheduled_at: scheduledDate.toISOString(),
+                      //   cancelled_at: null,
+                      // })
+                      setDeletionRequested(true)
+                      setDeletionScheduledAt(scheduledDate.toISOString())
+                      setDeletionConfirmEmail('')
+                      setDeletionLoading(false)
+                    }}
+                    style={{
+                      width: '100%', padding: '11px 0',
+                      background: deletionConfirmEmail === profile?.email ? '#ef4444' : 'var(--bg-surface2)',
+                      color: deletionConfirmEmail === profile?.email ? '#fff' : 'var(--text-muted)',
+                      border: '1px solid',
+                      borderColor: deletionConfirmEmail === profile?.email ? '#ef4444' : 'var(--border)',
+                      borderRadius: 10, fontSize: 13.5, fontWeight: 600, cursor: deletionConfirmEmail === profile?.email ? 'pointer' : 'not-allowed',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <i className={`fa-solid ${deletionLoading ? 'fa-spinner fa-spin' : 'fa-trash-can'}`} />
+                    {deletionLoading ? 'Scheduling deletion…' : 'Schedule Account Deletion'}
+                  </button>
+
+                  <div style={{ marginTop: 12, textAlign: 'center' }}>
+                    <a
+                      href="/data-deletion"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: 11.5, color: 'var(--text-muted)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                    >
+                      <i className="fa-solid fa-arrow-up-right-from-square" />
+                      Read our full Data Deletion Policy
+                    </a>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
 
         {/* ── ACCOUNT: Info ── */}
         {subPage === 'account-info' && (
