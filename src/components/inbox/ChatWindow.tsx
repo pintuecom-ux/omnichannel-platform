@@ -12,14 +12,22 @@ const STATUS_LABEL = { open: 'Open', pending: 'Pending', closed: 'Closed' }
 
 export default function ChatWindow() {
   const supabase = createClient()
-  const { activeConversationId, messages, setMessages, addMessage, updateMessage, updateConversation } = useInboxStore()
+  const {
+    activeConversationId,
+    messages,
+    setMessages,
+    addMessage,
+    updateMessage,
+    updateConversation,
+  } = useInboxStore()
   const conversation = useActiveConversation()
   const platform = conversation?.platform ?? 'whatsapp'
-  const isWA = platform === 'whatsapp'
-  const [activeTab, setActiveTab] = useState<'messages' | 'notes' | 'comments'>('messages')
-  const [status, setStatus] = useState<'open' | 'pending' | 'closed'>('open')
+  const isWA     = platform === 'whatsapp'
+
+  const [activeTab,   setActiveTab]   = useState<'messages' | 'notes' | 'comments'>('messages')
+  const [status,      setStatus]      = useState<'open' | 'pending' | 'closed'>('open')
   // Track which comment the agent is replying to in the Comments tab
-  const [replyingTo, setReplyingTo] = useState<{ id: string; body: string } | null>(null)
+  const [replyingTo, setReplyingTo]  = useState<{ id: string; body: string } | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -74,6 +82,7 @@ export default function ChatWindow() {
         filter: `conversation_id=eq.${activeConversationId}`,
       }, payload => {
         const msg = payload.new as Message
+        // Don't add optimistic messages that already exist by external_id
         if (!msg.id.startsWith('temp-')) addMessage(msg)
       })
       .on('postgres_changes', {
@@ -86,6 +95,7 @@ export default function ChatWindow() {
     return () => { supabase.removeChannel(ch) }
   }, [activeConversationId, loadMessages]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
   }, [messages.length])
@@ -100,11 +110,11 @@ export default function ChatWindow() {
 
   if (!conversation) return null
 
-  const contactName = conversation.contact?.name || conversation.contact?.phone || conversation.contact?.instagram_username || 'Unknown'
-  const platformIcon  = { whatsapp: 'fa-brands fa-whatsapp', instagram: 'fa-brands fa-instagram', facebook: 'fa-brands fa-facebook' }[platform]
-  const platformCls   = { whatsapp: 'pp-wa', instagram: 'pp-ig', facebook: 'pp-fb' }[platform]
-  const platformLabel = { whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook' }[platform]
-  const badgeCls      = { whatsapp: 'pb-wa', instagram: 'pb-ig', facebook: 'pb-fb' }[platform]
+  const contactName    = conversation.contact?.name || conversation.contact?.phone || conversation.contact?.instagram_username || 'Unknown'
+  const platformIcon   = { whatsapp: 'fa-brands fa-whatsapp', instagram: 'fa-brands fa-instagram', facebook: 'fa-brands fa-facebook' }[platform]
+  const platformCls    = { whatsapp: 'pp-wa', instagram: 'pp-ig', facebook: 'pp-fb' }[platform]
+  const platformLabel  = { whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook' }[platform]
+  const badgeCls       = { whatsapp: 'pb-wa', instagram: 'pb-ig', facebook: 'pb-fb' }[platform]
 
   // Build date groups — filter messages by active tab
   const dateGroups: { date: string; msgs: Message[] }[] = []
@@ -114,7 +124,7 @@ export default function ChatWindow() {
     return !m.is_note && m.content_type !== 'comment'
   })
   for (const msg of displayMsgs) {
-    const d = formatMessageDate(msg.created_at)
+    const d    = formatMessageDate(msg.created_at)
     const last = dateGroups[dateGroups.length - 1]
     if (!last || last.date !== d) dateGroups.push({ date: d, msgs: [msg] })
     else last.msgs.push(msg)
@@ -124,11 +134,12 @@ export default function ChatWindow() {
 
   return (
     <div id="main-workspace">
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="chat-header">
         <div className="chat-contact">
           <div className="avatar-wrap">
-            <div className="avatar" style={{ background: '#1a6b3a', width: 40, height: 40, fontSize: 14, fontWeight: 700, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+            <div className="avatar"
+              style={{ background: '#1a6b3a', width: 40, height: 40, fontSize: 14, fontWeight: 700, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
               {contactName.slice(0, 2).toUpperCase()}
             </div>
             <div className={`platform-badge ${badgeCls}`}>
@@ -153,7 +164,7 @@ export default function ChatWindow() {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* ── Tabs ── */}
       <div className="workspace-tabs">
         {tabs.map(tab => (
           <div
@@ -181,7 +192,7 @@ export default function ChatWindow() {
         ))}
       </div>
 
-      {/* Messages area */}
+      {/* ── Messages area ── */}
       <div className="workspace-content">
         {activeTab === 'notes' && (
           <div className="note-intro"><i className="fa-solid fa-lock" /> Internal notes — never sent to customer.</div>
@@ -207,16 +218,20 @@ export default function ChatWindow() {
             <div key={group.date}>
               <div className="date-divider"><span>{group.date}</span></div>
               {group.msgs.map((msg, i) => {
-                const prev = group.msgs[i - 1]
-                const next = group.msgs[i + 1]
-                const isFirst = !prev || prev.direction !== msg.direction || new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime() > 5 * 60000
-                const isLast  = !next || next.direction !== msg.direction || new Date(next.created_at).getTime() - new Date(msg.created_at).getTime() > 5 * 60000
+                const prev    = group.msgs[i - 1]
+                const next    = group.msgs[i + 1]
+                const isFirst = !prev || prev.direction !== msg.direction ||
+                  new Date(msg.created_at).getTime() - new Date(prev.created_at).getTime() > 5 * 60000
+                const isLast  = !next || next.direction !== msg.direction ||
+                  new Date(next.created_at).getTime() - new Date(msg.created_at).getTime() > 5 * 60000
                 return (
                   <MessageBubble
                     key={msg.id}
                     message={msg}
                     isFirstInGroup={isFirst}
                     isLastInGroup={isLast}
+                    // CRITICAL: pass full message list so quoted replies can look up the original
+                    allMessages={displayMsgs}
                     onSetReply={
                       activeTab === 'comments'
                         ? (id, body) => setReplyingTo({ id, body })
@@ -231,11 +246,9 @@ export default function ChatWindow() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input area — switches by tab */}
+      {/* ── Input area — switches by tab ── */}
       {activeTab === 'messages' && <InputArea onMessageSent={loadMessages} />}
-      {activeTab === 'notes' && (
-        <NoteInput conversationId={activeConversationId!} onSaved={loadMessages} />
-      )}
+      {activeTab === 'notes'    && <NoteInput conversationId={activeConversationId!} onSaved={loadMessages} />}
       {activeTab === 'comments' && (
         <CommentReplyInput
           conversation={conversation}
@@ -248,7 +261,10 @@ export default function ChatWindow() {
   )
 }
 
-// ── Internal Note Input ──────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/* Internal Note Input                                                        */
+/* -------------------------------------------------------------------------- */
+
 function NoteInput({ conversationId, onSaved }: { conversationId: string; onSaved: () => void }) {
   const [text, setText] = useState('')
   const supabase = createClient()
@@ -261,13 +277,13 @@ function NoteInput({ conversationId, onSaved }: { conversationId: string; onSave
     if (!p) return
     await supabase.from('messages').insert({
       conversation_id: conversationId,
-      workspace_id: p.workspace_id,
-      direction: 'outbound',
-      content_type: 'text',
-      body: text.trim(),
-      is_note: true,
-      status: 'sent',
-      sender_id: session.user.id,
+      workspace_id:    p.workspace_id,
+      direction:       'outbound',
+      content_type:    'text',
+      body:            text.trim(),
+      is_note:         true,
+      status:          'sent',
+      sender_id:       session.user.id,
     })
     setText('')
     onSaved()
@@ -293,7 +309,10 @@ function NoteInput({ conversationId, onSaved }: { conversationId: string; onSave
   )
 }
 
-// ── Comment Reply Input (now functional) ─────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/* Comment Reply Input                                                        */
+/* -------------------------------------------------------------------------- */
+
 interface CommentReplyInputProps {
   conversation: Conversation
   replyingTo: { id: string; body: string } | null
@@ -302,9 +321,9 @@ interface CommentReplyInputProps {
 }
 
 function CommentReplyInput({ conversation, replyingTo, onClearReply, onSent }: CommentReplyInputProps) {
-  const [text, setText] = useState('')
+  const [text,    setText]    = useState('')
   const [sending, setSending] = useState(false)
-  const [error, setError] = useState('')
+  const [error,   setError]   = useState('')
   const textRef = useRef<HTMLTextAreaElement>(null)
 
   async function send() {
@@ -315,25 +334,20 @@ function CommentReplyInput({ conversation, replyingTo, onClearReply, onSent }: C
     }
     setError('')
     setSending(true)
-
     try {
-      const res = await fetch('/api/messages/send', {
-        method: 'POST',
+      const res  = await fetch('/api/messages/send', {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body:    JSON.stringify({
           conversation_id: conversation.id,
-          type: 'comment_reply',
-          comment_id: replyingTo.id,
-          body: text.trim(),
+          type:            'comment_reply',
+          comment_id:      replyingTo.id,
+          body:            text.trim(),
         }),
       })
       const json = await res.json()
-      if (!res.ok) {
-        setError(json.error || 'Failed to send reply')
-      } else {
-        setText('')
-        onSent()
-      }
+      if (!res.ok) setError(json.error || 'Failed to send reply')
+      else { setText(''); onSent() }
     } catch (err: any) {
       setError(err.message || 'Network error')
     } finally {
@@ -341,31 +355,19 @@ function CommentReplyInput({ conversation, replyingTo, onClearReply, onSent }: C
     }
   }
 
-  const platformIcon = {
-    facebook: 'fa-brands fa-facebook',
-    instagram: 'fa-brands fa-instagram',
-    whatsapp: 'fa-brands fa-whatsapp',
-  }[conversation.platform]
-
+  const platformIcon  = { facebook: 'fa-brands fa-facebook', instagram: 'fa-brands fa-instagram', whatsapp: 'fa-brands fa-whatsapp' }[conversation.platform]
   const platformColor = conversation.platform === 'instagram' ? '#e1306c' : '#1877f2'
 
   return (
     <div className="notes-input-area" style={{ borderTop: '1px solid var(--border)' }}>
       {/* Reply target indicator */}
       {replyingTo ? (
-        <div style={{
-          display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 12px',
-          background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)',
-          fontSize: 12,
-        }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 12px', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
           <i className="fa-solid fa-reply" style={{ color: platformColor, marginTop: 2, flexShrink: 0 }} />
           <span style={{ flex: 1, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             Replying to: <em>{replyingTo.body.slice(0, 60)}{replyingTo.body.length > 60 ? '…' : ''}</em>
           </span>
-          <button
-            onClick={onClearReply}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, flexShrink: 0 }}
-          >
+          <button onClick={onClearReply} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, flexShrink: 0 }}>
             <i className="fa-solid fa-xmark" />
           </button>
         </div>
@@ -376,14 +378,12 @@ function CommentReplyInput({ conversation, replyingTo, onClearReply, onSent }: C
         </div>
       )}
 
-      {/* Error */}
       {error && (
         <div style={{ padding: '4px 12px', fontSize: 11, color: '#e84040' }}>
           <i className="fa-solid fa-circle-exclamation" style={{ marginRight: 4 }} />{error}
         </div>
       )}
 
-      {/* Input row */}
       <div className="input-row">
         <textarea
           ref={textRef}
@@ -394,28 +394,19 @@ function CommentReplyInput({ conversation, replyingTo, onClearReply, onSent }: C
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
           rows={1}
           disabled={sending || !replyingTo}
-          style={{
-            borderColor: replyingTo ? `${platformColor}44` : undefined,
-            opacity: replyingTo ? 1 : 0.6,
-          }}
+          style={{ borderColor: replyingTo ? `${platformColor}44` : undefined, opacity: replyingTo ? 1 : 0.6 }}
         />
         <button
           className="send-btn"
-          style={{
-            background: replyingTo ? platformColor : 'var(--bg-surface)',
-            opacity: (sending || !text.trim() || !replyingTo) ? 0.5 : 1,
-          }}
+          style={{ background: replyingTo ? platformColor : 'var(--bg-surface)', opacity: (sending || !text.trim() || !replyingTo) ? 0.5 : 1 }}
           onClick={send}
           disabled={sending || !text.trim() || !replyingTo}
-          title={replyingTo ? 'Send public reply' : 'Select a comment first'}
         >
           {sending
-            ? <i className="fa-solid fa-spinner" style={{ animation: 'spin 1s linear infinite' }} />
-            : <i className="fa-solid fa-paper-plane" />
-          }
+            ? <i className="fa-solid fa-spinner fa-spin" />
+            : <i className="fa-solid fa-paper-plane" />}
         </button>
       </div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
 }

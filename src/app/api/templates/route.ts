@@ -184,6 +184,14 @@ function buildComponents(f: {
         case 'OTP':           return { type: 'OTP', otp_type: b.otp_type ?? 'COPY_CODE', text: b.text ?? 'Copy Code' }
         case 'CATALOG':       return { type: 'CATALOG',       text: b.text }
         case 'MPM':           return { type: 'MPM',           text: b.text }
+        case 'FLOW':
+          return {
+            type: 'FLOW',
+            text: b.text,
+            ...(b.flow_id         ? { flow_id: b.flow_id }                 : {}),
+            ...(b.navigate_screen ? { navigate_screen: b.navigate_screen }  : {}),
+            flow_action: 'navigate',
+          }
         default:              return b
       }
     })

@@ -24,8 +24,8 @@ const WA_LANGUAGES = [
 type HeaderType = 'NONE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'LOCATION'
 
 // All supported button types
-type BtnKind = 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'OTP' | 'CATALOG' | 'MPM'
-interface Btn { type: BtnKind; text: string; url?: string; phone?: string; url_example?: string; otp_type?: 'COPY_CODE' | 'ONE_TAP' | 'ZERO_TAP' }
+type BtnKind = 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'OTP' | 'CATALOG' | 'MPM' | 'FLOW'
+interface Btn { type: BtnKind; text: string; url?: string; phone?: string; url_example?: string; otp_type?: 'COPY_CODE' | 'ONE_TAP' | 'ZERO_TAP'; flow_id?: string; flow_name?: string; navigate_screen?: string }
 
 // Template types
 type TemplateType = 'STANDARD' | 'AUTHENTICATION' | 'CATALOG' | 'MPM'
@@ -1031,9 +1031,9 @@ export default function TemplatesPage() {
                     <div className="form-label" style={{ marginBottom: 0 }}>Buttons <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 10 }}>(max 10, mix of types)</span></div>
                     <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                       {([
-                        ['QUICK_REPLY', '↩ Quick Reply'], ['URL', '🔗 URL'], ['PHONE_NUMBER', '📞 Phone'],
-                        ['CATALOG', '🛒 Catalog'], ['MPM', '📦 Products'],
-                      ] as [BtnKind, string][]).map(([type, label]) => (
+                          ['QUICK_REPLY', '↩ Quick Reply'], ['URL', '🔗 URL'], ['PHONE_NUMBER', '📞 Phone'],
+                          ['CATALOG', '🛒 Catalog'], ['MPM', '📦 Products'], ['FLOW', '⚡ Flow'],
+                        ] as [BtnKind, string][]).map(([type, label]) => (
                         <button key={type} className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 10, height: 24 }} onClick={() => addBtn(type)}>
                           {label}
                         </button>
@@ -1043,7 +1043,7 @@ export default function TemplatesPage() {
                   {form.buttons.map((btn, i) => (
                     <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
                       <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0, minWidth: 68 }}>
-                        {btn.type === 'QUICK_REPLY' ? '↩ Reply' : btn.type === 'URL' ? '🔗 URL' : btn.type === 'PHONE_NUMBER' ? '📞 Phone' : btn.type === 'CATALOG' ? '🛒 Catalog' : '📦 Products'}
+                        {btn.type === 'QUICK_REPLY' ? '↩ Reply' : btn.type === 'URL' ? '🔗 URL' : btn.type === 'PHONE_NUMBER' ? '📞 Phone' : btn.type === 'CATALOG' ? '🛒 Catalog' : btn.type === 'FLOW' ? '⚡ Flow' : '📦 Products'}
                       </span>
                       <input className="form-input" style={{ flex: 1 }} value={btn.text} onChange={e => updBtn(i, { text: e.target.value })} placeholder="Button label (max 25)" maxLength={25} />
                       {btn.type === 'URL' && (
@@ -1052,6 +1052,26 @@ export default function TemplatesPage() {
                       {btn.type === 'PHONE_NUMBER' && (
                         <input className="form-input" style={{ flex: 1 }} value={btn.phone ?? ''} onChange={e => updBtn(i, { phone: e.target.value })} placeholder="+919354231262" />
                       )}
+
+                      {btn.type === 'FLOW' && (
+                        <>
+                          <input
+                            className="form-input"
+                            style={{ flex: 2 }}
+                            value={btn.flow_id ?? ''}
+                            onChange={e => updBtn(i, { flow_id: e.target.value })}
+                            placeholder="Flow ID (from Meta)"
+                          />
+                          <input
+                            className="form-input"
+                            style={{ flex: 1 }}
+                            value={btn.navigate_screen ?? ''}
+                              onChange={e => updBtn(i, { navigate_screen: e.target.value })}
+                            placeholder="Screen ID (optional)"
+                          />
+                        </>
+                      )}
+
                       <button className="icon-btn" onClick={() => upd('buttons', form.buttons.filter((_, j) => j !== i))}>
                         <i className="fa-solid fa-xmark" style={{ fontSize: 11, color: '#e84040' }} />
                       </button>
