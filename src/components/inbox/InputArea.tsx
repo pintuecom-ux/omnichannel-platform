@@ -248,9 +248,14 @@ export default function InputArea({ onMessageSent }: Props) {
     }
 
     // Build preview (for OTP just use a placeholder)
-    const preview = isOTP
-      ? `[OTP Authentication — code: ${vals[0] || '******'}]`
-      : extractVars(template).reduce((b, v, i) => b.replaceAll(v, vals[i] || v), template.body)
+const templateBody = template.body ?? ''
+
+const preview: string = isOTP
+  ? `[OTP Authentication — code: ${vals[0] || '******'}]`
+  : extractVars(template).reduce(
+      (b, v, i) => b.replaceAll(v, vals[i] || v),
+      templateBody
+    )
 
     addOptimistic('template', preview, { template_name: template.name })
 
@@ -680,7 +685,11 @@ export default function InputArea({ onMessageSent }: Props) {
                   <div className="form-group">
                     <div className="form-label">Preview</div>
                     <div className="tpl-preview-box" style={{ fontFamily: 'inherit', fontSize: 13 }}>
-                      {varModal.vars.reduce((body, v, i) => body.replaceAll(v, varModal.values[i] || v), varModal.template.body)}
+                      {varModal.vars.reduce(
+  (body, v, i) =>
+    body.replaceAll(v, varModal.values[i] || v),
+  varModal.template.body ?? ''
+)}
                     </div>
                   </div>
                 </>
