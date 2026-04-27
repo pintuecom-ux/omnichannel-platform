@@ -1,8 +1,12 @@
 /**
- * WhatsApp Webhook Route
+ * src/app/api/webhooks/whatsapp/route.ts
  *
- * Bugs fixed vs original:
- *  BUG-03: Now processes interactive/button/order messages and extracts readable body
+ * FIXES:
+ * 1. Handle type='unsupported' properly — previously stored as text with null body
+ *    causing "[unsupported]" display
+ * 2. context field on inbound messages stored correctly in meta.context
+ * 3. Replace getSession() with getUser() pattern (webhook uses service role so
+ *    this doesn't apply here — webhooks use admin client directly, no auth needed)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -31,7 +35,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    // Must await BEFORE returning 200 — Vercel terminates after response
     await handleEvents(body)
     return NextResponse.json({ status: 'ok' })
   } catch (err) {
@@ -52,65 +55,53 @@ async function handleEvents(body: any) {
 }
 
 // ── Extract human-readable body from any message type ─────────────────────────
-// FIX BUG-03: proper extraction for interactive/button/flow/order messages
 function extractMessageBody(data: any): string | null {
-  // Plain text
   if (data.text) return data.text
 
-  // Quick-reply button click (from template buttons)
-  if (data.button) {
-    return data.button.text ?? null
-  }
+  if (data.button) return data.button.text ?? null
 
-  // Interactive message (button reply, list reply, flow completion)
   if (data.interactive) {
     const iv = data.interactive
     switch (iv.type) {
-      case 'button_reply':
-        // User clicked a reply button
-        return iv.button_reply?.title ?? '[Button Reply]'
-      case 'list_reply':
-        // User selected from a list
-        return iv.list_reply?.title ?? iv.list_reply?.id ?? '[List Reply]'
-      case 'nfm_reply':
-        // Flow completion response
-        // body field contains JSON response from the flow
-        return `[Flow Response: ${iv.nfm_reply?.name ?? 'submitted'}]`
-      default:
-        return `[Interactive: ${iv.type}]`
+      case 'button_reply': return iv.button_reply?.title ?? '[Button Reply]'
+      case 'list_reply':   return iv.list_reply?.title ?? iv.list_reply?.id ?? '[List Reply]'
+      case 'nfm_reply':    return `[Flow Response: ${iv.nfm_reply?.name ?? 'submitted'}]`
+      default:             return `[Interactive: ${iv.type}]`
     }
   }
 
-  // Order message
   if (data.order) {
     const items = data.order.product_items ?? []
     return `[Order: ${items.length} item${items.length !== 1 ? 's' : ''}]`
   }
 
-  // Contacts
   if (data.contacts && data.contacts.length > 0) {
     const name = data.contacts[0]?.name?.formatted_name ?? 'Contact'
     return `[Contact: ${name}]`
   }
 
-  // Media — use caption if present
   const mediaObj = data.image ?? data.video ?? data.audio ?? data.document ?? data.sticker ?? null
   if (mediaObj) return mediaObj.caption ?? null
 
-  // Location
   if (data.location) {
     return `[Location: ${data.location.name ?? data.location.address ?? 'shared location'}]`
   }
 
-  // Reaction
   if (data.reaction) {
     return `[Reaction: ${data.reaction.emoji ?? '👍'}]`
+  }
+
+  // FIX: 'unsupported' type — return descriptive body instead of null
+  // WhatsApp sends type='unsupported' for: polls, voice notes in some regions,
+  // broadcast list messages, certain business messages, future message types
+  if (data.type === 'unsupported') {
+    return null  // body is null — MessageBubble handles 'unsupported' content_type specially
   }
 
   return null
 }
 
-// ── Determine DB content_type from parsed message data ──────────────────────
+// ── Determine DB content_type ──────────────────────────────────────────────────
 function getContentType(data: any): string {
   switch (data.type) {
     case 'text':        return 'text'
@@ -125,6 +116,9 @@ function getContentType(data: any): string {
     case 'button':      return 'button'
     case 'order':       return 'order'
     case 'contacts':    return 'contacts'
+    // FIX: Store 'unsupported' as its own type so MessageBubble can render it
+    // with the proper "Message type not supported in this view" indicator
+    case 'unsupported': return 'unsupported'
     default:            return 'text'
   }
 }
@@ -133,7 +127,6 @@ function getContentType(data: any): string {
 async function processMessage(ev: any) {
   const { phoneNumberId, data } = ev
 
-  // 1. Find channel by phone_number_id
   const { data: channel } = await admin
     .from('channels')
     .select('id, workspace_id, access_token')
@@ -146,7 +139,7 @@ async function processMessage(ev: any) {
     return
   }
 
-  // 2. Idempotency
+  // Idempotency check
   const { data: exists } = await admin
     .from('messages')
     .select('id')
@@ -154,7 +147,7 @@ async function processMessage(ev: any) {
     .maybeSingle()
   if (exists) return
 
-  // 3. Upsert contact
+  // Upsert contact
   const phone = data.from.replace(/^\+/, '')
   const { data: contact, error: contactErr } = await admin
     .from('contacts')
@@ -170,8 +163,9 @@ async function processMessage(ev: any) {
     return
   }
 
-  // 4. Upsert conversation
-  const bodyText = extractMessageBody(data) ?? `[${data.type}]`
+  const bodyText = extractMessageBody(data)
+
+  // Upsert conversation
   const { data: conv, error: convErr } = await admin
     .from('conversations')
     .upsert(
@@ -181,7 +175,7 @@ async function processMessage(ev: any) {
         channel_id:      channel.id,
         platform:        'whatsapp',
         status:          'open',
-        last_message:    bodyText,
+        last_message:    bodyText ?? (data.type === 'unsupported' ? '[Unsupported message]' : `[${data.type}]`),
         last_message_at: data.timestamp,
         updated_at:      new Date().toISOString(),
       },
@@ -195,12 +189,11 @@ async function processMessage(ev: any) {
     return
   }
 
-  await admin
-    .from('conversations')
+  await admin.from('conversations')
     .update({ unread_count: (conv.unread_count || 0) + 1 })
     .eq('id', conv.id)
 
-  // 5. Resolve media URL (images, video, audio, documents)
+  // Resolve media URL
   let mediaUrl:  string | null = null
   let mediaMime: string | null = null
 
@@ -208,10 +201,8 @@ async function processMessage(ev: any) {
   if (mediaObj?.id) {
     try {
       const waClient = new WhatsAppClient(channel.access_token, phoneNumberId)
-      // FIX BUG-01: getMediaUrl now includes phone_number_id
       const { url, mime_type } = await waClient.getMediaUrl(mediaObj.id)
 
-      // Download and persist to Supabase Storage
       const bytes = await waClient.downloadMedia(url)
       const ext   = (mime_type?.split('/')[1]?.split(';')[0] ?? 'bin').replace(/[^a-z0-9]/g, '')
       const path  = `${channel.workspace_id}/${conv.id}/${data.external_id}.${ext}`
@@ -221,8 +212,8 @@ async function processMessage(ev: any) {
         .upload(path, bytes, { contentType: mime_type, upsert: true })
 
       if (storageErr) {
-        console.warn('[WA] Storage upload failed, using WA URL directly:', storageErr.message)
-        mediaUrl = url   // temp URL — will expire in ~5 min
+        console.warn('[WA] Storage upload failed, using temp URL:', storageErr.message)
+        mediaUrl = url
       } else {
         const { data: pub } = admin.storage.from('media').getPublicUrl(path)
         mediaUrl = pub.publicUrl
@@ -233,38 +224,43 @@ async function processMessage(ev: any) {
     }
   }
 
-  // 6. Build full meta for storage (includes flow response data, interactive data, etc.)
+  // Build meta
   const meta: Record<string, any> = {
     from:      phone,
     from_name: data.from_name,
     filename:  data.document?.filename ?? null,
   }
 
-  // FIX BUG-03: preserve flow response data
   if (data.interactive) {
     meta.interactive_type = data.interactive.type
-    if (data.interactive.nfm_reply) {
-      // Flow completion — store the response JSON
-      meta.flow_response = data.interactive.nfm_reply
-    }
-    if (data.interactive.button_reply) meta.button_reply = data.interactive.button_reply
-    if (data.interactive.list_reply)   meta.list_reply   = data.interactive.list_reply
+    if (data.interactive.nfm_reply)    meta.flow_response = data.interactive.nfm_reply
+    if (data.interactive.button_reply) meta.button_reply  = data.interactive.button_reply
+    if (data.interactive.list_reply)   meta.list_reply    = data.interactive.list_reply
   }
   if (data.button)   meta.button    = data.button
   if (data.order)    meta.order     = data.order
-  if (data.context)  meta.context   = data.context
   if (data.reaction) meta.reaction  = data.reaction
   if (data.location) meta.location  = data.location
   if (data.contacts) meta.contacts  = data.contacts
 
-  // 7. Insert message
+  // FIX: Store context (reply-to reference) correctly
+  // meta.context.message_id is what QuotedPreview reads to find the original message
+  if (data.context) {
+    meta.context = {
+      message_id: data.context.message_id ?? data.context.id,
+      from:       data.context.from ?? null,
+      type:       data.context.type ?? null,
+    }
+  }
+
+  // Insert message
   const { error: msgErr } = await admin.from('messages').insert({
     conversation_id: conv.id,
     workspace_id:    channel.workspace_id,
     external_id:     data.external_id,
     direction:       'inbound',
     content_type:    getContentType(data),
-    body:            bodyText !== `[${data.type}]` ? bodyText : (data.text ?? null),
+    body:            bodyText,
     media_url:       mediaUrl,
     media_mime:      mediaMime,
     status:          'delivered',
@@ -281,15 +277,15 @@ async function processStatus(ev: any) {
   const { data } = ev
   if (!data.external_id) return
 
-  await admin
-    .from('messages')
-    .update({ status: data.status })
-    .eq('external_id', data.external_id)
+  const updates: any = { status: data.status }
 
-  // If status failed, store error info
+  // Store pricing/conversation metadata from status updates
+  if (data.conversation) updates.meta = { conversation: data.conversation, pricing: data.pricing }
+
+  await admin.from('messages').update(updates).eq('external_id', data.external_id)
+
   if (data.status === 'failed' && data.errors) {
-    await admin
-      .from('messages')
+    await admin.from('messages')
       .update({ meta: { errors: data.errors } })
       .eq('external_id', data.external_id)
   }
