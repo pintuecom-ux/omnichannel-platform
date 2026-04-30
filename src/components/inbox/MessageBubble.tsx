@@ -635,12 +635,6 @@ function WaBubble({
       className={`wa-msg-row ${isOut ? 'out' : 'in'}`}
       style={{ marginTop: isFirst ? 6 : 2 }}
     >
-      {!isOut && (
-        <div className="wa-avatar-slot">
-          {isFirst && <div className="wa-avatar">👤</div>}
-        </div>
-      )}
-
       <div
         className={`wa-bubble ${isOut ? 'wa-out' : 'wa-in'} ${
           isLast ? (isOut ? 'wa-tail-out' : 'wa-tail-in') : ''
@@ -818,7 +812,6 @@ export default function MessageBubble({
         className={`wa-msg-row ${isOut ? 'out' : 'in'}`}
         style={{ marginTop: 2 }}
       >
-        {!isOut && <div className="wa-avatar-slot" />}
         <div
           style={{
             fontSize: 11,
@@ -1191,11 +1184,6 @@ export default function MessageBubble({
   if (msg.content_type === 'sticker' && mediaUrl) {
     return (
       <div className={`wa-msg-row ${isOut ? 'out' : 'in'}`}>
-        {!isOut && (
-          <div className="wa-avatar-slot">
-            {isFirstInGroup && <div className="wa-avatar">👤</div>}
-          </div>
-        )}
         <img
           src={mediaUrl}
           alt="Sticker"
