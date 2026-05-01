@@ -29,7 +29,8 @@ export type MessageContentType =
   | 'flow'          // outbound flow message
   | 'order'         // product order
   | 'contacts'      // contact card
-  | 'unsupported'   // polls, voice calls, broadcast lists, unknown future types
+  | 'unsupported'   // polls, broadcast lists, unknown future types
+  | 'call'          // WhatsApp voice call events (started, ended, missed, failed)
 
 export interface Profile {
   id: string

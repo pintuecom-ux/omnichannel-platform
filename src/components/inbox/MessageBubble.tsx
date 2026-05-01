@@ -905,6 +905,8 @@ export default function MessageBubble({
     )
   }
 
+  
+  
   /* ── Audio ── */
   if (msg.content_type === 'audio' || isAudio(mime)) {
     return (

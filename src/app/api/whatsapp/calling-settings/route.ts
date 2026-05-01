@@ -104,18 +104,15 @@ export async function POST(req: NextRequest) {
       call_icon_visibility: call_icon_visibility ?? 'visible',
     })
 
-    // Cache the calling status on the channel.meta for quick reads
-    await admin.from('channels')
-      .update({
-        meta: admin.rpc
-          ? undefined // will be handled below
-          : undefined,
-      })
+    // Cache the calling status on the channel for quick UI reads
+    const { data: existing } = await admin
+      .from('channels')
+      .select('meta')
       .eq('id', channel_id)
+      .maybeSingle()
 
-    // Update channel meta with calling status
-    const { data: existing } = await admin.from('channels').select('meta').eq('id', channel_id).maybeSingle()
     await admin.from('channels').update({
+      calling_enabled: status === 'enabled',
       meta: { ...(existing?.meta ?? {}), calling_enabled: status === 'enabled' },
     }).eq('id', channel_id)
 
