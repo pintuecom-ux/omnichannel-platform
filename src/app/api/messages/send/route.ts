@@ -1,12 +1,3 @@
-/**
- * src/app/api/messages/send/route.ts
- *
- * Full merged version — all three platforms + getUser() security fix
- *
- * Platforms: WhatsApp, Facebook, Instagram
- * Types:     text, template, media, flow, reaction, list, comment_reply
- */
-
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as serverClient } from '@/lib/supabase/server'
 import { createClient as adminClient } from '@supabase/supabase-js'
@@ -32,34 +23,52 @@ function detectMediaType(mime: string): 'image' | 'video' | 'audio' | 'document'
 }
 
 /**
- * Builds template send components:
- *  1. Body variables  → [{type:'body', parameters:[{type:'text',text:'val'}]}]
- *  2. OTP copy_code   → [{type:'button', sub_type:'copy_code', index:'0',
- *                          parameters:[{type:'coupon_code',coupon_code:'123456'}]}]
- *  3. URL suffix      → [{type:'button', sub_type:'url', index:'0',
- *                          parameters:[{type:'text',text:'suffix'}]}]
+ * buildSendComponents
  *
- * NOTE: FLOW template buttons are static — no component params needed when sending.
+ * FIX (Issue 6 — Error 131009):
+ * The Meta WhatsApp API rejects templates with FLOW-type buttons if you
+ * include ANY button component with sub_type='flow' in the components array.
+ * FLOW buttons are fully self-contained in the template definition and must
+ * be sent with NO button component parameters at all.
+ *
+ * Rules:
+ *   - Body variables → [{type:'body', parameters:[{type:'text',text:'val'}]}]
+ *   - OTP copy_code  → [{type:'button', sub_type:'copy_code', index:'0',
+ *                         parameters:[{type:'coupon_code',coupon_code:'CODE'}]}]
+ *   - URL suffix     → [{type:'button', sub_type:'url', index:'0',
+ *                         parameters:[{type:'text',text:'SUFFIX'}]}]
+ *   - FLOW button    → *** OMITTED — never include parameters for flow buttons ***
+ *   - quick_reply    → [{type:'button', sub_type:'quick_reply', index:'N',
+ *                         parameters:[{type:'payload',payload:'VAL'}]}]
  */
 function buildSendComponents(
   bodyVars: string[] = [],
   buttonParams?: {
-    index: number
-    subType: 'copy_code' | 'url' | 'quick_reply'
-    value: string
+    index:   number
+    subType: 'copy_code' | 'url' | 'quick_reply' | 'flow'
+    value:   string
   }[]
 ): any[] {
   const components: any[] = []
 
   if (bodyVars.length > 0 && bodyVars.some(v => v)) {
     components.push({
-      type: 'body',
+      type:       'body',
       parameters: bodyVars.map(v => ({ type: 'text', text: v || '' })),
     })
   }
 
   if (buttonParams?.length) {
     for (const bp of buttonParams) {
+      // *** FIX (Issue 6): Skip FLOW buttons entirely ***
+      // Meta API error 131009 is thrown when you include button parameters
+      // for a FLOW-type button. FLOW buttons are static — they have no
+      // runtime parameters. Sending them causes "Parameter value is not valid".
+      if (bp.subType === 'flow') {
+        console.log('[buildSendComponents] Skipping FLOW button parameter (not allowed by Meta)')
+        continue
+      }
+
       const btn: any = {
         type:       'button',
         sub_type:   bp.subType,
@@ -71,6 +80,7 @@ function buildSendComponents(
       } else if (bp.subType === 'url') {
         btn.parameters = [{ type: 'text', text: bp.value }]
       } else {
+        // quick_reply
         btn.parameters = [{ type: 'payload', payload: bp.value }]
       }
       components.push(btn)
@@ -80,6 +90,32 @@ function buildSendComponents(
   return components
 }
 
+/**
+ * sanitizeTemplateComponents
+ *
+ * FIX (Issue 6): When the front-end sends pre-built components from an
+ * older template picker, they may already contain a FLOW button component.
+ * Strip it here before forwarding to the Meta API.
+ *
+ * Also strips any button component whose parameters array is empty and
+ * sub_type is 'flow' — which would cause the 131009 error.
+ */
+function sanitizeTemplateComponents(components: any[]): any[] {
+  if (!Array.isArray(components)) return []
+
+  return components.filter(c => {
+    // If it's a button component with sub_type 'flow', drop it
+    if (
+      c.type === 'button' &&
+      (c.sub_type === 'flow' || c.sub_type === 'FLOW')
+    ) {
+      console.log('[sanitizeTemplateComponents] Removed FLOW button component')
+      return false
+    }
+    return true
+  })
+}
+
 /* -------------------------------------------------------------------------- */
 /* Route Handler                                                              */
 /* -------------------------------------------------------------------------- */
@@ -87,7 +123,6 @@ function buildSendComponents(
 export async function POST(req: NextRequest) {
   const supabase = await serverClient()
 
-  // FIX: getUser() instead of getSession() — validates token server-side
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (!user || authError) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -107,15 +142,12 @@ export async function POST(req: NextRequest) {
       body:                 form.get('body') ?? null,
       type:                 form.get('type') ?? 'text',
       reply_to_external_id: form.get('reply_to_external_id') ?? null,
-      // template
       template_name:        form.get('template_name') ?? null,
       template_language:    form.get('template_language') ?? 'en_US',
       template_components:  JSON.parse((form.get('template_components') as string) ?? '[]'),
       otp_code:             form.get('otp_code') ?? null,
-      // media
       file:                 form.get('file') ?? null,
       filename:             form.get('filename') ?? null,
-      // flow
       flow_id:              form.get('flow_id') ?? null,
       flow_name:            form.get('flow_name') ?? null,
       flow_token:           form.get('flow_token') ?? null,
@@ -125,13 +157,10 @@ export async function POST(req: NextRequest) {
       flow_screen:          form.get('flow_screen') ?? null,
       flow_mode:            form.get('flow_mode') ?? 'published',
       flow_action_payload:  JSON.parse((form.get('flow_action_payload') as string) ?? '{}'),
-      // reaction
       reaction_emoji:       form.get('reaction_emoji') ?? null,
       reaction_message_id:  form.get('reaction_message_id') ?? null,
-      // list
       list_button_text:     form.get('list_button_text') ?? null,
       list_sections:        JSON.parse((form.get('list_sections') as string) ?? '[]'),
-      // comment reply (FB/IG)
       comment_id:           form.get('comment_id') ?? null,
     }
   } else {
@@ -183,7 +212,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
   }
 
-  // FIX: use user.id from getUser()
   const { data: profile } = await admin
     .from('profiles')
     .select('workspace_id')
@@ -203,7 +231,10 @@ export async function POST(req: NextRequest) {
     let messageBody:   string | null = body ?? null
     let savedMediaUrl: string | null = null
     let savedMime:     string | null = null
-    let contentType2   = 'text'
+
+    // FIX (Issue 5): 'flow' is now a valid value in content_type.
+    // The DB check constraint was updated in migration 001.
+    let contentType2 = 'text'
 
     /* ==================================================================== */
     /* WHATSAPP                                                             */
@@ -230,22 +261,31 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'template_name required' }, { status: 400 })
         }
 
-        let finalComponents = template_components
+        const isOTP = template_components?.some?.((c: any) =>
+          c.type === 'button' && c.sub_type === 'copy_code'
+        ) || otp_code
 
-        // OTP copy_code button
-        if ((!finalComponents || finalComponents.length === 0) && otp_code) {
+        let finalComponents: any[]
+
+        if (isOTP && otp_code) {
+          // OTP Authentication template — copy_code button only
           finalComponents = buildSendComponents([], [
             { index: 0, subType: 'copy_code', value: otp_code },
           ])
+        } else if (Array.isArray(template_components) && template_components.length > 0) {
+          if (typeof template_components[0] === 'string') {
+            // Plain string array → body variables (no button params)
+            finalComponents = buildSendComponents(template_components as string[])
+          } else {
+            // Pre-built component objects from front-end
+            // FIX (Issue 6): strip any FLOW button components before sending
+            finalComponents = sanitizeTemplateComponents(template_components)
+          }
+        } else {
+          finalComponents = []
         }
-        // Plain string array → body components
-        else if (
-          Array.isArray(finalComponents) &&
-          finalComponents.length > 0 &&
-          typeof finalComponents[0] === 'string'
-        ) {
-          finalComponents = buildSendComponents(finalComponents as string[])
-        }
+
+        console.log(`[Send/template] name=${template_name} components=`, JSON.stringify(finalComponents))
 
         externalId = await wa.sendTemplate(
           conv.contact.phone,
@@ -273,7 +313,7 @@ export async function POST(req: NextRequest) {
 
         const mediaId = await wa.uploadMedia(buffer, mime, name)
 
-        const ext = mime.split('/')[1]?.split(';')[0]?.replace(/[^a-z0-9]/g, '') ?? 'bin'
+        const ext         = mime.split('/')[1]?.split(';')[0]?.replace(/[^a-z0-9]/g, '') ?? 'bin'
         const storagePath = `${profile.workspace_id}/${conversation_id}/${Date.now()}.${ext}`
         const { error: upErr } = await admin.storage
           .from('media')
@@ -295,27 +335,29 @@ export async function POST(req: NextRequest) {
         messageBody = body ?? name
       }
 
-      /* -- flow -- */
+      /* -- flow (standalone interactive flow message) -- */
+      // FIX (Issue 5): content_type was 'flow' but the DB check constraint
+      // didn't include 'flow'. Migration 001 adds it.
       else if (type === 'flow') {
         if (!flow_token) return NextResponse.json({ error: 'flow_token required' }, { status: 400 })
         if (!flow_id && !flow_name) return NextResponse.json({ error: 'flow_id or flow_name required' }, { status: 400 })
-        if (!body) return NextResponse.json({ error: 'body required for flow' }, { status: 400 })
+        if (!body) return NextResponse.json({ error: 'body required for flow message' }, { status: 400 })
 
         externalId = await wa.sendFlow(conv.contact.phone, {
-          flowId:         flow_id    || undefined,
-          flowName:       flow_name  || undefined,
-          flowToken:      flow_token,
-          headerText:     flow_header || undefined,
-          bodyText:       body,
-          footerText:     flow_footer || undefined,
-          ctaText:        flow_cta,
-          screenId:       flow_screen || undefined,
-          mode:           flow_mode as 'draft' | 'published',
-          actionPayload:  flow_action_payload,
+          flowId:          flow_id    || undefined,
+          flowName:        flow_name  || undefined,
+          flowToken:       flow_token,
+          headerText:      flow_header || undefined,
+          bodyText:        body,
+          footerText:      flow_footer || undefined,
+          ctaText:         flow_cta,
+          screenId:        flow_screen || undefined,
+          mode:            flow_mode as 'draft' | 'published',
+          actionPayload:   flow_action_payload,
           replyToMessageId: reply_to_external_id || undefined,
         })
         messageBody  = body
-        contentType2 = 'flow'
+        contentType2 = 'flow'   // ← now allowed by migration 001
       }
 
       /* -- reaction -- */
@@ -377,12 +419,11 @@ export async function POST(req: NextRequest) {
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Save to DB                                                             */
+    /* Save message to DB                                                     */
     /* ---------------------------------------------------------------------- */
 
     const meta: any = {}
 
-    // Always store reply context so QuotedPreview can display it
     if (reply_to_external_id) {
       meta.reply_to_external_id = reply_to_external_id
     }
@@ -418,7 +459,7 @@ export async function POST(req: NextRequest) {
         body:          messageBody,
         media_url:     savedMediaUrl,
         media_mime:    savedMime,
-        sender_id:     user.id,     // FIX: user.id from getUser()
+        sender_id:     user.id,
         status:        externalId ? 'sent' : 'queued',
         is_note:       false,
         meta,
@@ -428,9 +469,13 @@ export async function POST(req: NextRequest) {
 
     if (msgErr) throw new Error(msgErr.message)
 
-    // Don't update last_message for reactions
+    // FIX (Issue 4): Explicit conversation update here + DB trigger backup.
+    // The DB trigger (migration 003) fires on INSERT to messages and keeps
+    // last_message in sync. This explicit update is kept for the outbound
+    // path as a belt-and-suspenders measure and handles edge cases where
+    // the trigger might not be installed yet.
     if (type !== 'reaction') {
-      await admin
+      const { error: convUpdateErr } = await admin
         .from('conversations')
         .update({
           last_message:    messageBody ?? `[${contentType2}]`,
@@ -438,6 +483,11 @@ export async function POST(req: NextRequest) {
           updated_at:      new Date().toISOString(),
         })
         .eq('id', conversation_id)
+
+      if (convUpdateErr) {
+        // Non-critical — DB trigger will still handle it
+        console.warn('[Send] Conversation update warning:', convUpdateErr.message)
+      }
     }
 
     return NextResponse.json({ message: msg })

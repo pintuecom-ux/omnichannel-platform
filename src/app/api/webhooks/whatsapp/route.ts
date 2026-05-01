@@ -1,12 +1,14 @@
 /**
  * src/app/api/webhooks/whatsapp/route.ts
  *
- * FIXES:
- * 1. Handle type='unsupported' properly — previously stored as text with null body
- *    causing "[unsupported]" display
- * 2. context field on inbound messages stored correctly in meta.context
- * 3. Replace getSession() with getUser() pattern (webhook uses service role so
- *    this doesn't apply here — webhooks use admin client directly, no auth needed)
+ * FIXES IN THIS VERSION:
+ * 1. Atomic unread_count — uses increment_unread() RPC (no more read-then-write race)
+ * 2. Conversation last_message update is now backed by the DB trigger
+ *    (migration 003) but still included in the upsert for immediate consistency
+ * 3. processStatus bug fixed — meta field was being overwritten entirely;
+ *    now merges into existing meta using jsonb_strip_nulls
+ * 4. Status update no longer overwrites conversation meta accidentally
+ * 5. Added structured error logging per event
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -36,9 +38,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     await handleEvents(body)
+    // Always return 200 to Meta — otherwise Meta retries aggressively
     return NextResponse.json({ status: 'ok' })
   } catch (err) {
-    console.error('[WA Webhook] Fatal:', err)
+    console.error('[WA Webhook] Fatal parse error:', err)
     return NextResponse.json({ status: 'error_logged' })
   }
 }
@@ -49,16 +52,16 @@ async function handleEvents(body: any) {
     events.map(ev =>
       ev.type === 'message'
         ? processMessage(ev).catch(e => console.error('[WA] processMessage error:', e))
-        : processStatus(ev).catch(e => console.error('[WA] processStatus error:', e))
+        : processStatus(ev).catch(e =>  console.error('[WA] processStatus error:',  e))
     )
   )
 }
 
 // ── Extract human-readable body from any message type ─────────────────────────
 function extractMessageBody(data: any): string | null {
-  if (data.text) return data.text
+  if (data.text)    return data.text
 
-  if (data.button) return data.button.text ?? null
+  if (data.button)  return data.button.text ?? null
 
   if (data.interactive) {
     const iv = data.interactive
@@ -91,12 +94,7 @@ function extractMessageBody(data: any): string | null {
     return `[Reaction: ${data.reaction.emoji ?? '👍'}]`
   }
 
-  // FIX: 'unsupported' type — return descriptive body instead of null
-  // WhatsApp sends type='unsupported' for: polls, voice notes in some regions,
-  // broadcast list messages, certain business messages, future message types
-  if (data.type === 'unsupported') {
-    return null  // body is null — MessageBubble handles 'unsupported' content_type specially
-  }
+  if (data.type === 'unsupported') return null
 
   return null
 }
@@ -116,8 +114,6 @@ function getContentType(data: any): string {
     case 'button':      return 'button'
     case 'order':       return 'order'
     case 'contacts':    return 'contacts'
-    // FIX: Store 'unsupported' as its own type so MessageBubble can render it
-    // with the proper "Message type not supported in this view" indicator
     case 'unsupported': return 'unsupported'
     default:            return 'text'
   }
@@ -127,27 +123,31 @@ function getContentType(data: any): string {
 async function processMessage(ev: any) {
   const { phoneNumberId, data } = ev
 
-  const { data: channel } = await admin
+  // 1. Find the channel
+  const { data: channel, error: channelErr } = await admin
     .from('channels')
     .select('id, workspace_id, access_token')
     .eq('platform', 'whatsapp')
     .eq('external_id', phoneNumberId)
     .maybeSingle()
 
-  if (!channel) {
-    console.error(`[WA] No channel for phone_number_id: ${phoneNumberId}`)
+  if (channelErr || !channel) {
+    console.error(`[WA] No channel for phone_number_id: ${phoneNumberId}`, channelErr?.message)
     return
   }
 
-  // Idempotency check
+  // 2. Idempotency — skip if we already stored this message
   const { data: exists } = await admin
     .from('messages')
     .select('id')
     .eq('external_id', data.external_id)
     .maybeSingle()
-  if (exists) return
+  if (exists) {
+    console.log(`[WA] Already processed message ${data.external_id} — skipping`)
+    return
+  }
 
-  // Upsert contact
+  // 3. Upsert contact
   const phone = data.from.replace(/^\+/, '')
   const { data: contact, error: contactErr } = await admin
     .from('contacts')
@@ -159,13 +159,16 @@ async function processMessage(ev: any) {
     .single()
 
   if (contactErr || !contact) {
-    console.error('[WA] Contact upsert error:', contactErr)
+    console.error('[WA] Contact upsert error:', contactErr?.message)
     return
   }
 
   const bodyText = extractMessageBody(data)
 
-  // Upsert conversation
+  // 4. Upsert conversation
+  //    Note: last_message is also kept in sync by the DB trigger
+  //    (migration 003 — trg_sync_last_message). Setting it here too
+  //    ensures the upsert path also reflects the latest message immediately.
   const { data: conv, error: convErr } = await admin
     .from('conversations')
     .upsert(
@@ -185,15 +188,22 @@ async function processMessage(ev: any) {
     .single()
 
   if (convErr || !conv) {
-    console.error('[WA] Conversation upsert error:', convErr)
+    console.error('[WA] Conversation upsert error:', convErr?.message)
     return
   }
 
-  await admin.from('conversations')
-    .update({ unread_count: (conv.unread_count || 0) + 1 })
-    .eq('id', conv.id)
+  // 5. Increment unread_count atomically (FIX: was read-then-write, race condition)
+  const { error: unreadErr } = await admin.rpc('increment_unread', { conv_id: conv.id })
+  if (unreadErr) {
+    // Non-critical: fall back to manual update (works if migration 003 not applied yet)
+    console.warn('[WA] RPC increment_unread failed, using fallback:', unreadErr.message)
+    await admin
+      .from('conversations')
+      .update({ unread_count: (conv.unread_count || 0) + 1 })
+      .eq('id', conv.id)
+  }
 
-  // Resolve media URL
+  // 6. Resolve + upload media
   let mediaUrl:  string | null = null
   let mediaMime: string | null = null
 
@@ -224,7 +234,7 @@ async function processMessage(ev: any) {
     }
   }
 
-  // Build meta
+  // 7. Build meta
   const meta: Record<string, any> = {
     from:      phone,
     from_name: data.from_name,
@@ -243,8 +253,7 @@ async function processMessage(ev: any) {
   if (data.location) meta.location  = data.location
   if (data.contacts) meta.contacts  = data.contacts
 
-  // FIX: Store context (reply-to reference) correctly
-  // meta.context.message_id is what QuotedPreview reads to find the original message
+  // Store context (reply-to reference) so QuotedPreview can find the original
   if (data.context) {
     meta.context = {
       message_id: data.context.message_id ?? data.context.id,
@@ -253,7 +262,7 @@ async function processMessage(ev: any) {
     }
   }
 
-  // Insert message
+  // 8. Insert message
   const { error: msgErr } = await admin.from('messages').insert({
     conversation_id: conv.id,
     workspace_id:    channel.workspace_id,
@@ -268,8 +277,11 @@ async function processMessage(ev: any) {
     meta,
   })
 
-  if (msgErr) console.error('[WA] Message insert error:', msgErr)
-  else        console.log(`[WA] ✅ ${data.type} from ${phone}`)
+  if (msgErr) {
+    console.error('[WA] Message insert error:', msgErr.message, '| external_id:', data.external_id)
+  } else {
+    console.log(`[WA] ✅ ${data.type} from ${phone} → conv ${conv.id}`)
+  }
 }
 
 // ── Process a status update ───────────────────────────────────────────────────
@@ -277,16 +289,47 @@ async function processStatus(ev: any) {
   const { data } = ev
   if (!data.external_id) return
 
-  const updates: any = { status: data.status }
+  // FIX: was overwriting the entire meta field.
+  // Now only update the status column; merge pricing info separately.
+  const { error: statusErr } = await admin
+    .from('messages')
+    .update({ status: data.status })
+    .eq('external_id', data.external_id)
 
-  // Store pricing/conversation metadata from status updates
-  if (data.conversation) updates.meta = { conversation: data.conversation, pricing: data.pricing }
+  if (statusErr) {
+    console.error('[WA] Status update error:', statusErr.message)
+    return
+  }
 
-  await admin.from('messages').update(updates).eq('external_id', data.external_id)
+  // Merge additional metadata (pricing / conversation info) without
+  // overwriting the existing meta object.
+  // FIX: await the rpc() result and read .error — .catch() does not exist
+  // on PostgrestFilterBuilder (it is not a native Promise).
+  if (data.conversation || data.pricing) {
+    const { error: mergeErr } = await admin.rpc('merge_message_meta', {
+      msg_external_id: data.external_id,
+      extra_meta: {
+        ...(data.conversation ? { wa_conversation: data.conversation } : {}),
+        ...(data.pricing      ? { wa_pricing: data.pricing }           : {}),
+      },
+    })
+    if (mergeErr) {
+      // merge_message_meta RPC is optional — safe to ignore if not installed yet
+      console.debug('[WA] merge_message_meta not available (optional):', mergeErr.message)
+    }
+  }
 
   if (data.status === 'failed' && data.errors) {
-    await admin.from('messages')
-      .update({ meta: { errors: data.errors } })
-      .eq('external_id', data.external_id)
+    // Merge errors into meta — do NOT overwrite the whole meta field
+    const { error: errMergeErr } = await admin.rpc('merge_message_meta', {
+      msg_external_id: data.external_id,
+      extra_meta: { errors: data.errors },
+    })
+    if (errMergeErr) {
+      // Fallback: just log it — don't wipe the existing meta
+      console.warn('[WA] Failed message errors (could not merge):', data.errors)
+    }
   }
+
+  console.log(`[WA] Status update: ${data.external_id} → ${data.status}`)
 }
