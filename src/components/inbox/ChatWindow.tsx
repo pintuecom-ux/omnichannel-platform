@@ -1,11 +1,12 @@
 'use client'
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useInboxStore, useActiveConversation } from '@/stores/useInboxStore'
 import { formatMessageDate } from '@/lib/utils'
 import MessageBubble from './MessageBubble'
 import InputArea from './InputArea'
-import CallModal from './CallModal'
+
 import type { Conversation, Message } from '@/types'
 
 const STATUS_CYCLE = ['open', 'pending', 'closed'] as const
@@ -13,6 +14,7 @@ const STATUS_LABEL = { open: 'Open', pending: 'Pending', closed: 'Closed' }
 
 export default function ChatWindow() {
   const supabase = createClient()
+  const router   = useRouter()
   const {
     activeConversationId,
     messages,
@@ -30,15 +32,13 @@ export default function ChatWindow() {
   // Track which comment the agent is replying to in the Comments tab
   const [replyingTo, setReplyingTo]  = useState<{ id: string; body: string } | null>(null)
 
-  // ── WhatsApp Call modal state ──────────────────────────────────────────────
-  const [showCallModal, setShowCallModal] = useState(false)
+  // (Call state now managed on /calls page — see Issue 1)
 
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setActiveTab('messages')
     setReplyingTo(null)
-    setShowCallModal(false)
   }, [activeConversationId])
 
   const loadMessages = useCallback(async () => {
@@ -170,15 +170,18 @@ export default function ChatWindow() {
             <span>{STATUS_LABEL[status]}</span>
           </div>
 
-          {/* ── WhatsApp Call Button — only shown for WA conversations ── */}
+          {/* ── WhatsApp Call Button — navigates to /calls tab (Issue 1) ── */}
           {isWA && (
             <button
               className="icon-btn"
               title="WhatsApp Voice Call"
-              onClick={() => setShowCallModal(true)}
+              onClick={() => {
+                // Navigate to the dedicated Calls tab, pre-selecting this conversation.
+                // The Calls page reads ?conversation_id= and opens the CallModal there.
+                router.push(`/calls?conversation_id=${activeConversationId}`)
+              }}
               style={{
-                position:   'relative',
-                color:       showCallModal ? 'var(--accent)' : undefined,
+                position: 'relative',
               }}
             >
               {/* Inline SVG phone icon — no extra dep needed */}
@@ -297,15 +300,8 @@ export default function ChatWindow() {
         />
       )}
 
-      {/* ── WhatsApp Call Modal (portal-style overlay) ── */}
-      {showCallModal && activeConversationId && (
-        <CallModal
-          conversationId={activeConversationId}
-          contactName={contactName}
-          contactPhone={contactPhone}
-          onClose={() => setShowCallModal(false)}
-        />
-      )}
+      {/* Call Modal is now on /calls page — phone icon navigates there */}
+      
     </div>
   )
 }

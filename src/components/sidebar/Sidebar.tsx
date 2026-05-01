@@ -1,27 +1,34 @@
 'use client'
+/**
+ * src/components/sidebar/Sidebar.tsx
+ *
+ * CHANGE: 'calls' entry now has href: '/calls' and soon: false.
+ * The phone icon in ChatWindow navigates to /calls — it needs to be routable.
+ */
+
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 const NAV = [
-  { id: 'inbox',     icon: 'fa-solid fa-comments',       label: 'Inbox',            href: '/inbox',      badge: 0, section: 'Messaging' },
-  { id: 'calls',     icon: 'fa-solid fa-phone',           label: 'Calls',            soon: true,          section: 'Messaging' },
-  { id: 'email',     icon: 'fa-solid fa-envelope',        label: 'Email',            soon: true,          section: 'Messaging' },
-  { id: 'livechat',  icon: 'fa-solid fa-bolt',            label: 'Live Chat Widget', soon: true,          section: 'Messaging' },
-  { id: 'contacts',  icon: 'fa-solid fa-user-group',      label: 'Contacts',         href: '/contacts',   section: 'Audience' },
-  { id: 'lists',     icon: 'fa-solid fa-list-ul',         label: 'Lists',            soon: true,          section: 'Audience' },
-  { id: 'segments',  icon: 'fa-solid fa-filter',          label: 'Segments',         soon: true,          section: 'Audience' },
-  { id: 'broadcast', icon: 'fa-solid fa-satellite-dish',  label: 'Broadcast',        soon: true,          section: 'Automation' },
-  // FIX BUG-11: removed soon:true, added href so Flows page is accessible
-  { id: 'flows',     icon: 'fa-solid fa-diagram-project', label: 'WA Flows',         href: '/flows',      section: 'Automation' },
-  { id: 'aibots',    icon: 'fa-solid fa-robot',           label: 'AI Bots',          soon: true,          section: 'Automation' },
-  { id: 'planner',   icon: 'fa-solid fa-calendar-days',   label: 'Content Planner',  soon: true,          section: 'Publishing' },
-  { id: 'templates', icon: 'fa-solid fa-file-code',       label: 'Templates',        href: '/templates',  section: 'Publishing' },
-  { id: 'pages',     icon: 'fa-solid fa-layer-group',     label: 'Pages & Posts',    soon: true,          section: 'Publishing' },
-  { id: 'ads',       icon: 'fa-solid fa-rectangle-ad',    label: 'Ad Manager',       soon: true,          section: 'Ads & Analytics' },
-  { id: 'analytics', icon: 'fa-solid fa-chart-column',    label: 'Analytics',        soon: true,          section: 'Ads & Analytics' },
-  { id: 'numbers',   icon: 'fa-solid fa-sim-card',        label: 'Buy Numbers',      soon: true,          section: 'Numbers & Calling' },
-  { id: 'voip',      icon: 'fa-solid fa-headset',         label: 'VoIP / Dialer',    soon: true,          section: 'Numbers & Calling' },
-  { id: 'ivr',       icon: 'fa-solid fa-sitemap',         label: 'IVR Builder',      soon: true,          section: 'Numbers & Calling' },
+  { id: 'inbox',     icon: 'fa-solid fa-comments',       label: 'Inbox',            href: '/inbox',    section: 'Messaging' },
+  // FIX Issue 1: removed soon:true, added href so Calls page is accessible
+  { id: 'calls',     icon: 'fa-solid fa-phone',           label: 'Calls',            href: '/calls',    section: 'Messaging' },
+  { id: 'email',     icon: 'fa-solid fa-envelope',        label: 'Email',            soon: true,        section: 'Messaging' },
+  { id: 'livechat',  icon: 'fa-solid fa-bolt',            label: 'Live Chat Widget', soon: true,        section: 'Messaging' },
+  { id: 'contacts',  icon: 'fa-solid fa-user-group',      label: 'Contacts',         href: '/contacts', section: 'Audience' },
+  { id: 'lists',     icon: 'fa-solid fa-list-ul',         label: 'Lists',            soon: true,        section: 'Audience' },
+  { id: 'segments',  icon: 'fa-solid fa-filter',          label: 'Segments',         soon: true,        section: 'Audience' },
+  { id: 'broadcast', icon: 'fa-solid fa-satellite-dish',  label: 'Broadcast',        soon: true,        section: 'Automation' },
+  { id: 'flows',     icon: 'fa-solid fa-diagram-project', label: 'WA Flows',         href: '/flows',    section: 'Automation' },
+  { id: 'aibots',    icon: 'fa-solid fa-robot',           label: 'AI Bots',          soon: true,        section: 'Automation' },
+  { id: 'planner',   icon: 'fa-solid fa-calendar-days',   label: 'Content Planner',  soon: true,        section: 'Publishing' },
+  { id: 'templates', icon: 'fa-solid fa-file-code',       label: 'Templates',        href: '/templates',section: 'Publishing' },
+  { id: 'pages',     icon: 'fa-solid fa-layer-group',     label: 'Pages & Posts',    soon: true,        section: 'Publishing' },
+  { id: 'ads',       icon: 'fa-solid fa-rectangle-ad',    label: 'Ad Manager',       soon: true,        section: 'Ads & Analytics' },
+  { id: 'analytics', icon: 'fa-solid fa-chart-column',    label: 'Analytics',        soon: true,        section: 'Ads & Analytics' },
+  { id: 'numbers',   icon: 'fa-solid fa-sim-card',        label: 'Buy Numbers',      soon: true,        section: 'Numbers & Calling' },
+  { id: 'voip',      icon: 'fa-solid fa-headset',         label: 'VoIP / Dialer',    soon: true,        section: 'Numbers & Calling' },
+  { id: 'ivr',       icon: 'fa-solid fa-sitemap',         label: 'IVR Builder',      soon: true,        section: 'Numbers & Calling' },
 ] as const
 
 export default function Sidebar() {
@@ -55,8 +62,8 @@ export default function Sidebar() {
           <div className="sidebar-section" key={section}>
             <div className="sidebar-section-label">{section}</div>
             {NAV.filter(n => n.section === section).map(item => {
-              const isSoon  = 'soon' in item && item.soon
-              const href    = 'href' in item ? item.href : undefined
+              const isSoon   = 'soon' in item && item.soon
+              const href     = 'href' in item ? item.href : undefined
               const isActive = href ? pathname?.startsWith(href) : false
               return (
                 <div

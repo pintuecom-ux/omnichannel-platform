@@ -1,11 +1,21 @@
 /**
  * src/app/api/whatsapp/calls/route.ts
  *
- * Handles all WhatsApp calling operations from the frontend:
- *  - GET  ?action=check_permission&conversation_id=  → check if we can call
- *  - POST { action: "request_permission" }           → send permission request
- *  - POST { action: "initiate", sdp_offer }          → start a call
- *  - POST { action: "terminate", call_id }           → end a call
+ * FIXES IN THIS VERSION
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Issue 4 — "send_call_permission_request" is NOT a valid Meta API action.
+ *   Valid actions per v23 YAML spec:
+ *   accept | connect | media_update | pre_accept | reject | terminate
+ *   Removed the entire request_permission action. The UI now surfaces
+ *   clear instructions to the user instead of making a broken API call.
+ *
+ * Issue 3 — messages.content_type = 'call' blocked by DB constraint.
+ *   Fixed by migration 005. Route is already correct — this note confirms
+ *   why inserts were silently failing before.
+ *
+ * API surface (POST actions):
+ *   initiate   → POST {action:'connect'} to Meta, store call_started message
+ *   terminate  → POST {action:'terminate'} to Meta, update call message
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -18,7 +28,7 @@ const admin = adminClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// ── Shared helper: resolve channel + contact from conversation ────────────────
+// ── Shared: resolve channel + contact from a conversation ID ─────────────────
 async function resolveConversation(conversationId: string) {
   const { data: conv, error } = await admin
     .from('conversations')
@@ -34,70 +44,75 @@ async function resolveConversation(conversationId: string) {
   return conv as any
 }
 
-// ── GET — Check call permission for a conversation contact ────────────────────
+/* -------------------------------------------------------------------------- */
+/* GET — Check call permission                                                */
+/* -------------------------------------------------------------------------- */
 export async function GET(req: NextRequest) {
   const supabase = await serverClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (!user || authError) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const { data: { user }, error: authErr } = await supabase.auth.getUser()
+  if (!user || authErr) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const conversationId = req.nextUrl.searchParams.get('conversation_id')
-  if (!conversationId) {
-    return NextResponse.json({ error: 'conversation_id required' }, { status: 400 })
-  }
+  if (!conversationId) return NextResponse.json({ error: 'conversation_id required' }, { status: 400 })
 
   const conv = await resolveConversation(conversationId)
-  if (!conv) {
-    return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
-  }
-
+  if (!conv) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
   if (conv.platform !== 'whatsapp') {
     return NextResponse.json({ error: 'Calling only supported for WhatsApp' }, { status: 400 })
   }
 
   const phone = conv.contact?.phone
-  if (!phone) {
-    return NextResponse.json({ error: 'Contact has no phone number' }, { status: 400 })
-  }
+  if (!phone) return NextResponse.json({ error: 'Contact has no phone number' }, { status: 400 })
 
   const wa = new WhatsAppClient(conv.channel.access_token, conv.channel.external_id)
 
   try {
     const permission = await wa.checkCallPermission(phone)
+
+    const canCall = permission.actions.find(
+      (a: any) => a.action_name === 'start_call'
+    )?.can_perform_action ?? false
+
+    // NOTE: 'send_call_permission_request' may appear in the actions list
+    // returned by Meta's GET call_permissions, but it CANNOT be used as an
+    // action on POST /calls. We expose it as a UI hint only.
+    const canRequestPermission = permission.actions.find(
+      (a: any) => a.action_name === 'send_call_permission_request'
+    )?.can_perform_action ?? false
+
     return NextResponse.json({
       ok: true,
       permission,
+      can_call: canCall,
+      // When true, show the user a message: "Ask this contact to allow calls
+      // from your WhatsApp number in their privacy settings."
+      // There is NO API to trigger this — it's a manual action by the contact.
+      can_request_permission: canRequestPermission,
       contact: { name: conv.contact.name, phone },
     })
   } catch (err: any) {
-    console.error('[Calls GET] permission check error:', err.message)
-
-    // Error 138006 = calling not enabled for this phone number
+    console.error('[Calls GET]', err.message)
     if (err.message.includes('138006')) {
       return NextResponse.json({
         ok: false,
         error: 'calling_not_enabled',
-        message: 'WhatsApp Calling is not enabled for this phone number. Enable it in Meta Business Suite → Phone Numbers → Calling.',
+        message: 'WhatsApp Calling is not enabled. Go to Meta Business Suite → Phone Numbers → [your number] → Settings → Calling.',
       }, { status: 403 })
     }
-
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 })
   }
 }
 
-// ── POST — request_permission | initiate | terminate ─────────────────────────
+/* -------------------------------------------------------------------------- */
+/* POST — Initiate or terminate a call                                        */
+/* -------------------------------------------------------------------------- */
 export async function POST(req: NextRequest) {
   const supabase = await serverClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (!user || authError) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const { data: { user }, error: authErr } = await supabase.auth.getUser()
+  if (!user || authErr) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let body: any
-  try {
-    body = await req.json()
-  } catch {
+  try { body = await req.json() } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
@@ -107,72 +122,60 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'action and conversation_id required' }, { status: 400 })
   }
 
-  const conv = await resolveConversation(conversation_id)
-  if (!conv) {
-    return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+  // ── REMOVED: request_permission ──────────────────────────────────────────
+  // Meta's /calls endpoint does NOT support action:'send_call_permission_request'
+  // Valid actions: accept | connect | media_update | pre_accept | reject | terminate
+  if (action === 'request_permission') {
+    return NextResponse.json({
+      ok: false,
+      error: 'not_supported',
+      message:
+        "Meta's API does not support programmatic call permission requests." +
+        'Ask the contact to open WhatsApp → Settings → Privacy → Calls ' +
+        'and allow calls from your business number.',
+    }, { status: 400 })
   }
 
+  const conv = await resolveConversation(conversation_id)
+  if (!conv) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
   if (conv.platform !== 'whatsapp') {
     return NextResponse.json({ error: 'Calling only supported for WhatsApp' }, { status: 400 })
   }
 
   const phone = conv.contact?.phone
-  if (!phone) {
-    return NextResponse.json({ error: 'Contact has no phone number' }, { status: 400 })
-  }
+  if (!phone) return NextResponse.json({ error: 'Contact has no phone number' }, { status: 400 })
 
   const wa = new WhatsAppClient(conv.channel.access_token, conv.channel.external_id)
 
-  // ── request_permission ────────────────────────────────────────────────────
-  if (action === 'request_permission') {
-    try {
-      const result = await wa.sendCallPermissionRequest(phone)
-
-      // Log permission request as a system message in the conversation
-      await admin.from('messages').insert({
-        conversation_id,
-        workspace_id: conv.workspace_id,
-        direction:    'outbound',
-        content_type: 'call',
-        body:         '📞 Call permission request sent',
-        status:       'sent',
-        sender_id:    user.id,
-        is_note:      false,
-        meta: {
-          call_event: 'permission_request',
-          call_id:    result.call_id ?? null,
-          to_phone:   normalizePhone(phone),
-        },
-      })
-
-      return NextResponse.json({ ok: true, call_id: result.call_id })
-    } catch (err: any) {
-      console.error('[Calls POST] request_permission error:', err.message)
-      return NextResponse.json({ ok: false, error: err.message }, { status: 500 })
-    }
-  }
-
-  // ── initiate ──────────────────────────────────────────────────────────────
+  /* ---------------------------------------------------------------------- */
+  /* initiate — action: 'connect'                                           */
+  /* ---------------------------------------------------------------------- */
   if (action === 'initiate') {
     if (!sdp_offer) {
-      return NextResponse.json({ error: 'sdp_offer required for initiate action' }, { status: 400 })
+      return NextResponse.json({ error: 'sdp_offer required' }, { status: 400 })
     }
 
-    // Verify permission before attempting
+    // Pre-flight permission check
     try {
       const perm = await wa.checkCallPermission(phone)
-      const canCall = perm.actions.find(a => a.action_name === 'start_call')?.can_perform_action
+      const canCall = perm.actions.find(
+        (a: any) => a.action_name === 'start_call'
+      )?.can_perform_action
       if (!canCall) {
         return NextResponse.json({
           ok: false,
           error: 'permission_required',
           permission_status: perm.status,
-          message: 'You do not have permission to call this user. Send a permission request first.',
+          message:
+            perm.status === 'pending'
+              ? 'Permission request is pending. The contact has not approved yet.'
+              : 'You do not have permission to call this contact. ' +
+                'They must allow calls from your business in their WhatsApp privacy settings.',
         }, { status: 403 })
       }
-    } catch (err: any) {
-      // If permission check fails, still try to initiate — Meta will reject with 138006
-      console.warn('[Calls POST] permission pre-check failed, proceeding anyway:', err.message)
+    } catch (permErr: any) {
+      // Non-fatal — let Meta reject it with its own error if needed
+      console.warn('[Calls POST] Permission pre-check failed:', permErr.message)
     }
 
     try {
@@ -180,16 +183,16 @@ export async function POST(req: NextRequest) {
         callbackData: `conv:${conversation_id}`,
       })
 
-      // Store call_started event as a message for audit trail
+      // Store call_started log — requires migration 005 ('call' in constraint)
       await admin.from('messages').insert({
         conversation_id,
-        workspace_id: conv.workspace_id,
-        direction:    'outbound',
-        content_type: 'call',
-        body:         '📞 Call started',
-        status:       'sent',
-        sender_id:    user.id,
-        is_note:      false,
+        workspace_id:  conv.workspace_id,
+        direction:     'outbound',
+        content_type:  'call',
+        body:          '📞 Call started',
+        status:        'sent',
+        sender_id:     user.id,
+        is_note:       false,
         meta: {
           call_event: 'call_started',
           call_id:    newCallId,
@@ -204,27 +207,42 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── terminate ─────────────────────────────────────────────────────────────
+  /* ---------------------------------------------------------------------- */
+  /* terminate — action: 'terminate'                                        */
+  /* ---------------------------------------------------------------------- */
   if (action === 'terminate') {
     if (!call_id) {
-      return NextResponse.json({ error: 'call_id required for terminate action' }, { status: 400 })
+      return NextResponse.json({ error: 'call_id required for terminate' }, { status: 400 })
     }
 
     try {
       const success = await wa.terminateCall(call_id)
 
-      // Update the call_started message to call_ended
-      await admin.from('messages')
-        .update({
-          body: '📞 Call ended',
-          meta: {
-            call_event: 'call_ended',
-            call_id,
-            to_phone: normalizePhone(phone),
-          },
-        })
+      // Update the matching call message to 'ended'
+      const { data: existing } = await admin
+        .from('messages')
+        .select('id, meta')
         .eq('conversation_id', conversation_id)
+        .eq('content_type', 'call')
         .contains('meta', { call_id })
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (existing) {
+        await admin
+          .from('messages')
+          .update({
+            body: '📞 Call ended',
+            meta: {
+              ...(existing.meta ?? {}),
+              call_event: 'call_ended',
+              call_id,
+              ended_at: new Date().toISOString(),
+            },
+          })
+          .eq('id', existing.id)
+      }
 
       return NextResponse.json({ ok: success })
     } catch (err: any) {
@@ -233,5 +251,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
+  return NextResponse.json(
+    { error: `Unknown action: ${action}. Valid: initiate | terminate` },
+    { status: 400 }
+  )
 }
