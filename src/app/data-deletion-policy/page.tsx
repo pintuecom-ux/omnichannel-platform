@@ -81,7 +81,7 @@ export default function DataDeletionPage() {
           --text-primary: #e8edf5; --text-secondary: #8a9ab8; --text-muted: #506080;
           --border: rgba(255,255,255,0.06); --border-active: rgba(37,211,102,0.3);
         }
-        html, body { font-family: 'DM Sans', sans-serif; background: var(--bg-base); color: var(--text-primary); }
+        html, body { overflow: auto !important; font-family: 'DM Sans', sans-serif; background: var(--bg-base); color: var(--text-primary); }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.2); border-radius: 4px; }
 
         .dd-page { max-width: 760px; margin: 0 auto; padding: 56px 32px 80px; }
@@ -89,7 +89,7 @@ export default function DataDeletionPage() {
         /* ── Header ── */
         .dd-back { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 12px; text-decoration: none; margin-bottom: 32px; transition: color 0.15s; }
         .dd-back:hover { color: var(--accent); }
-        .dd-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; color: var(--danger); background: var(--danger-glow); border: 1px solid var(--danger-border); border-radius: 20px; padding: 4px 12px; margin-bottom: 16px; }
+        .dd-badge {margin-left: 20px; display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; color: var(--danger); background: var(--danger-glow); border: 1px solid var(--danger-border); border-radius: 20px; padding: 4px 12px; margin-bottom: 16px; }
         .dd-title { font-family: 'Space Grotesk', sans-serif; font-size: 34px; font-weight: 600; line-height: 1.2; margin-bottom: 12px; }
         .dd-subtitle { font-size: 14px; color: var(--text-secondary); line-height: 1.7; max-width: 580px; margin-bottom: 36px; }
 
@@ -153,8 +153,8 @@ export default function DataDeletionPage() {
       `}</style>
 
       <div className="dd-page">
-        <Link href="/privacy-policy" className="dd-back">
-          <i className="fa-solid fa-arrow-left" /> Privacy Policy
+        <Link href="/settings/admin" className="dd-back">
+          <i className="fa-solid fa-arrow-left" /> Settings 
         </Link>
 
         <div className="dd-badge"><i className="fa-solid fa-trash-can" /> Data Deletion Policy</div>

@@ -102,6 +102,8 @@ export default function SettingsShell({ children }: { children: React.ReactNode 
             { label: 'Conversation Resources', href: '/settings/conversation-resources', icon: 'fa-solid fa-folder-open' },
             { label: 'Lifecycle Stages',    href: '/settings/lifecycle-stages',    icon: 'fa-solid fa-arrow-right-arrow-left' },
             { label: 'Users',               href: '/settings/users',               icon: 'fa-solid fa-user-group' },
+            { label: 'Privacy Policy',               href: '/updated-privacy-policy',               icon: 'fa-solid fa-file-lines' },
+            { label: 'Data Deletion',               href: '/data-deletion-policy',               icon: 'fa-solid fa-trash' },
           ].map(item => {
             const isActive = pathname === item.href
             return (

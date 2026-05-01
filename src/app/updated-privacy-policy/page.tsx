@@ -32,7 +32,7 @@ export default function PrivacyPolicyPage() {
           --text-primary: #e8edf5; --text-secondary: #8a9ab8; --text-muted: #506080;
           --border: rgba(255,255,255,0.06); --border-active: rgba(37,211,102,0.3);
         }
-        html, body { font-family: 'DM Sans', sans-serif; background: var(--bg-base); color: var(--text-primary); }
+        html, body { overflow: auto !important; font-family: 'DM Sans', sans-serif; background: var(--bg-base); color: var(--text-primary); }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.2); border-radius: 4px; }
 
         .pp-wrap { display: flex; min-height: 100vh; }
@@ -140,8 +140,8 @@ export default function PrivacyPolicyPage() {
             </div>
           ))}
           <div className="pp-nav-footer">
-            <Link href="/data-deletion"><i className="fa-solid fa-trash-can" /> Data Deletion Policy</Link>
-            <Link href="/"><i className="fa-solid fa-arrow-left" /> Back to App</Link>
+            <Link href="/data-deletion-policy"><i className="fa-solid fa-trash-can" /> Data Deletion Policy</Link>
+            <Link href="/settings/admin"><i className="fa-solid fa-arrow-left" /> Back to Settings</Link>
           </div>
         </nav>
 
