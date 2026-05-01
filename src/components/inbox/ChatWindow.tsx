@@ -5,6 +5,7 @@ import { useInboxStore, useActiveConversation } from '@/stores/useInboxStore'
 import { formatMessageDate } from '@/lib/utils'
 import MessageBubble from './MessageBubble'
 import InputArea from './InputArea'
+import CallModal from './CallModal'
 import type { Conversation, Message } from '@/types'
 
 const STATUS_CYCLE = ['open', 'pending', 'closed'] as const
@@ -28,11 +29,16 @@ export default function ChatWindow() {
   const [status,      setStatus]      = useState<'open' | 'pending' | 'closed'>('open')
   // Track which comment the agent is replying to in the Comments tab
   const [replyingTo, setReplyingTo]  = useState<{ id: string; body: string } | null>(null)
+
+  // ── WhatsApp Call modal state ──────────────────────────────────────────────
+  const [showCallModal, setShowCallModal] = useState(false)
+
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setActiveTab('messages')
     setReplyingTo(null)
+    setShowCallModal(false)
   }, [activeConversationId])
 
   const loadMessages = useCallback(async () => {
@@ -58,59 +64,63 @@ export default function ChatWindow() {
           fetch('/api/messages/mark-read', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ conversation_id: activeConversationId, message_id: m.external_id }),
+            body: JSON.stringify({ message_id: m.id, external_id: m.external_id }),
           }).catch(() => {})
         })
       }
     }
-  }, [activeConversationId, isWA]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeConversationId, isWA])
 
   useEffect(() => {
-    if (!conversation) return
-    setStatus(conversation.status as 'open' | 'pending' | 'closed')
-  }, [conversation?.status])
+    loadMessages()
+  }, [loadMessages])
 
-  useEffect(() => { loadMessages() }, [loadMessages])
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   // Realtime subscription
   useEffect(() => {
     if (!activeConversationId) return
-    const ch = supabase
-      .channel(`msg-${activeConversationId}`)
+    const channel = supabase
+      .channel(`messages:${activeConversationId}`)
       .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'messages',
+        event: '*',
+        schema: 'public',
+        table: 'messages',
         filter: `conversation_id=eq.${activeConversationId}`,
       }, payload => {
-        const msg = payload.new as Message
-        // Don't add optimistic messages that already exist by external_id
-        if (!msg.id.startsWith('temp-')) addMessage(msg)
+        if (payload.eventType === 'INSERT') {
+          addMessage(payload.new as Message)
+        } else if (payload.eventType === 'UPDATE') {
+          updateMessage((payload.new as Message).id, payload.new as Partial<Message>)
+        }
       })
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'messages',
-        filter: `conversation_id=eq.${activeConversationId}`,
-      }, payload => {
-        updateMessage(payload.new.id, payload.new as Partial<Message>)
-      })
-      .subscribe(s => { if (s === 'SUBSCRIBED') loadMessages() })
-    return () => { supabase.removeChannel(ch) }
-  }, [activeConversationId, loadMessages]) // eslint-disable-line react-hooks/exhaustive-deps
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [activeConversationId])
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
-  }, [messages.length])
-
+  // Cycle conversation status
   async function cycleStatus() {
     if (!activeConversationId) return
-    const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(status) + 1) % STATUS_CYCLE.length]
+    const idx = STATUS_CYCLE.indexOf(status)
+    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]
     setStatus(next)
     await supabase.from('conversations').update({ status: next }).eq('id', activeConversationId)
     updateConversation(activeConversationId, { status: next })
   }
 
-  if (!conversation) return null
+  if (!conversation || !activeConversationId) {
+    return (
+      <div id="main-workspace" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--text-muted)' }}>
+        <i className="fa-brands fa-whatsapp" style={{ fontSize: 48, opacity: 0.12 }} />
+        <p style={{ fontSize: 14 }}>Select a conversation to get started</p>
+      </div>
+    )
+  }
 
   const contactName    = conversation.contact?.name || conversation.contact?.phone || conversation.contact?.instagram_username || 'Unknown'
+  const contactPhone   = conversation.contact?.phone ?? undefined
   const platformIcon   = { whatsapp: 'fa-brands fa-whatsapp', instagram: 'fa-brands fa-instagram', facebook: 'fa-brands fa-facebook' }[platform]
   const platformCls    = { whatsapp: 'pp-wa', instagram: 'pp-ig', facebook: 'pp-fb' }[platform]
   const platformLabel  = { whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook' }[platform]
@@ -159,6 +169,35 @@ export default function ChatWindow() {
             <i className="fa-solid fa-circle" style={{ fontSize: '7px' }} />
             <span>{STATUS_LABEL[status]}</span>
           </div>
+
+          {/* ── WhatsApp Call Button — only shown for WA conversations ── */}
+          {isWA && (
+            <button
+              className="icon-btn"
+              title="WhatsApp Voice Call"
+              onClick={() => setShowCallModal(true)}
+              style={{
+                position:   'relative',
+                color:       showCallModal ? 'var(--accent)' : undefined,
+              }}
+            >
+              {/* Inline SVG phone icon — no extra dep needed */}
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ display: 'block' }}
+              >
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 15a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 4.18L6.6 4a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 11.56a16 16 0 0 0 6.15 6.15l.54-.54a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.3 15.6l-.38 1.32z" />
+              </svg>
+            </button>
+          )}
+
           <button className="icon-btn" title="Search"><i className="fa-solid fa-magnifying-glass" /></button>
           <button className="icon-btn" title="More"><i className="fa-solid fa-ellipsis-vertical" /></button>
         </div>
@@ -255,6 +294,16 @@ export default function ChatWindow() {
           replyingTo={replyingTo}
           onClearReply={() => setReplyingTo(null)}
           onSent={() => { loadMessages(); setReplyingTo(null) }}
+        />
+      )}
+
+      {/* ── WhatsApp Call Modal (portal-style overlay) ── */}
+      {showCallModal && activeConversationId && (
+        <CallModal
+          conversationId={activeConversationId}
+          contactName={contactName}
+          contactPhone={contactPhone}
+          onClose={() => setShowCallModal(false)}
         />
       )}
     </div>

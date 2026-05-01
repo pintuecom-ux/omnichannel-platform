@@ -1,21 +1,8 @@
 'use client'
-/**
- * src/components/inbox/InfoPanel.tsx
- *
- * CHANGE: Added WhatsApp Call button in Quick Actions section (Issue 7).
- * The button only shows when platform === 'whatsapp' and the contact has a phone number.
- * Clicking it opens WhatsAppCallModal which handles the full calling flow.
- * All other logic is unchanged from the original.
- */
-
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useInboxStore, useActiveConversation } from '@/stores/useInboxStore'
 import { getInitials, getAvatarColor } from '@/lib/utils'
-import dynamic from 'next/dynamic'
-
-// Lazy-load the call modal — it's large and only needed when the user clicks Call
-const WhatsAppCallModal = dynamic(() => import('./WhatsAppCallModal'), { ssr: false })
 
 const QUICK_TAGS = ['VIP', 'Lead', 'Hot Lead', 'B2B', 'Repeat Buyer', 'Wholesale', 'Delhi NCR']
 
@@ -23,12 +10,10 @@ export default function InfoPanel() {
   const supabase = createClient()
   const { updateConversation } = useInboxStore()
   const conversation = useActiveConversation()
-
-  const [showDrawer,  setShowDrawer]  = useState(false)
-  const [showCall,    setShowCall]    = useState(false)   // ← NEW: call modal state
-  const [editName,    setEditName]    = useState('')
-  const [editPhone,   setEditPhone]   = useState('')
-  const [editTags,    setEditTags]    = useState<string[]>([])
+  const [showDrawer, setShowDrawer] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editPhone, setEditPhone] = useState('')
+  const [editTags, setEditTags] = useState<string[]>([])
 
   if (!conversation) return null
   const contact = conversation.contact
@@ -36,15 +21,13 @@ export default function InfoPanel() {
   const safeConversation = conversation
   const safeContact = contact
 
-  const name          = contact.name || contact.phone || contact.instagram_username || 'Unknown'
-  const initials      = getInitials(name)
-  const color         = getAvatarColor(contact.id)
-  const platform      = conversation.platform
-  const platformIcon  = { whatsapp: 'fa-brands fa-whatsapp', instagram: 'fa-brands fa-instagram', facebook: 'fa-brands fa-facebook' }[platform]
-  const platformCls   = { whatsapp: 'pp-wa', instagram: 'pp-ig', facebook: 'pp-fb' }[platform]
+  const name = contact.name || contact.phone || contact.instagram_username || 'Unknown'
+  const initials = getInitials(name)
+  const color = getAvatarColor(contact.id)
+  const platform = conversation.platform
+  const platformIcon = { whatsapp: 'fa-brands fa-whatsapp', instagram: 'fa-brands fa-instagram', facebook: 'fa-brands fa-facebook' }[platform]
+  const platformCls = { whatsapp: 'pp-wa', instagram: 'pp-ig', facebook: 'pp-fb' }[platform]
   const platformLabel = { whatsapp: 'WA', instagram: 'IG', facebook: 'FB' }[platform]
-
-  // ── Helpers ──────────────────────────────────────────────────────────────
 
   function openDrawer() {
     setEditName(contact!.name || '')
@@ -60,33 +43,22 @@ export default function InfoPanel() {
   async function saveContact() {
     await supabase
       .from('contacts')
-      .update({
-        name:       editName,
-        phone:      editPhone,
-        tags:       editTags,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ name: editName, phone: editPhone, tags: editTags, updated_at: new Date().toISOString() })
       .eq('id', contact!.id)
     setShowDrawer(false)
+    // Reflect in store
     updateConversation(safeConversation.id, {
       contact: { ...contact!, name: editName, phone: editPhone, tags: editTags },
     })
   }
 
   async function cycleStatus() {
-    const cycle   = ['open', 'pending', 'closed'] as const
+    const cycle = ['open', 'pending', 'closed'] as const
     const current = safeConversation.status as 'open' | 'pending' | 'closed'
-    const next    = cycle[(cycle.indexOf(current) + 1) % cycle.length]
+    const next = cycle[(cycle.indexOf(current) + 1) % cycle.length]
     await supabase.from('conversations').update({ status: next }).eq('id', safeConversation.id)
     updateConversation(safeConversation.id, { status: next })
   }
-
-  // Only show call button for WhatsApp conversations where we have a phone number
-  const canCall = platform === 'whatsapp' && !!contact.phone
-
-  /* ---------------------------------------------------------------------- */
-  /* Render                                                                 */
-  /* ---------------------------------------------------------------------- */
 
   return (
     <>
@@ -118,10 +90,7 @@ export default function InfoPanel() {
           <div className="info-section-title">Tags</div>
           <div className="tag-list">
             {(contact.tags || []).length === 0 ? (
-              <span
-                style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', cursor: 'pointer' }}
-                onClick={openDrawer}
-              >
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', cursor: 'pointer' }} onClick={openDrawer}>
                 Add tags…
               </span>
             ) : (
@@ -161,13 +130,9 @@ export default function InfoPanel() {
             <span
               className="value"
               style={{
-                cursor:           'pointer',
-                textTransform:    'capitalize',
-                color:            conversation.status === 'open'
-                                    ? 'var(--accent)'
-                                    : conversation.status === 'pending'
-                                    ? 'var(--accent3)'
-                                    : 'var(--text-muted)',
+                cursor: 'pointer',
+                textTransform: 'capitalize',
+                color: conversation.status === 'open' ? 'var(--accent)' : conversation.status === 'pending' ? 'var(--accent3)' : 'var(--text-muted)',
               }}
               onClick={cycleStatus}
             >
@@ -188,31 +153,9 @@ export default function InfoPanel() {
         <div className="info-section">
           <div className="info-section-title">Quick Actions</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-
             <button className="quick-action-btn" onClick={openDrawer}>
               <i className="fa-solid fa-tag" /> Add / Edit Tags
             </button>
-
-            {/* ── WhatsApp Call Button (NEW) ─────────────────────────────── */}
-            {canCall && (
-              <button
-                className="quick-action-btn"
-                onClick={() => setShowCall(true)}
-                style={{
-                  display:     'flex',
-                  alignItems:  'center',
-                  gap:         8,
-                  color:       'var(--text-primary)',
-                }}
-              >
-                <i
-                  className="fa-solid fa-phone"
-                  style={{ color: '#25d366', fontSize: 13 }}
-                />
-                WhatsApp Call
-              </button>
-            )}
-
             <button className="quick-action-btn">
               <i className="fa-solid fa-calendar-plus" /> Schedule Follow-up
             </button>
@@ -226,15 +169,7 @@ export default function InfoPanel() {
         </div>
       </div>
 
-      {/* ── WhatsApp Call Modal (NEW) ──────────────────────────────────────── */}
-      {showCall && (
-        <WhatsAppCallModal
-          conversation={safeConversation}
-          onClose={() => setShowCall(false)}
-        />
-      )}
-
-      {/* Edit Contact Drawer (unchanged) */}
+      {/* Edit Drawer */}
       <div
         className={`edit-drawer-overlay ${showDrawer ? 'open' : ''}`}
         onClick={() => setShowDrawer(false)}

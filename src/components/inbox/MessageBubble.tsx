@@ -830,6 +830,81 @@ export default function MessageBubble({
     )
   }
 
+
+  /* ── Call events ── */
+  if (msg.content_type === 'call') {
+    const callEvent = msg.meta?.call_event ?? 'unknown'
+    const duration  = msg.meta?.duration
+    const isInbound = msg.direction === 'inbound'
+
+    const iconMap: Record<string, string> = {
+      call_started:       '📞',
+      ringing:            '📡',
+      connected:          '✅',
+      call_ended:         '📞',
+      ended:              '📞',
+      missed:             '📵',
+      failed:             '❌',
+      rejected:           '🚫',
+      terminated:         '📞',
+      permission_request: '🔔',
+    }
+
+    const colorMap: Record<string, string> = {
+      missed:    '#ef4444',
+      failed:    '#ef4444',
+      rejected:  '#ef4444',
+      connected: '#22c55e',
+    }
+
+    const icon  = iconMap[callEvent]  ?? '📞'
+    const color = colorMap[callEvent] ?? 'var(--text-secondary)'
+    const label = msg.body ?? `📞 Call ${callEvent}`
+
+    const durationStr = duration != null
+      ? (() => {
+          const m = Math.floor(duration / 60)
+          const s = duration % 60
+          return m > 0 ? `${m}m ${s}s` : `${s}s`
+        })()
+      : null
+
+    return (
+      <div
+        className={`wa-msg-row ${isInbound ? 'in' : 'out'}`}
+        style={{ marginTop: 4 }}
+      >
+        <div
+          style={{
+            display:        'flex',
+            alignItems:     'center',
+            gap:             8,
+            padding:        '8px 12px',
+            background:     'var(--bg-surface)',
+            border:         '1px solid var(--border)',
+            borderRadius:    10,
+            fontSize:        12,
+            color,
+            maxWidth:        260,
+          }}
+        >
+          <span style={{ fontSize: 16 }}>{icon}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <span style={{ fontWeight: 500 }}>{label}</span>
+            {durationStr && (
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                Duration: {durationStr}
+              </span>
+            )}
+          </div>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto', flexShrink: 0 }}>
+            {time}
+          </span>
+        </div>
+      </div>
+    )
+  }
+
   /* ── Audio ── */
   if (msg.content_type === 'audio' || isAudio(mime)) {
     return (

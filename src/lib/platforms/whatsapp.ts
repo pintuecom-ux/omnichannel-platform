@@ -9,6 +9,14 @@
  *  - blockUser / unblockUser: moderation
  *  - getBusinessProfile / updateBusinessProfile
  *  - getQRCodes / createQRCode / deleteQRCode
+ *
+ * CALLING ADDITIONS (v23 API):
+ *  - checkCallPermission: check if you can call a user
+ *  - sendCallPermissionRequest: request calling permission from user
+ *  - initiateCall: start a WebRTC voice call (connect action + SDP offer)
+ *  - terminateCall: end an active call
+ *  - getCallingSettings: get calling feature config for a phone number
+ *  - updateCallingSettings: enable/disable calling, set call_icon_visibility
  */
 
 import axios from 'axios'
@@ -64,7 +72,6 @@ export class WhatsAppClient {
       type: 'text',
       text: { body, preview_url: opts?.previewUrl ?? false },
     }
-    // context field enables "reply to" feature — shows quoted message in WhatsApp
     if (opts?.replyToMessageId) {
       payload.context = { message_id: opts.replyToMessageId }
     }
@@ -72,7 +79,7 @@ export class WhatsAppClient {
     return this.msgId(res, 'sendText')
   }
 
-  // ── Template (with optional reply context + button parameters for OTP) ────
+  // ── Template ───────────────────────────────────────────────────────────────
   async sendTemplate(
     to: string,
     name: string,
@@ -144,7 +151,7 @@ export class WhatsAppClient {
     return this.msgId(res, 'sendFlow')
   }
 
-  // ── Interactive reply buttons (with optional context) ─────────────────────
+  // ── Interactive reply buttons ──────────────────────────────────────────────
   async sendInteractiveButtons(
     to: string,
     bodyText: string,
@@ -173,8 +180,7 @@ export class WhatsAppClient {
     return this.msgId(res, 'sendInteractiveButtons')
   }
 
-  // ── Interactive list message (NEW) ────────────────────────────────────────
-  // Official API: POST /messages — type:interactive, interactive.type:list
+  // ── Interactive list message ───────────────────────────────────────────────
   async sendListMessage(
     to: string,
     bodyText: string,
@@ -200,8 +206,7 @@ export class WhatsAppClient {
     return this.msgId(res, 'sendListMessage')
   }
 
-  // ── Send Reaction (emoji reaction to a message) (NEW) ─────────────────────
-  // Official API: POST /messages — type:reaction, reaction:{message_id, emoji}
+  // ── Reaction ───────────────────────────────────────────────────────────────
   async sendReaction(to: string, messageId: string, emoji: string): Promise<string> {
     const res = await this.post(`${BASE}/${this.phoneNumberId}/messages`, {
       messaging_product: 'whatsapp',
@@ -213,12 +218,11 @@ export class WhatsAppClient {
     return this.msgId(res, 'sendReaction')
   }
 
-  // ── Remove Reaction (emoji = "" removes the reaction) ────────────────────
   async removeReaction(to: string, messageId: string): Promise<string> {
     return this.sendReaction(to, messageId, '')
   }
 
-  // ── Send Location (NEW) ───────────────────────────────────────────────────
+  // ── Location ───────────────────────────────────────────────────────────────
   async sendLocation(
     to: string,
     lat: number,
@@ -236,7 +240,7 @@ export class WhatsAppClient {
     return this.msgId(res, 'sendLocation')
   }
 
-  // ── Media (with optional reply context) ───────────────────────────────────
+  // ── Media ──────────────────────────────────────────────────────────────────
   async uploadMedia(fileBuffer: Buffer, mimeType: string, filename: string): Promise<string> {
     const FormData = (await import('form-data')).default
     const form = new FormData()
@@ -273,7 +277,6 @@ export class WhatsAppClient {
     return this.msgId(res, `sendMedia(${mediaType})`)
   }
 
-  // ── Media URL retrieval (with phone_number_id fix) ────────────────────────
   async getMediaUrl(mediaId: string): Promise<{ url: string; mime_type: string; file_size?: number }> {
     const res = await axios.get(`${BASE}/${mediaId}`, {
       params: { phone_number_id: this.phoneNumberId },
@@ -294,7 +297,7 @@ export class WhatsAppClient {
     return Buffer.from(res.data)
   }
 
-  // ── Read receipt + typing indicator ───────────────────────────────────────
+  // ── Read receipt + typing ──────────────────────────────────────────────────
   async markRead(messageId: string): Promise<void> {
     try {
       await this.post(`${BASE}/${this.phoneNumberId}/messages`, {
@@ -312,8 +315,7 @@ export class WhatsAppClient {
     } catch { /* non-critical */ }
   }
 
-  // ── Block / Unblock (NEW) ─────────────────────────────────────────────────
-  // Official API: POST /{phone-id}/block_users — block_users:[{user: phone}]
+  // ── Block / Unblock ───────────────────────────────────────────────────────
   async blockUser(phone: string): Promise<void> {
     await this.post(`${BASE}/${this.phoneNumberId}/block_users`, {
       messaging_product: 'whatsapp',
@@ -321,7 +323,6 @@ export class WhatsAppClient {
     })
   }
 
-  // Official API: DELETE /{phone-id}/block_users — same body
   async unblockUser(phone: string): Promise<void> {
     try {
       await axios.delete(`${BASE}/${this.phoneNumberId}/block_users`, {
@@ -343,8 +344,7 @@ export class WhatsAppClient {
     return res.data?.block_users ?? []
   }
 
-  // ── Business Profile (NEW) ────────────────────────────────────────────────
-  // Official API: GET+POST /{phone-id}/whatsapp_business_profile
+  // ── Business Profile ───────────────────────────────────────────────────────
   async getBusinessProfile(): Promise<any> {
     const res = await axios.get(
       `${BASE}/${this.phoneNumberId}/whatsapp_business_profile`,
@@ -367,8 +367,7 @@ export class WhatsAppClient {
     })
   }
 
-  // ── QR Codes (NEW) ────────────────────────────────────────────────────────
-  // Official API: GET+POST+DELETE /{phone-id}/message_qrdls
+  // ── QR Codes ──────────────────────────────────────────────────────────────
   async getQRCodes(): Promise<any[]> {
     const res = await axios.get(
       `${BASE}/${this.phoneNumberId}/message_qrdls`,
@@ -394,8 +393,7 @@ export class WhatsAppClient {
     })
   }
 
-  // ── Analytics (NEW) ───────────────────────────────────────────────────────
-  // Official API: GET /{waba-id}?fields=analytics.start(ts).end(ts).granularity(DAY)
+  // ── Analytics ─────────────────────────────────────────────────────────────
   async getAnalytics(wabaId: string, startTs: number, endTs: number, granularity: 'DAY' | 'MONTH' = 'DAY'): Promise<any> {
     const res = await axios.get(`${BASE}/${wabaId}`, {
       params: {
@@ -415,11 +413,192 @@ export class WhatsAppClient {
     })
     return res.data?.conversation_analytics ?? {}
   }
+
+  // ── ─────────────────────────────────────────────────────────────────────── ──
+  // ── CALLING METHODS (v23 API additions)                                    ──
+  // ── ─────────────────────────────────────────────────────────────────────── ──
+
+  /**
+   * Check if you have permission to call a specific WhatsApp user.
+   *
+   * Returns permission status (granted | pending | denied | expired)
+   * and available actions (start_call | send_call_permission_request).
+   *
+   * Prerequisites:
+   *  - WhatsApp Cloud API Calling must be enabled for your phone number
+   *  - App must have calls webhook field subscribed
+   *  - Business account requires calling feature enabled
+   *
+   * API: GET /{Phone-Number-ID}/call_permissions?user_wa_id={phone}
+   */
+  async checkCallPermission(userWaId: string): Promise<{
+    status: 'granted' | 'pending' | 'denied' | 'expired'
+    expiration_time?: number
+    actions: {
+      action_name: 'start_call' | 'send_call_permission_request'
+      can_perform_action: boolean
+      limits?: { time_period: string; current_usage: number; max_allowed: number }[]
+    }[]
+  }> {
+    try {
+      const res = await axios.get(
+        `${BASE}/${this.phoneNumberId}/call_permissions`,
+        {
+          params: { user_wa_id: normalizePhone(userWaId) },
+          headers: { Authorization: `Bearer ${this.token}` },
+        }
+      )
+      return {
+        status: res.data?.permission?.status ?? 'denied',
+        expiration_time: res.data?.permission?.expiration_time,
+        actions: res.data?.actions ?? [],
+      }
+    } catch (err: any) {
+      const e = err?.response?.data?.error
+      const msg = e ? `[${e.code}] ${e.message}` : err.message
+      throw new Error(`checkCallPermission failed: ${msg}`)
+    }
+  }
+
+  /**
+   * Send a call permission request to a user who has denied/expired permissions.
+   * This sends a special system message the user sees in WhatsApp asking them
+   * to allow your business to call them.
+   *
+   * API: POST /{Phone-Number-ID}/calls
+   *      { messaging_product, to, action: "send_call_permission_request" }
+   *
+   * Note: This uses the /calls endpoint with a special action, not /messages.
+   */
+  async sendCallPermissionRequest(to: string): Promise<{ call_id?: string }> {
+    try {
+      const res = await this.post(`${BASE}/${this.phoneNumberId}/calls`, {
+        messaging_product: 'whatsapp',
+        to: normalizePhone(to),
+        action: 'send_call_permission_request',
+      })
+      return { call_id: res?.calls?.[0]?.id }
+    } catch (err: any) {
+      throw new Error(`sendCallPermissionRequest failed: ${err.message}`)
+    }
+  }
+
+  /**
+   * Initiate (connect) a WhatsApp voice call to a user.
+   *
+   * Flow:
+   *  1. Browser creates RTCPeerConnection and generates SDP offer
+   *  2. SDP offer is sent to this method
+   *  3. Meta returns a call_id
+   *  4. Meta sends SDP answer back via the `calls` webhook field
+   *  5. Browser sets remote description from the webhook SDP answer
+   *  6. ICE candidate exchange happens via webhooks
+   *
+   * Prerequisites: checkCallPermission must return action start_call = true
+   *
+   * API: POST /{Phone-Number-ID}/calls
+   *      { messaging_product, to, action: "connect", session: { sdp_type, sdp } }
+   */
+  async initiateCall(
+    to: string,
+    sdpOffer: string,
+    opts?: { callbackData?: string }
+  ): Promise<string> {
+    const payload: any = {
+      messaging_product: 'whatsapp',
+      to: normalizePhone(to),
+      action: 'connect',
+      session: {
+        sdp_type: 'offer',
+        sdp: sdpOffer,
+      },
+    }
+    if (opts?.callbackData) {
+      payload.biz_opaque_callback_data = opts.callbackData.slice(0, 512)
+    }
+
+    const res = await this.post(`${BASE}/${this.phoneNumberId}/calls`, payload)
+    const callId = res?.calls?.[0]?.id
+    if (!callId) throw new Error('initiateCall: No call_id in Meta response')
+    return callId
+  }
+
+  /**
+   * Terminate (hang up) an active WhatsApp call.
+   *
+   * API: POST /{Phone-Number-ID}/calls
+   *      { messaging_product, call_id, action: "terminate" }
+   */
+  async terminateCall(callId: string): Promise<boolean> {
+    try {
+      const res = await this.post(`${BASE}/${this.phoneNumberId}/calls`, {
+        messaging_product: 'whatsapp',
+        call_id: callId,
+        action: 'terminate',
+      })
+      return res?.success === true
+    } catch (err: any) {
+      console.error('[WA] terminateCall error:', err.message)
+      return false
+    }
+  }
+
+  /**
+   * Get current calling settings for this phone number.
+   *
+   * Returns: status (enabled/disabled), call_icon_visibility,
+   *          ip_addresses, callback_permission_status, srtp_protocol
+   *
+   * API: GET /{Phone-Number-ID}?fields=calling
+   */
+  async getCallingSettings(): Promise<{
+    status: 'enabled' | 'disabled'
+    call_icon_visibility: 'visible' | 'hidden'
+    callback_permission_status?: 'enabled' | 'disabled'
+    srtp_key_exchange_protocol?: 'DTLS-SRTP' | 'SDES-SRTP'
+    ip_addresses?: { default: string[] }
+  }> {
+    try {
+      const res = await axios.get(
+        `${BASE}/${this.phoneNumberId}`,
+        {
+          params: { fields: 'calling' },
+          headers: { Authorization: `Bearer ${this.token}` },
+        }
+      )
+      return res.data?.calling ?? { status: 'disabled', call_icon_visibility: 'hidden' }
+    } catch (err: any) {
+      throw new Error(`getCallingSettings failed: ${err.message}`)
+    }
+  }
+
+  /**
+   * Enable or disable the calling feature for this phone number.
+   *
+   * API: POST /{Phone-Number-ID}
+   *      { calling: { status: "enabled"|"disabled", call_icon_visibility: "visible"|"hidden" } }
+   */
+  async updateCallingSettings(settings: {
+    status: 'enabled' | 'disabled'
+    call_icon_visibility?: 'visible' | 'hidden'
+  }): Promise<boolean> {
+    try {
+      const res = await this.post(`${BASE}/${this.phoneNumberId}`, {
+        calling: {
+          status: settings.status,
+          call_icon_visibility: settings.call_icon_visibility ?? 'visible',
+        },
+      })
+      return res?.success === true
+    } catch (err: any) {
+      throw new Error(`updateCallingSettings failed: ${err.message}`)
+    }
+  }
 }
 
 // ── Webhook parser ────────────────────────────────────────────────────────────
 export interface ParsedWAEvent {
-  type: 'message' | 'status'
+  type: 'message' | 'status' | 'call'
   phoneNumberId: string
   data: any
 }
@@ -433,6 +612,7 @@ export function parseWhatsAppWebhook(body: any): ParsedWAEvent[] {
       if (!val) continue
       const phoneNumberId: string = val.metadata?.phone_number_id ?? ''
 
+      // ── Inbound messages ──
       for (const msg of val.messages ?? []) {
         const contact = (val.contacts ?? []).find((c: any) => c.wa_id === msg.from)
         events.push({
@@ -444,8 +624,6 @@ export function parseWhatsAppWebhook(body: any): ParsedWAEvent[] {
             from_name:    contact?.profile?.name ?? msg.from,
             timestamp:    new Date(parseInt(msg.timestamp) * 1000).toISOString(),
             type:         msg.type,
-
-            // All standard types
             text:        msg.text?.body   ?? null,
             image:       msg.image        ?? null,
             audio:       msg.audio        ?? null,
@@ -454,20 +632,16 @@ export function parseWhatsAppWebhook(body: any): ParsedWAEvent[] {
             sticker:     msg.sticker      ?? null,
             location:    msg.location     ?? null,
             reaction:    msg.reaction     ?? null,
-
-            // Interactive types (button reply, list reply, flow response)
             interactive: msg.interactive  ?? null,
-            // Quick-reply button press on template
             button:      msg.button       ?? null,
             order:       msg.order        ?? null,
             contacts:    msg.contacts     ?? null,
-
-            // CRITICAL: context = the message being replied to
             context:     msg.context      ?? null,
           },
         })
       }
 
+      // ── Status updates ──
       for (const st of val.statuses ?? []) {
         events.push({
           type: 'status',
@@ -479,6 +653,35 @@ export function parseWhatsAppWebhook(body: any): ParsedWAEvent[] {
             errors:       st.errors ?? null,
             conversation: st.conversation ?? null,
             pricing:      st.pricing ?? null,
+          },
+        })
+      }
+
+      // ── Call events (NEW) ──
+      // Fired when: call state changes (ringing, connected, ended, missed),
+      // SDP answer arrives, ICE candidates are exchanged
+      // Webhook field: "calls" — must be subscribed in Meta App Dashboard
+      for (const callEvent of val.calls ?? []) {
+        events.push({
+          type: 'call',
+          phoneNumberId,
+          data: {
+            call_id:   callEvent.id,
+            // State: ringing | accepted | connecting | connected | ended | missed | failed
+            status:    callEvent.status,
+            from:      callEvent.from ?? null,
+            to:        callEvent.to ?? null,
+            timestamp: callEvent.timestamp
+              ? new Date(parseInt(callEvent.timestamp) * 1000).toISOString()
+              : new Date().toISOString(),
+            // SDP answer delivered by Meta when call is connecting
+            session:   callEvent.session ?? null,
+            // Duration in seconds (on ended events)
+            duration:  callEvent.duration ?? null,
+            // Reason for ended/failed events
+            reason:    callEvent.reason ?? null,
+            // Echoes back biz_opaque_callback_data sent during initiateCall
+            callback_data: callEvent.biz_opaque_callback_data ?? null,
           },
         })
       }
