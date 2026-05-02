@@ -53,9 +53,12 @@ export interface UseWhatsAppCallReturn {
 }
 
 const ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-]
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    // Add a TURN server if calls fail behind corporate/mobile NAT:
+    // { urls: 'turn:your-turn-server:3478', username: '...', credential: '...' }
+  ]
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 export function useWhatsAppCall(
@@ -302,7 +305,16 @@ export function useWhatsAppCall(
         body:    JSON.stringify({ action: 'request_permission', conversation_id: conversationId }),
       })
       const data = await res.json()
-      if (!res.ok || !data.ok) { setErr(data.error ?? 'Permission request failed'); return }
+        if (!res.ok || !data.ok) {
+    // Don't set error state — show info message instead
+    setCallState('permission_required')
+    setPermission(prev => prev ? { 
+      ...prev, 
+      status: 'pending',
+      _manual_required: true  // add this flag to CallPermission type if needed
+    } : null)
+    return
+  }
       setCallState('permission_required')
       setPermission(prev => prev ? { ...prev, status: 'pending' } : null)
     } catch (e: any) {
@@ -365,7 +377,7 @@ export function useWhatsAppCall(
     // 4. Wait for ICE gathering (max 3s)
     await new Promise<void>(resolve => {
       if (pc.iceGatheringState === 'complete') { resolve(); return }
-      const t = setTimeout(resolve, 3000)
+      const t = setTimeout(resolve, 6000)
       pc.onicegatheringstatechange = () => {
         if (pc.iceGatheringState === 'complete') { clearTimeout(t); resolve() }
       }

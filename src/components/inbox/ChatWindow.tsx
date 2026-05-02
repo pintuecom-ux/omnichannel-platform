@@ -92,9 +92,13 @@ export default function ChatWindow() {
         table: 'messages',
         filter: `conversation_id=eq.${activeConversationId}`,
       }, payload => {
-        if (payload.eventType === 'INSERT') {
-          addMessage(payload.new as Message)
-        } else if (payload.eventType === 'UPDATE') {
+  if (payload.eventType === 'INSERT') {
+    const msg = payload.new as Message
+    // Skip call-type messages — they live in the /calls tab only
+    if (msg.content_type !== 'call') {
+      addMessage(msg)
+    }
+  } else if (payload.eventType === 'UPDATE') {
           updateMessage((payload.new as Message).id, payload.new as Partial<Message>)
         }
       })

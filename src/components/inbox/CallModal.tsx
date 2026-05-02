@@ -193,9 +193,11 @@ const AlertIcon = () => (
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function CallModal({ conversationId, contactName, contactPhone, onClose }: CallModalProps) {
-  const {
+const {
     callState, callId, permission, duration, isMuted, error,
+    isRecording, recordingUploading, recordingUrl,
     checkPermission, requestPermission, startCall, endCall, toggleMute, reset,
+    startRecording, stopRecording,
   } = useWhatsAppCall(conversationId)
 
   // Check permission on open
@@ -436,6 +438,42 @@ export default function CallModal({ conversationId, contactName, contactPhone, o
           {/* ── Connecting / Ringing / Connected call controls ── */}
           {(callState === 'connecting' || callState === 'ringing' || callState === 'connected' || callState === 'ending') && (
             <div style={{ display: 'flex', gap: 24, alignItems: 'center', marginTop: 4 }}>
+
+              {/* Record */}
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+    <CircleBtn
+      onClick={isRecording ? stopRecording : startRecording}
+      disabled={callState !== 'connected'}
+      danger={isRecording}
+      label={isRecording ? 'Stop Recording' : 'Record'}
+    >
+      {isRecording ? (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="6" y="6" width="12" height="12" rx="2" />
+        </svg>
+      ) : (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="8" />
+        </svg>
+      )}
+    </CircleBtn>
+    <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11 }}>
+      {isRecording ? 'Stop' : 'Record'}
+    </span>
+  </div>
+
+AND add recording status display after the controls section:
+  {recordingUploading && (
+    <div style={{ fontSize: 12, color: '#a78bfa', textAlign: 'center' }}>
+      Uploading recording…
+    </div>
+  )}
+  {recordingUrl && !recordingUploading && (
+    <div style={{ fontSize: 12, color: '#86efac', textAlign: 'center' }}>
+      ✓ Recording saved
+    </div>
+  )}
+
               {/* Mute */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                 <CircleBtn

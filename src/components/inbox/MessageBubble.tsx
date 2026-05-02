@@ -905,7 +905,41 @@ export default function MessageBubble({
     )
   }
 
-  
+   /* ── Unsupported ── */
+  if (msg.content_type === 'unsupported') {
+    const rawType = msg.meta?.raw_type ?? msg.meta?.wa_type ?? '?'
+    return (
+      <div className={`wa-msg-row ${isOut ? 'out' : 'in'}`} style={{ marginTop: 4 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 12px',
+          background: 'var(--bg-surface)',
+          border: '1px solid rgba(245,158,11,0.25)',
+          borderRadius: 10, fontSize: 12,
+          color: 'var(--text-muted)', maxWidth: 280,
+        }}>
+          <span style={{ fontSize: 16 }}>⚠️</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 2 }}>
+              Unsupported message type
+            </div>
+            <div style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
+              type: {rawType}
+            </div>
+            {msg.meta?.wa_type && (
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
+                {msg.meta.wa_type === 'poll' && '📊 Poll (not supported in Cloud API)'}
+                {msg.meta.wa_type === 'broadcast_list' && '📢 Broadcast list message'}
+                {msg.meta.wa_type === 'ephemeral' && '⏳ View-once message'}
+                {msg.meta.wa_type === 'call' && '📞 WhatsApp call notification'}
+              </div>
+            )}
+          </div>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>{time}</span>
+        </div>
+      </div>
+    )
+  }
   
   /* ── Audio ── */
   if (msg.content_type === 'audio' || isAudio(mime)) {

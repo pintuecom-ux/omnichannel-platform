@@ -91,7 +91,7 @@ function extractMessageBody(data: any): string | null {
   if (mediaObj) return mediaObj.caption ?? null
   if (data.location) return `[Location: ${data.location.name ?? data.location.address ?? 'shared location'}]`
   if (data.reaction) return `[Reaction: ${data.reaction.emoji ?? '👍'}]`
-  if (data.type === 'unsupported') return null
+  if (data.type === 'unsupported') data.meta.raw_type = data.type
   return null
 }
 
@@ -157,7 +157,7 @@ async function processMessage(ev: any) {
         channel_id:      channel.id,
         platform:        'whatsapp',
         status:          'open',
-        last_message:    bodyText ?? (data.type === 'unsupported' ? '[Unsupported message]' : `[${data.type}]`),
+        last_message:    bodyText ?? (data.type === 'unsupported' ? { raw_type: data.type, wa_type: data.type } : {}),
         last_message_at: data.timestamp,
         updated_at:      new Date().toISOString(),
       },
@@ -338,6 +338,42 @@ async function processCall(ev: any) {
 
   const terminalStatuses = ['ended', 'completed', 'missed', 'failed', 'rejected', 'terminated', 'canceled', 'busy', 'no_answer']
   const isTerminal = terminalStatuses.includes(status)
+
+  if ((status === 'ringing' || status === 'connecting') && data.from) {
+    const contactPhone = (data.from as string).replace(/^\+/, '')
+    // Get contact name for display
+    const { data: contactRow } = await admin
+      .from('contacts')
+      .select('name')
+      .eq('workspace_id', channel.workspace_id)
+      .eq('phone', contactPhone)
+      .maybeSingle()
+    
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY!
+    await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+        'apikey':         serviceKey,
+      },
+      body: JSON.stringify({
+        messages: [{
+          topic:   `workspace:${channel.workspace_id}`,
+          event:   'incoming_call',
+          payload: {
+            call_id:         data.call_id,
+            from_phone:      contactPhone,
+            contact_name:    contactRow?.name ?? contactPhone,
+            conversation_id: conversationId,
+            sdp:             data.session?.sdp    ?? null,
+            sdp_type:        data.session?.sdp_type ?? null,
+          },
+        }],
+      }),
+    }).catch(e => console.warn('[WA Call] incoming_call broadcast failed:', e.message))
+  }
 
   if (isTerminal) {
     // Update the existing call_started/ringing message for this call_id
