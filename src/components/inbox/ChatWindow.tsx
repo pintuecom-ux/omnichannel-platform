@@ -1,12 +1,12 @@
 'use client'
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useInboxStore, useActiveConversation } from '@/stores/useInboxStore'
 import { formatMessageDate } from '@/lib/utils'
 import MessageBubble from './MessageBubble'
 import InputArea from './InputArea'
 import type { Conversation, Message } from '@/types'
+import CallModal from '@/components/inbox/CallModal'
 
 const STATUS_CYCLE = ['open', 'pending', 'closed'] as const
 const STATUS_LABEL = { open: 'Open', pending: 'Pending', closed: 'Closed' }
@@ -21,7 +21,6 @@ export default function ChatWindow() {
     updateMessage,
     updateConversation,
   } = useInboxStore()
-  const router       = useRouter()
   const conversation = useActiveConversation()
   const platform = conversation?.platform ?? 'whatsapp'
   const isWA     = platform === 'whatsapp'
@@ -32,6 +31,7 @@ export default function ChatWindow() {
   const [replyingTo, setReplyingTo]  = useState<{ id: string; body: string } | null>(null)
 
   // ── WhatsApp Call modal state ──────────────────────────────────────────────
+  const [showCallModal, setShowCallModal] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -177,11 +177,7 @@ export default function ChatWindow() {
             <button
               className="icon-btn"
               title="WhatsApp Voice Call"
-              onClick={() => {
-                // Issue 1: Navigate to Calls tab, passing conversation_id so the
-                // call panel opens directly for this contact.
-                router.push(`/calls?cid=${activeConversationId}`)
-              }}
+onClick={() => setShowCallModal(true)}
               style={{
                 position:   'relative',
                 color:       'var(--text-muted)',
@@ -303,8 +299,15 @@ export default function ChatWindow() {
         />
       )}
 
-      {/* ── WhatsApp Call Modal (portal-style overlay) ── */}
-    </div>
+  {/* ── WhatsApp Call Modal (portal-style overlay) ── */}
+  {showCallModal && isWA && (
+    <CallModal
+      conversationId={activeConversationId!}
+      contactName={contactName}
+      contactPhone={contactPhone}
+      onClose={() => setShowCallModal(false)}
+    />
+  )}    </div>
   )
 }
 
