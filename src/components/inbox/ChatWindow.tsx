@@ -6,7 +6,6 @@ import { useInboxStore, useActiveConversation } from '@/stores/useInboxStore'
 import { formatMessageDate } from '@/lib/utils'
 import MessageBubble from './MessageBubble'
 import InputArea from './InputArea'
-
 import type { Conversation, Message } from '@/types'
 
 const STATUS_CYCLE = ['open', 'pending', 'closed'] as const
@@ -14,7 +13,6 @@ const STATUS_LABEL = { open: 'Open', pending: 'Pending', closed: 'Closed' }
 
 export default function ChatWindow() {
   const supabase = createClient()
-  const router   = useRouter()
   const {
     activeConversationId,
     messages,
@@ -23,6 +21,7 @@ export default function ChatWindow() {
     updateMessage,
     updateConversation,
   } = useInboxStore()
+  const router       = useRouter()
   const conversation = useActiveConversation()
   const platform = conversation?.platform ?? 'whatsapp'
   const isWA     = platform === 'whatsapp'
@@ -32,7 +31,7 @@ export default function ChatWindow() {
   // Track which comment the agent is replying to in the Comments tab
   const [replyingTo, setReplyingTo]  = useState<{ id: string; body: string } | null>(null)
 
-  // (Call state now managed on /calls page — see Issue 1)
+  // ── WhatsApp Call modal state ──────────────────────────────────────────────
 
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -50,7 +49,10 @@ export default function ChatWindow() {
       .order('created_at', { ascending: true })
       .limit(200)
     if (error) { console.error('[ChatWindow] loadMessages error:', error.message); return }
-    if (data) setMessages(data as Message[])
+    if (data) {
+      // Issue (hide calls): filter out call-type messages — they show in /calls tab only
+      setMessages((data as Message[]).filter(m => m.content_type !== 'call'))
+    }
 
     // Mark conversation as read
     await supabase.from('conversations').update({ unread_count: 0 }).eq('id', activeConversationId)
@@ -170,18 +172,19 @@ export default function ChatWindow() {
             <span>{STATUS_LABEL[status]}</span>
           </div>
 
-          {/* ── WhatsApp Call Button — navigates to /calls tab (Issue 1) ── */}
+          {/* ── WhatsApp Call Button — only shown for WA conversations ── */}
           {isWA && (
             <button
               className="icon-btn"
               title="WhatsApp Voice Call"
               onClick={() => {
-                // Navigate to the dedicated Calls tab, pre-selecting this conversation.
-                // The Calls page reads ?conversation_id= and opens the CallModal there.
-                router.push(`/calls?conversation_id=${activeConversationId}`)
+                // Issue 1: Navigate to Calls tab, passing conversation_id so the
+                // call panel opens directly for this contact.
+                router.push(`/calls?cid=${activeConversationId}`)
               }}
               style={{
-                position: 'relative',
+                position:   'relative',
+                color:       'var(--text-muted)',
               }}
             >
               {/* Inline SVG phone icon — no extra dep needed */}
@@ -300,8 +303,7 @@ export default function ChatWindow() {
         />
       )}
 
-      {/* Call Modal is now on /calls page — phone icon navigates there */}
-      
+      {/* ── WhatsApp Call Modal (portal-style overlay) ── */}
     </div>
   )
 }

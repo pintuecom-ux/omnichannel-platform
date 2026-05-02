@@ -1,26 +1,25 @@
 /**
  * src/app/api/webhooks/whatsapp/route.ts
  *
- * FIXES IN THIS VERSION
- * ─────────────────────────────────────────────────────────────────────────────
- * Issue 2a — "Call undefined" in message bubble:
- *   Meta sends call status in UPPERCASE (RINGING, COMPLETED, MISSED, etc.)
- *   but our callBodyMap and callEvent stored in meta were using lowercase keys.
- *   Fix: normalise status to lowercase immediately on entry to processCall().
+ * FIXES IN THIS VERSION:
  *
- * Issue 2b — Voice not working (SDP answer never reaches the browser):
- *   The previous code used `admin.channel('call:ID').send(...)` to broadcast
- *   the SDP answer. This DOES NOT WORK in a serverless Next.js API route because
- *   the Supabase JS client's Realtime module requires a persistent WebSocket
- *   connection, which serverless functions don't maintain.
+ * Issue 2 (No voice / "Call undefined"):
+ *   Meta sends call status in UPPERCASE: COMPLETED, RINGING, CONNECTED etc.
+ *   callBodyMap only had lowercase keys → body was always undefined → "Call undefined"
+ *   FIX: normalise status to lowercase before all lookups.
  *
- *   Fix: Use Supabase's Realtime REST Broadcast API instead:
- *     POST {SUPABASE_URL}/realtime/v1/api/broadcast
- *   This is an HTTP endpoint — it works in serverless environments and delivers
- *   the message to all subscribed clients immediately.
+ * Issue 2 (SDP answer not reaching browser):
+ *   admin.channel().send() opens a WebSocket — impossible in serverless routes.
+ *   FIX: Use Supabase Realtime REST broadcast endpoint (HTTP POST, no socket needed).
  *
- * Make sure "calls" is subscribed in Meta App Dashboard:
- *   App → WhatsApp → Webhooks → calls ✓
+ * Issue 3 (No DB call logs):
+ *   content_type 'call' was missing from the DB check constraint.
+ *   FIX: Run migration 005_add_call_content_type.sql first, then this file.
+ *
+ * Issue 4 (send_call_permission_request invalid):
+ *   That action does NOT exist on POST /calls. It only appears as an informational
+ *   field in the GET /call_permissions response. The whatsapp.ts method that
+ *   tried to POST it has been removed / replaced in whatsapp.ts.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -32,9 +31,7 @@ const admin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-/* -------------------------------------------------------------------------- */
-/* Verification                                                               */
-/* -------------------------------------------------------------------------- */
+// ── Verification ──────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams
   if (
@@ -47,16 +44,14 @@ export async function GET(req: NextRequest) {
   return new NextResponse('Forbidden', { status: 403 })
 }
 
-/* -------------------------------------------------------------------------- */
-/* Events dispatcher                                                          */
-/* -------------------------------------------------------------------------- */
+// ── Events ────────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     await handleEvents(body)
     return NextResponse.json({ status: 'ok' })
   } catch (err) {
-    console.error('[WA Webhook] Fatal:', err)
+    console.error('[WA Webhook] Fatal parse error:', err)
     return NextResponse.json({ status: 'error_logged' })
   }
 }
@@ -65,21 +60,17 @@ async function handleEvents(body: any) {
   const events = parseWhatsAppWebhook(body)
   await Promise.all(
     events.map(ev => {
-      if (ev.type === 'message') return processMessage(ev).catch(e => console.error('[WA] processMessage:', e))
-      if (ev.type === 'status')  return processStatus(ev).catch(e =>  console.error('[WA] processStatus:',  e))
-      if (ev.type === 'call')    return processCall(ev).catch(e =>    console.error('[WA] processCall:',    e))
-      return Promise.resolve()
+      if (ev.type === 'message') return processMessage(ev).catch(e => console.error('[WA] processMessage error:', e))
+      if (ev.type === 'status')  return processStatus(ev).catch(e  => console.error('[WA] processStatus error:',  e))
+      if (ev.type === 'call')    return processCall(ev).catch(e    => console.error('[WA] processCall error:',    e))
     })
   )
 }
 
-/* -------------------------------------------------------------------------- */
-/* Helpers for message processing                                             */
-/* -------------------------------------------------------------------------- */
+// ── Extract human-readable body ───────────────────────────────────────────────
 function extractMessageBody(data: any): string | null {
-  if (data.text)   return data.text
-  if (data.button) return data.button.text ?? null
-
+  if (data.text)    return data.text
+  if (data.button)  return data.button.text ?? null
   if (data.interactive) {
     const iv = data.interactive
     switch (iv.type) {
@@ -89,75 +80,57 @@ function extractMessageBody(data: any): string | null {
       default:             return `[Interactive: ${iv.type}]`
     }
   }
-
   if (data.order) {
     const items = data.order.product_items ?? []
     return `[Order: ${items.length} item${items.length !== 1 ? 's' : ''}]`
   }
-
   if (data.contacts?.length > 0) {
     return `[Contact: ${data.contacts[0]?.name?.formatted_name ?? 'Contact'}]`
   }
-
   const mediaObj = data.image ?? data.video ?? data.audio ?? data.document ?? data.sticker ?? null
   if (mediaObj) return mediaObj.caption ?? null
-
-  if (data.location) {
-    return `[Location: ${data.location.name ?? data.location.address ?? 'shared location'}]`
-  }
-
+  if (data.location) return `[Location: ${data.location.name ?? data.location.address ?? 'shared location'}]`
   if (data.reaction) return `[Reaction: ${data.reaction.emoji ?? '👍'}]`
   if (data.type === 'unsupported') return null
-
   return null
 }
 
 function getContentType(data: any): string {
-  switch (data.type) {
-    case 'text':        return 'text'
-    case 'image':       return 'image'
-    case 'video':       return 'video'
-    case 'audio':       return 'audio'
-    case 'document':    return 'document'
-    case 'sticker':     return 'sticker'
-    case 'location':    return 'location'
-    case 'reaction':    return 'reaction'
-    case 'interactive': return 'interactive'
-    case 'button':      return 'button'
-    case 'order':       return 'order'
-    case 'contacts':    return 'contacts'
-    case 'unsupported': return 'unsupported'
-    default:            return 'text'
+  const map: Record<string, string> = {
+    text: 'text', image: 'image', video: 'video', audio: 'audio',
+    document: 'document', sticker: 'sticker', location: 'location',
+    reaction: 'reaction', interactive: 'interactive', button: 'button',
+    order: 'order', contacts: 'contacts', unsupported: 'unsupported',
   }
+  return map[data.type] ?? 'text'
 }
 
-/* -------------------------------------------------------------------------- */
-/* processMessage                                                             */
-/* -------------------------------------------------------------------------- */
+// ── Process inbound message ───────────────────────────────────────────────────
 async function processMessage(ev: any) {
   const { phoneNumberId, data } = ev
 
-  const { data: channel } = await admin
+  const { data: channel, error: channelErr } = await admin
     .from('channels')
     .select('id, workspace_id, access_token')
     .eq('platform', 'whatsapp')
     .eq('external_id', phoneNumberId)
     .maybeSingle()
 
-  if (!channel) {
-    console.error(`[WA] No channel for phone_number_id: ${phoneNumberId}`)
+  if (channelErr || !channel) {
+    console.error(`[WA] No channel for phone_number_id: ${phoneNumberId}`, channelErr?.message)
     return
   }
 
-  // Idempotency
   const { data: exists } = await admin
     .from('messages')
     .select('id')
     .eq('external_id', data.external_id)
     .maybeSingle()
-  if (exists) return
+  if (exists) {
+    console.log(`[WA] Already processed message ${data.external_id} — skipping`)
+    return
+  }
 
-  // Upsert contact
   const phone = data.from.replace(/^\+/, '')
   const { data: contact, error: contactErr } = await admin
     .from('contacts')
@@ -169,13 +142,12 @@ async function processMessage(ev: any) {
     .single()
 
   if (contactErr || !contact) {
-    console.error('[WA] Contact upsert error:', contactErr)
+    console.error('[WA] Contact upsert error:', contactErr?.message)
     return
   }
 
   const bodyText = extractMessageBody(data)
 
-  // Upsert conversation
   const { data: conv, error: convErr } = await admin
     .from('conversations')
     .upsert(
@@ -195,23 +167,20 @@ async function processMessage(ev: any) {
     .single()
 
   if (convErr || !conv) {
-    console.error('[WA] Conversation upsert error:', convErr)
+    console.error('[WA] Conversation upsert error:', convErr?.message)
     return
   }
 
-  // Atomic unread increment (uses RPC from migration 003 if available)
-  const { error: rpcErr } = await admin.rpc('increment_unread', { conv_id: conv.id })
-  if (rpcErr) {
-    await admin
-      .from('conversations')
-      .update({ unread_count: (conv.unread_count || 0) + 1 })
-      .eq('id', conv.id)
+  // Atomic unread increment
+  const { error: unreadErr } = await admin.rpc('increment_unread', { conv_id: conv.id })
+  if (unreadErr) {
+    console.warn('[WA] RPC increment_unread failed, using fallback:', unreadErr.message)
+    await admin.from('conversations').update({ unread_count: (conv.unread_count || 0) + 1 }).eq('id', conv.id)
   }
 
-  // Resolve media
+  // Media upload
   let mediaUrl:  string | null = null
   let mediaMime: string | null = null
-
   const mediaObj = data.image ?? data.video ?? data.audio ?? data.document ?? data.sticker ?? null
   if (mediaObj?.id) {
     try {
@@ -220,28 +189,15 @@ async function processMessage(ev: any) {
       const bytes = await waClient.downloadMedia(url)
       const ext   = (mime_type?.split('/')[1]?.split(';')[0] ?? 'bin').replace(/[^a-z0-9]/g, '')
       const path  = `${channel.workspace_id}/${conv.id}/${data.external_id}.${ext}`
-
-      const { error: stErr } = await admin.storage
-        .from('media')
-        .upload(path, bytes, { contentType: mime_type, upsert: true })
-
-      if (stErr) { mediaUrl = url }
-      else {
-        const { data: pub } = admin.storage.from('media').getPublicUrl(path)
-        mediaUrl = pub.publicUrl
-      }
+      const { error: storageErr } = await admin.storage.from('media').upload(path, bytes, { contentType: mime_type, upsert: true })
+      if (storageErr) { mediaUrl = url } else { mediaUrl = admin.storage.from('media').getPublicUrl(path).data.publicUrl }
       mediaMime = mime_type
     } catch (e: any) {
       console.warn('[WA] Media fetch error (non-critical):', e.message)
     }
   }
 
-  // Build meta
-  const meta: Record<string, any> = {
-    from:      phone,
-    from_name: data.from_name,
-    filename:  data.document?.filename ?? null,
-  }
+  const meta: Record<string, any> = { from: phone, from_name: data.from_name, filename: data.document?.filename ?? null }
   if (data.interactive) {
     meta.interactive_type = data.interactive.type
     if (data.interactive.nfm_reply)    meta.flow_response = data.interactive.nfm_reply
@@ -253,13 +209,7 @@ async function processMessage(ev: any) {
   if (data.reaction) meta.reaction = data.reaction
   if (data.location) meta.location = data.location
   if (data.contacts) meta.contacts = data.contacts
-  if (data.context) {
-    meta.context = {
-      message_id: data.context.message_id ?? data.context.id,
-      from:       data.context.from ?? null,
-      type:       data.context.type ?? null,
-    }
-  }
+  if (data.context)  meta.context  = { message_id: data.context.message_id ?? data.context.id, from: data.context.from ?? null }
 
   const { error: msgErr } = await admin.from('messages').insert({
     conversation_id: conv.id,
@@ -275,13 +225,11 @@ async function processMessage(ev: any) {
     meta,
   })
 
-  if (msgErr) console.error('[WA] Message insert error:', msgErr)
-  else        console.log(`[WA] ✅ ${data.type} from ${phone}`)
+  if (msgErr) console.error('[WA] Message insert error:', msgErr.message)
+  else        console.log(`[WA] ✅ ${data.type} from ${phone} → conv ${conv.id}`)
 }
 
-/* -------------------------------------------------------------------------- */
-/* processStatus                                                              */
-/* -------------------------------------------------------------------------- */
+// ── Process status update ─────────────────────────────────────────────────────
 async function processStatus(ev: any) {
   const { data } = ev
   if (!data.external_id) return
@@ -291,10 +239,7 @@ async function processStatus(ev: any) {
     .update({ status: data.status })
     .eq('external_id', data.external_id)
 
-  if (statusErr) {
-    console.error('[WA] Status update error:', statusErr.message)
-    return
-  }
+  if (statusErr) { console.error('[WA] Status update error:', statusErr.message); return }
 
   if (data.conversation || data.pricing) {
     const { error: mergeErr } = await admin.rpc('merge_message_meta', {
@@ -304,7 +249,7 @@ async function processStatus(ev: any) {
         ...(data.pricing      ? { wa_pricing: data.pricing }           : {}),
       },
     })
-    if (mergeErr) console.debug('[WA] merge_message_meta (optional):', mergeErr.message)
+    if (mergeErr) console.debug('[WA] merge_message_meta skipped (optional):', mergeErr.message)
   }
 
   if (data.status === 'failed' && data.errors) {
@@ -314,23 +259,21 @@ async function processStatus(ev: any) {
     })
     if (errMergeErr) console.warn('[WA] Failed message errors (could not merge):', data.errors)
   }
+
+  console.log(`[WA] Status: ${data.external_id} → ${data.status}`)
 }
 
-/* -------------------------------------------------------------------------- */
-/* processCall — FIX: normalise status, use Realtime REST for SDP broadcast  */
-/* -------------------------------------------------------------------------- */
+// ── Process call event ────────────────────────────────────────────────────────
 async function processCall(ev: any) {
   const { phoneNumberId, data } = ev
 
-  // ── FIX Issue 2a: Meta sends status in UPPERCASE ──────────────────────────
-  // "COMPLETED", "RINGING", "MISSED", etc.
-  // Normalise to lowercase so callBodyMap lookups always succeed.
-  const rawStatus: string = data.status ?? ''
-  const status = rawStatus.toLowerCase()   // ← THE FIX
+  // FIX (Issue 2): Meta sends call status as UPPERCASE (COMPLETED, RINGING, etc.)
+  // Normalise to lowercase so callBodyMap lookups always hit.
+  const rawStatus  = data.status ?? ''
+  const status     = rawStatus.toLowerCase()
 
-  console.log(`[WA Call] event: ${status} | call_id: ${data.call_id}`)
+  console.log(`[WA Call] event: ${status} (raw: ${rawStatus}) call_id: ${data.call_id}`)
 
-  // Find channel
   const { data: channel } = await admin
     .from('channels')
     .select('id, workspace_id')
@@ -343,64 +286,61 @@ async function processCall(ev: any) {
     return
   }
 
-  // Resolve conversation — prefer callback_data, fallback to caller's phone
+  // Resolve conversation from callback_data or caller phone
   let conversationId: string | null = null
 
   if (data.callback_data?.startsWith('conv:')) {
     conversationId = data.callback_data.replace('conv:', '')
   } else if (data.from) {
-    const callerPhone = data.from.replace(/^\+/, '')
-    const { data: contact } = await admin
+    const phone = (data.from as string).replace(/^\+/, '')
+    const { data: contactRow } = await admin
       .from('contacts')
       .select('id')
       .eq('workspace_id', channel.workspace_id)
-      .eq('phone', callerPhone)
+      .eq('phone', phone)
       .maybeSingle()
 
-    if (contact) {
-      const { data: conv } = await admin
+    if (contactRow) {
+      const { data: convRow } = await admin
         .from('conversations')
         .select('id')
         .eq('channel_id', channel.id)
-        .eq('contact_id', contact.id)
+        .eq('contact_id', contactRow.id)
         .maybeSingle()
-      conversationId = conv?.id ?? null
+      conversationId = convRow?.id ?? null
     }
   }
 
   if (!conversationId) {
-    console.warn('[WA Call] Could not resolve conversation — dropping event')
+    console.warn('[WA Call] Could not resolve conversation for call event — no callback_data and no matching contact')
     return
   }
 
-  // ── Map normalised status to human-readable body ──────────────────────────
-  // All keys are now lowercase so they match the normalised status.
-  const duration = data.duration
+  // FIX (Issue 2): callBodyMap uses lowercase keys. Status is now lowercase.
   const callBodyMap: Record<string, string> = {
     ringing:    '📞 Call ringing…',
     accepted:   '📞 Call accepted',
     connecting: '📞 Call connecting…',
     connected:  '📞 Call connected',
-    initiated:  '📞 Call initiated',
-    // terminal events
-    ended:      `📞 Call ended${duration ? ` (${formatDuration(duration)})` : ''}`,
-    completed:  `📞 Call ended${duration ? ` (${formatDuration(duration)})` : ''}`,
-    missed:     '📞 Missed call',
-    failed:     '📞 Call failed',
-    rejected:   '📞 Call rejected',
+    completed:  `📞 Call ended${data.duration ? ` (${formatDuration(data.duration)})` : ''}`,
+    ended:      `📞 Call ended${data.duration ? ` (${formatDuration(data.duration)})` : ''}`,
+    missed:     '📵 Missed call',
+    failed:     '❌ Call failed',
+    rejected:   '🚫 Call rejected',
     terminated: '📞 Call ended',
-    cancelled:  '📞 Call cancelled',
-    busy:       '📞 Contact is busy',
+    canceled:   '📞 Call cancelled',
+    busy:       '📵 Contact is busy',
+    no_answer:  '📵 No answer',
+    permission_requested: '🔔 Call permission requested',
   }
 
-  // Guarantee we never fall through to "Call undefined"
-  const body = callBodyMap[status] ?? `📞 Call ${status || 'event'}`
+  const body = callBodyMap[status] ?? `📞 Call ${status}`
 
-  // ── Terminal states: update existing message or insert new one ────────────
-  const terminalStatuses = ['ended', 'completed', 'missed', 'failed', 'rejected', 'terminated', 'cancelled']
+  const terminalStatuses = ['ended', 'completed', 'missed', 'failed', 'rejected', 'terminated', 'canceled', 'busy', 'no_answer']
   const isTerminal = terminalStatuses.includes(status)
 
   if (isTerminal) {
+    // Update the existing call_started/ringing message for this call_id
     const { data: existing } = await admin
       .from('messages')
       .select('id, meta')
@@ -412,27 +352,22 @@ async function processCall(ev: any) {
       .maybeSingle()
 
     if (existing) {
-      await admin
-        .from('messages')
-        .update({
-          body,
-          meta: {
-            ...(existing.meta ?? {}),
-            call_event: status,
-            duration:   data.duration ?? null,
-            reason:     data.reason ?? null,
-            ended_at:   data.timestamp,
-          },
-        })
-        .eq('id', existing.id)
-
+      await admin.from('messages').update({
+        body,
+        meta: {
+          ...existing.meta,
+          call_event: status,
+          duration:   data.duration ?? null,
+          reason:     data.reason   ?? null,
+          ended_at:   data.timestamp,
+        },
+      }).eq('id', existing.id)
       console.log(`[WA Call] Updated call message → ${status}`)
     } else {
       await insertCallMessage(conversationId, channel.workspace_id, body, data, status)
     }
-  } else {
-    // Non-terminal (ringing, connecting, connected, etc.)
-    // Check idempotency to avoid duplicate rows
+  } else if (status === 'ringing' || status === 'connecting' || status === 'connected') {
+    // Non-terminal: only insert once per call_id + status pair
     const { data: dup } = await admin
       .from('messages')
       .select('id')
@@ -446,113 +381,86 @@ async function processCall(ev: any) {
     }
   }
 
-  // Update conversation last_message for all events
-  await admin
-    .from('conversations')
-    .update({
-      last_message:    body,
-      last_message_at: data.timestamp ?? new Date().toISOString(),
-      updated_at:      new Date().toISOString(),
-    })
-    .eq('id', conversationId)
+  // Update conversation preview
+  await admin.from('conversations').update({
+    last_message:    body,
+    last_message_at: data.timestamp ?? new Date().toISOString(),
+    updated_at:      new Date().toISOString(),
+  }).eq('id', conversationId)
 
-  // ── FIX Issue 2b: Forward SDP answer via Realtime REST Broadcast API ──────
-  //
-  // WHY THIS WAS BROKEN:
-  //   admin.channel('call:X').send(...)  requires a live WebSocket connection.
-  //   A serverless Next.js function closes immediately — no persistent socket.
-  //   The SDP answer was never reaching the browser, so WebRTC never completed.
-  //
-  // FIX: Supabase's REST broadcast endpoint works over plain HTTP.
-  //   It fires-and-forgets a broadcast to all subscribed clients.
-  //   The useWhatsAppCall hook listens on channel `call:{callId}` and
-  //   calls pc.setRemoteDescription() when it receives this event.
-  //
-  if (data.session?.sdp && data.session?.sdp_type === 'answer' && data.call_id) {
-    await broadcastSdpAnswer(data.call_id, data.session.sdp, data.session.sdp_type)
+  // ── Forward SDP answer to browser via Realtime REST broadcast ────────────
+  // FIX (Issue 2): admin.channel().send() opens a WebSocket — impossible in
+  // serverless/edge routes. Use Supabase's HTTP REST broadcast endpoint instead.
+  if (data.session?.sdp && data.session?.sdp_type === 'answer') {
+    await broadcastSdpAnswer(data.call_id, data.session.sdp_type, data.session.sdp)
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* Supabase Realtime REST Broadcast — works in serverless                    */
-/* -------------------------------------------------------------------------- */
-async function broadcastSdpAnswer(callId: string, sdp: string, sdpType: string) {
+// ── Realtime REST broadcast ───────────────────────────────────────────────────
+// Serverless routes cannot hold a WebSocket connection for Supabase Realtime.
+// The REST broadcast endpoint is a single HTTP POST — no socket needed.
+// Docs: https://supabase.com/docs/guides/realtime/broadcast#send-messages-using-rest-api
+async function broadcastSdpAnswer(callId: string, sdpType: string, sdp: string) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
-  // The topic must match exactly what the client subscribes to.
-  // Client code: supabase.channel(`call:${callId}`)
-  // The Realtime REST API prefixes topics with "realtime:"
-  const topic = `realtime:call:${callId}`
-
   try {
     const res = await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
-      method:  'POST',
+      method: 'POST',
       headers: {
-        'Content-Type':  'application/json',
+        'Content-Type': 'application/json',
         'Authorization': `Bearer ${serviceKey}`,
-        'apikey':         serviceKey,
+        'apikey':        serviceKey,
       },
       body: JSON.stringify({
         messages: [
           {
-            topic,
+            topic:   `call:${callId}`,
             event:   'sdp_answer',
-            payload: {
-              call_id:  callId,
-              sdp_type: sdpType,
-              sdp,
-            },
+            payload: { call_id: callId, sdp_type: sdpType, sdp },
           },
         ],
       }),
     })
 
     if (!res.ok) {
-      const txt = await res.text()
-      console.error(`[WA Call] Realtime broadcast failed (${res.status}):`, txt)
+      const text = await res.text()
+      console.warn(`[WA Call] Realtime broadcast failed (${res.status}): ${text}`)
     } else {
-      console.log(`[WA Call] SDP answer broadcasted for call: ${callId}`)
+      console.log(`[WA Call] ✅ SDP answer broadcast for call: ${callId}`)
     }
   } catch (e: any) {
     console.error('[WA Call] Realtime broadcast error:', e.message)
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* insertCallMessage                                                          */
-/* -------------------------------------------------------------------------- */
 async function insertCallMessage(
   conversationId: string,
-  workspaceId:    string,
-  body:           string,
-  data:           any,
-  normalisedStatus: string  // already lowercase
+  workspaceId: string,
+  body: string,
+  data: any,
+  status: string        // normalised lowercase
 ) {
   const { error } = await admin.from('messages').insert({
     conversation_id: conversationId,
     workspace_id:    workspaceId,
     direction:       data.from ? 'inbound' : 'outbound',
-    content_type:    'call',   // requires migration 005
+    content_type:    'call',           // allowed after migration 005
     body,
     status:          'delivered',
     is_note:         false,
     meta: {
-      call_event: normalisedStatus,    // always lowercase — matches callBodyMap + MessageBubble
+      call_event: status,
       call_id:    data.call_id,
-      from_phone: data.from   ?? null,
-      to_phone:   data.to     ?? null,
+      from_phone: data.from     ?? null,
+      to_phone:   data.to       ?? null,
       duration:   data.duration ?? null,
-      reason:     data.reason ?? null,
+      reason:     data.reason   ?? null,
     },
   })
-
   if (error) console.error('[WA Call] insertCallMessage error:', error.message)
 }
 
-/* -------------------------------------------------------------------------- */
-/* Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
