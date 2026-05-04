@@ -89,6 +89,7 @@ export function useWhatsAppCall(
   const mediaRecorderRef   = useRef<MediaRecorder | null>(null)
   const recordingChunksRef = useRef<Blob[]>([])
   const mixedStreamRef     = useRef<MediaStream | null>(null)
+  const recordingCallIdRef = useRef<string | null>(null)
 
   useEffect(() => { callIdRef.current = callId }, [callId])
 
@@ -156,6 +157,9 @@ export function useWhatsAppCall(
 
   // ── Recording internals ───────────────────────────────────────────────────
   function stopRecordingInternal() {
+    // Save the current call_id so the async upload can use it even if callId gets cleared
+    if (callIdRef.current) recordingCallIdRef.current = callIdRef.current
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try { mediaRecorderRef.current.stop() } catch {}
     }
@@ -236,8 +240,10 @@ export function useWhatsAppCall(
     const ext  = mime.split('/')[1]?.split(';')[0] ?? 'webm'
     form.append('audio',           new File([blob], `recording.${ext}`, { type: mime }))
     form.append('conversation_id', conversationId)
-    if (callIdRef.current) form.append('call_id', callIdRef.current)
-    if (elapsed)           form.append('duration', String(elapsed))
+    
+    // Use recordingCallIdRef since callIdRef may have been cleared by call_ended broadcast
+    if (recordingCallIdRef.current) form.append('call_id', recordingCallIdRef.current)
+    if (elapsed)                    form.append('duration', String(elapsed))
 
     try {
       const res  = await fetch('/api/whatsapp/call-recording', { method: 'POST', body: form })
@@ -255,6 +261,7 @@ export function useWhatsAppCall(
       console.error('[Recording] Upload fetch error:', e.message)
     } finally {
       setRecordingUploading(false)
+      recordingCallIdRef.current = null // cleanup
     }
   }
 

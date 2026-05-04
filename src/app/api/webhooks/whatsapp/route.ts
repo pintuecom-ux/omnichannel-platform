@@ -287,8 +287,10 @@ async function processCall(ev: any) {
 
   // Resolve conversation from callback_data or caller phone
   let conversationId: string | null = null
+  const isOutbound = !!data.callback_data
+  const direction = isOutbound ? 'outbound' : 'inbound'
 
-  if (data.callback_data?.startsWith('conv:')) {
+  if (isOutbound && data.callback_data?.startsWith('conv:')) {
     conversationId = data.callback_data.replace('conv:', '')
   } else if (data.from) {
     const phone = (data.from as string).replace(/^\+/, '')
@@ -314,6 +316,7 @@ async function processCall(ev: any) {
     console.warn('[WA Call] Could not resolve conversation — no callback_data and no matching contact')
     return
   }
+
 
   const callBodyMap: Record<string, string> = {
     ringing:    '📞 Call ringing…',
@@ -378,7 +381,7 @@ async function processCall(ev: any) {
       }).eq('id', existing.id)
       console.log(`[WA Call] Updated call message → ${status}`)
     } else {
-      await insertCallMessage(conversationId, channel.workspace_id, body, data, status)
+      await insertCallMessage(conversationId, channel.workspace_id, body, data, status, direction)
     }
 
     // ── Update call_logs with terminal status ──────────────────────────────
@@ -406,10 +409,10 @@ async function processCall(ev: any) {
         channel_id:       channel.id,
         conversation_id:  conversationId,
         call_id:          data.call_id,
-        direction:        data.from ? 'inbound' : 'outbound',
+        direction:        direction,
         status:           dbStatus,
-        from_phone:       data.from ? (data.from as string).replace(/^\+/, '') : null,
-        to_phone:         data.to   ? (data.to   as string).replace(/^\+/, '') : null,
+        from_phone:       isOutbound ? null : (data.from as string).replace(/^\+/, ''),
+        to_phone:         isOutbound ? (data.from as string).replace(/^\+/, '') : null,
         duration_seconds: data.duration ? parseInt(String(data.duration), 10) : null,
         started_at:       data.timestamp ?? new Date().toISOString(),
         ended_at:         data.timestamp ?? new Date().toISOString(),
@@ -440,7 +443,7 @@ async function processCall(ev: any) {
       .maybeSingle()
 
     if (!dup) {
-      await insertCallMessage(conversationId, channel.workspace_id, body, data, status)
+      await insertCallMessage(conversationId, channel.workspace_id, body, data, status, direction)
     }
 
     if (status === 'ringing') {
@@ -449,10 +452,10 @@ async function processCall(ev: any) {
         channel_id:      channel.id,
         conversation_id: conversationId,
         call_id:         data.call_id,
-        direction:       data.from ? 'inbound' : 'outbound',
+        direction:       direction,
         status:          'ringing',
-        from_phone:      data.from ? (data.from as string).replace(/^\+/, '') : null,
-        to_phone:        data.to   ? (data.to   as string).replace(/^\+/, '') : null,
+        from_phone:      isOutbound ? null : (data.from as string).replace(/^\+/, ''),
+        to_phone:        isOutbound ? (data.from as string).replace(/^\+/, '') : null,
         started_at:      data.timestamp ?? new Date().toISOString(),
         meta:            { call_event: 'ringing' },
       }).then(({ error }) => {
@@ -463,7 +466,7 @@ async function processCall(ev: any) {
         }
       })
 
-      if (data.from) {
+      if (direction === 'inbound' && data.from) {
         const callerPhone = (data.from as string).replace(/^\+/, '')
         const { data: contactRow } = await admin
           .from('contacts')
@@ -649,12 +652,13 @@ async function insertCallMessage(
   workspaceId: string,
   body: string,
   data: any,
-  status: string        // normalised lowercase
+  status: string,        // normalised lowercase
+  direction: string      // explicit direction
 ) {
   const { error } = await admin.from('messages').insert({
     conversation_id: conversationId,
     workspace_id:    workspaceId,
-    direction:       data.from ? 'inbound' : 'outbound',
+    direction:       direction,
     content_type:    'call',           // allowed after migration 005
     body,
     status:          'delivered',
@@ -662,8 +666,8 @@ async function insertCallMessage(
     meta: {
       call_event: status,
       call_id:    data.call_id,
-      from_phone: data.from     ?? null,
-      to_phone:   data.to       ?? null,
+      from_phone: direction === 'inbound' ? data.from : null,
+      to_phone:   direction === 'outbound' ? data.from : null,
       duration:   data.duration ?? null,
       reason:     data.reason   ?? null,
     },

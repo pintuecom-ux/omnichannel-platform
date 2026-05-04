@@ -118,25 +118,30 @@ export async function POST(req: NextRequest) {
   // ── Backlink recording to call_logs ─────────────────────────────────────────
   // Set call_logs.recording_id so the dashboard can show a Play button for the call.
   // Matched by call_id (primary) or conversation_id (fallback).
-  if (callId || conversationId) {
-    const q = admin.from('call_logs').update({
-      recording_id: recording.id,
-      updated_at:   new Date().toISOString(),
-    })
+  if (callId) {
+    const { error: linkErr } = await admin.from('call_logs')
+      .update({ recording_id: recording.id, updated_at: new Date().toISOString() })
+      .eq('call_id', callId)
 
-    if (callId) {
-      q.eq('call_id', callId)
-    } else {
-      q.eq('conversation_id', conversationId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-    }
+    if (linkErr) console.warn('[Recording] call_logs backlink warning:', linkErr.message)
+    else console.log('[Recording] ✅ call_logs.recording_id linked via call_id:', recording.id)
+  } else if (conversationId) {
+    // Fallback if callId is missing (shouldn't happen anymore, but just in case)
+    // PostgREST doesn't support order() and limit() on update(), so we select first
+    const { data: logToUpdate } = await admin.from('call_logs')
+      .select('id')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-    const { error: linkErr } = await q
-    if (linkErr) {
-      console.warn('[Recording] call_logs backlink warning:', linkErr.message)
-    } else {
-      console.log('[Recording] ✅ call_logs.recording_id linked:', recording.id)
+    if (logToUpdate) {
+      const { error: linkErr } = await admin.from('call_logs')
+        .update({ recording_id: recording.id, updated_at: new Date().toISOString() })
+        .eq('id', logToUpdate.id)
+        
+      if (linkErr) console.warn('[Recording] call_logs fallback backlink warning:', linkErr.message)
+      else console.log('[Recording] ✅ call_logs.recording_id linked via conversation_id fallback:', recording.id)
     }
   }
 

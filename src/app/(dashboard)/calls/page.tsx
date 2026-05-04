@@ -8,8 +8,9 @@
  * No mock data, no Math.random(), no hardcoded tags.
  */
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import CallModal from '@/components/inbox/CallModal'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface CallLog {
@@ -86,6 +87,35 @@ export default function CallsPage() {
   const [selected,     setSelected]     = useState<CallLog | null>(null)
   const [audioSrc,     setAudioSrc]     = useState<string | null>(null)
   const [audioLoading, setAudioLoading] = useState(false)
+
+  // Dialer states
+  const [dialerOpen, setDialerOpen] = useState(false)
+  const [dialerSearch, setDialerSearch] = useState('')
+  const [contactsList, setContactsList] = useState<any[]>([])
+  const [callingConv, setCallingConv] = useState<{ id: string, name: string, phone: string } | null>(null)
+
+  const loadContacts = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user?.id) return
+    const { data: profile } = await supabase.from('profiles').select('workspace_id').eq('id', session.user.id).single()
+    if (!profile) return
+
+    const { data } = await supabase
+      .from('conversations')
+      .select(`
+        id,
+        channels!inner(platform),
+        contact:contacts(name, phone)
+      `)
+      .eq('workspace_id', profile.workspace_id)
+      .eq('channels.platform', 'whatsapp')
+
+    if (data) setContactsList(data)
+  }, [supabase])
+
+  useEffect(() => {
+    if (dialerOpen && contactsList.length === 0) loadContacts()
+  }, [dialerOpen, loadContacts, contactsList.length])
 
   // ── Stats derived from logs ──────────────────────────────────────────────────
   const stats = {
@@ -207,6 +237,14 @@ export default function CallsPage() {
           <h1 className="page-title">Call Center</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setDialerOpen(true)}
+            style={{ gap: 6, position: 'relative' }}
+          >
+            <i className="fa-solid fa-phone" style={{ fontSize: 12 }} />
+            New Call
+          </button>
           <button
             className="btn btn-secondary"
             onClick={loadLogs}
@@ -525,6 +563,111 @@ export default function CallsPage() {
           </div>
         )}
       </div>
+
+      {/* ── Dialer Modal ── */}
+      {dialerOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999,
+        }} onClick={(e) => { if (e.target === e.currentTarget) setDialerOpen(false) }}>
+          <div style={{
+            background: 'var(--bg-panel)',
+            width: 400, maxWidth: '90%', maxHeight: '80vh',
+            borderRadius: 16, border: '1px solid var(--border)',
+            display: 'flex', flexDirection: 'column',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Select Contact to Call</h2>
+              <button className="btn-icon" onClick={() => setDialerOpen(false)}>
+                <i className="fa-solid fa-xmark" />
+              </button>
+            </div>
+            
+            <div style={{ padding: 16, borderBottom: '1px solid var(--border)' }}>
+              <div className="search-bar" style={{ flex: 1, height: 40 }}>
+                <i className="fa-solid fa-search" style={{ color: 'var(--text-muted)' }} />
+                <input
+                  placeholder="Search contacts…"
+                  value={dialerSearch}
+                  onChange={e => setDialerSearch(e.target.value)}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', outline: 'none', width: '100%' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+              {contactsList
+                .filter(c => {
+                  if (!dialerSearch) return true
+                  const q = dialerSearch.toLowerCase()
+                  return c.contact?.name?.toLowerCase().includes(q) || c.contact?.phone?.includes(q)
+                })
+                .map(c => {
+                  const name = c.contact?.name || c.contact?.phone || 'Unknown'
+                  return (
+                    <div
+                      key={c.id}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '12px 16px', borderRadius: 12, cursor: 'pointer',
+                        transition: 'background 0.2s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-surface)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      onClick={() => {
+                        setCallingConv({ id: c.id, name, phone: c.contact?.phone || '' })
+                        setDialerOpen(false)
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{
+                          width: 40, height: 40, borderRadius: '50%',
+                          background: 'var(--bg-surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: 'var(--text-primary)', fontWeight: 600, fontSize: 14,
+                        }}>
+                          {name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: 15 }}>{name}</div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>{c.contact?.phone || 'No phone'}</div>
+                        </div>
+                      </div>
+                      <div style={{
+                        width: 36, height: 36, borderRadius: '50%',
+                        background: 'var(--accent-glow)', color: 'var(--accent)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <i className="fa-solid fa-phone" style={{ fontSize: 14 }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              {contactsList.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                  No WhatsApp contacts found.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Active Call Modal ── */}
+      {callingConv && (
+        <CallModal
+          conversationId={callingConv.id}
+          contactName={callingConv.name}
+          contactPhone={callingConv.phone}
+          onClose={() => {
+            setCallingConv(null)
+            loadLogs() // Refresh logs after call ends
+          }}
+        />
+      )}
+
     </div>
   )
 }
