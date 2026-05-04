@@ -315,7 +315,6 @@ async function processCall(ev: any) {
     return
   }
 
-  // FIX (Issue 2): callBodyMap uses lowercase keys. Status is now lowercase.
   const callBodyMap: Record<string, string> = {
     ringing:    '📞 Call ringing…',
     accepted:   '📞 Call accepted',
@@ -334,6 +333,22 @@ async function processCall(ev: any) {
   }
 
   const body = callBodyMap[status] ?? `📞 Call ${status}`
+
+  // ── Map API status → DB-allowed status (call_logs_status_check constraint) ──
+  const statusToDb: Record<string, string> = {
+    completed:  'ended',
+    canceled:   'ended',
+    busy:       'failed',
+    no_answer:  'missed',
+    accepted:   'connected',
+    connecting: 'ringing',
+    // Pass-through:
+    initiated: 'initiated', ringing: 'ringing', connected: 'connected',
+    ended: 'ended', missed: 'missed', failed: 'failed',
+    rejected: 'rejected', terminated: 'terminated',
+    permission_requested: 'permission_requested',
+  }
+  const dbStatus = statusToDb[status] ?? 'ended'
 
   const terminalStatuses = ['ended', 'completed', 'missed', 'failed', 'rejected', 'terminated', 'canceled', 'busy', 'no_answer']
   const isTerminal = terminalStatuses.includes(status)
@@ -370,41 +385,52 @@ async function processCall(ev: any) {
     const { data: existingLog } = await admin
       .from('call_logs')
       .select('id')
-      .eq('conversation_id', conversationId)
       .eq('call_id', data.call_id)
-      .order('created_at', { ascending: false })
-      .limit(1)
       .maybeSingle()
 
     if (existingLog) {
       await admin.from('call_logs').update({
-        status:           status,
-        duration_seconds: data.duration ?? null,
-        ended_at:         data.timestamp ?? new Date().toISOString(),
+        status:           dbStatus,
+        duration_seconds: data.duration     ? parseInt(String(data.duration), 10) : null,
+        ended_at:         data.timestamp    ?? new Date().toISOString(),
+        fail_reason:      data.reason       ?? null,
         meta:             { call_event: status, reason: data.reason ?? null },
-        updated_at:       new Date().toISOString(),
       }).eq('id', existingLog.id)
+        .then(({ error }) => {
+          if (error) console.warn('[WA Call] call_logs terminal update warning:', error.message)
+          else console.log(`[WA Call] ✅ call_logs updated → ${dbStatus}`)
+        })
     } else {
-      // Insert new log if none found (e.g. missed call with no prior ringing event)
       await admin.from('call_logs').insert({
         workspace_id:     channel.workspace_id,
+        channel_id:       channel.id,
         conversation_id:  conversationId,
         call_id:          data.call_id,
         direction:        data.from ? 'inbound' : 'outbound',
-        status:           status,
+        status:           dbStatus,
         from_phone:       data.from ? (data.from as string).replace(/^\+/, '') : null,
         to_phone:         data.to   ? (data.to   as string).replace(/^\+/, '') : null,
-        duration_seconds: data.duration ?? null,
+        duration_seconds: data.duration ? parseInt(String(data.duration), 10) : null,
         started_at:       data.timestamp ?? new Date().toISOString(),
         ended_at:         data.timestamp ?? new Date().toISOString(),
+        fail_reason:      data.reason    ?? null,
         meta:             { call_event: status, reason: data.reason ?? null },
       }).then(({ error }) => {
         if (error) console.warn('[WA Call] call_logs terminal insert warning:', error.message)
+        else console.log(`[WA Call] ✅ call_logs inserted → ${dbStatus}`)
       })
     }
 
+    await broadcastCallEnded({
+      workspaceId:    channel.workspace_id,
+      callId:         data.call_id,
+      conversationId: conversationId,
+      status:         dbStatus,
+      duration:       data.duration ?? null,
+      reason:         data.reason   ?? null,
+    })
+
   } else if (status === 'ringing' || status === 'connecting' || status === 'connected') {
-    // Non-terminal: only insert message once per call_id + status pair
     const { data: dup } = await admin
       .from('messages')
       .select('id')
@@ -417,34 +443,26 @@ async function processCall(ev: any) {
       await insertCallMessage(conversationId, channel.workspace_id, body, data, status)
     }
 
-
-    // ── call_logs + inbound broadcast ────────────────────────────────────────
     if (status === 'ringing') {
-      // Insert call_log row (deduplicated by call_id)
-      const { data: existingLog } = await admin
-        .from('call_logs')
-        .select('id')
-        .eq('conversation_id', conversationId)
-        .eq('call_id', data.call_id)
-        .maybeSingle()
+      await admin.from('call_logs').insert({
+        workspace_id:    channel.workspace_id,
+        channel_id:      channel.id,
+        conversation_id: conversationId,
+        call_id:         data.call_id,
+        direction:       data.from ? 'inbound' : 'outbound',
+        status:          'ringing',
+        from_phone:      data.from ? (data.from as string).replace(/^\+/, '') : null,
+        to_phone:        data.to   ? (data.to   as string).replace(/^\+/, '') : null,
+        started_at:      data.timestamp ?? new Date().toISOString(),
+        meta:            { call_event: 'ringing' },
+      }).then(({ error }) => {
+        if (error && !error.message.includes('duplicate')) {
+          console.warn('[WA Call] call_logs ringing insert warning:', error.message)
+        } else if (!error) {
+          console.log('[WA Call] ✅ call_logs inserted → ringing')
+        }
+      })
 
-      if (!existingLog) {
-        await admin.from('call_logs').insert({
-          workspace_id:    channel.workspace_id,
-          conversation_id: conversationId,
-          call_id:         data.call_id,
-          direction:       data.from ? 'inbound' : 'outbound',
-          status:          'ringing',
-          from_phone:      data.from ? (data.from as string).replace(/^\+/, '') : null,
-          to_phone:        data.to   ? (data.to   as string).replace(/^\+/, '') : null,
-          started_at:      data.timestamp ?? new Date().toISOString(),
-          meta:            { call_event: 'ringing' },
-        }).then(({ error }) => {
-          if (error) console.warn('[WA Call] call_logs ringing insert warning:', error.message)
-        })
-      }
-
-      // Only broadcast inbound ringing (data.from = someone calling you)
       if (data.from) {
         const callerPhone = (data.from as string).replace(/^\+/, '')
         const { data: contactRow } = await admin
@@ -466,8 +484,11 @@ async function processCall(ev: any) {
       }
     } else if (status === 'connected') {
       await admin.from('call_logs')
-        .update({ status: 'connected', meta: { call_event: 'connected' }, updated_at: new Date().toISOString() })
-        .eq('conversation_id', conversationId)
+        .update({
+          status:       'connected',
+          connected_at: data.timestamp ?? new Date().toISOString(),
+          meta:         { call_event: 'connected' },
+        })
         .eq('call_id', data.call_id)
         .then(({ error }) => {
           if (error) console.warn('[WA Call] call_logs connected update warning:', error.message)
@@ -571,6 +592,54 @@ async function broadcastIncomingCall(opts: {
     }
   } catch (e: any) {
     console.error('[WA Call] broadcastIncomingCall error:', e.message)
+  }
+}
+
+// Broadcasts call_ended to the browser so the modal auto-closes when remote party hangs up.
+// Also broadcasts to the specific call channel for per-call listeners.
+async function broadcastCallEnded(opts: {
+  workspaceId:    string
+  callId:         string
+  conversationId: string
+  status:         string
+  duration:       any
+  reason:         string | null
+}) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY!
+  const payload = {
+    call_id:         opts.callId,
+    conversation_id: opts.conversationId,
+    status:          opts.status,
+    duration:        opts.duration,
+    reason:          opts.reason,
+  }
+
+  try {
+    const res = await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+        'apikey':         serviceKey,
+      },
+      body: JSON.stringify({
+        messages: [
+          // Workspace-level: InboundCallBanner + CallModal both listen here
+          { topic: `workspace:${opts.workspaceId}`, event: 'call_ended', payload },
+          // Call-level: useWhatsAppCall hook listens here
+          { topic: `call:${opts.callId}`,           event: 'call_ended', payload },
+        ],
+      }),
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      console.warn(`[WA Call] call_ended broadcast failed (${res.status}): ${text}`)
+    } else {
+      console.log(`[WA Call] ✅ call_ended broadcast for call: ${opts.callId}, status: ${opts.status}`)
+    }
+  } catch (e: any) {
+    console.error('[WA Call] broadcastCallEnded error:', e.message)
   }
 }
 

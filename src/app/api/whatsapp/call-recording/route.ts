@@ -54,8 +54,12 @@ export async function POST(req: NextRequest) {
 
   const workspaceId = profile.workspace_id
   const duration    = durationStr ? parseInt(durationStr, 10) : null
-  const mime        = audioFile.type || 'audio/webm'
-  const ext         = mime.split('/')[1]?.split(';')[0] ?? 'webm'
+
+  // Strip codec suffix — Supabase Storage rejects 'audio/webm;codecs=opus'
+  // Only the base MIME type is allowed: 'audio/webm', 'audio/ogg', 'audio/mp4'
+  const rawMime = audioFile.type || 'audio/webm'
+  const mime    = rawMime.split(';')[0].trim()          // 'audio/webm;codecs=opus' → 'audio/webm'
+  const ext     = mime.split('/')[1] ?? 'webm'          // 'audio/webm' → 'webm'
   const filename    = `${callId ?? Date.now()}.${ext}`
   const storagePath = `${workspaceId}/${conversationId}/${filename}`
 

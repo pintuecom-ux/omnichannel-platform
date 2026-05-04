@@ -118,9 +118,10 @@ export default function CallsPage() {
       const { data, error: err } = await supabase
         .from('call_logs')
         .select(`
-          id, call_id, direction, status, from_phone, to_phone,
-          duration_seconds, started_at, ended_at, recording_id,
-          meta, created_at,
+          id, call_id, channel_id, direction, status,
+          from_phone, to_phone, duration_seconds,
+          started_at, connected_at, ended_at, recording_id,
+          fail_reason, meta, created_at,
           conversation:conversations(
             id,
             contact:contacts(name, phone, avatar_url)

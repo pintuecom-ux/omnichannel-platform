@@ -106,6 +106,32 @@ export function useWhatsAppCall(
     return () => { if (durationTimerRef.current) clearInterval(durationTimerRef.current) }
   }, [callState])
 
+  // ── Subscribe to call_ended broadcast from webhook ─────────────────────────
+  // When the remote party hangs up, Meta sends a COMPLETED/TERMINATED webhook.
+  // The webhook broadcasts 'call_ended' on workspace:{id} AND call:{callId}.
+  // This listener transitions the modal from 'connected' → 'idle' automatically.
+  useEffect(() => {
+    if (!callId) return
+    const supabase = createClient()
+    const ch = supabase
+      .channel(`call:${callId}`)
+      .on('broadcast', { event: 'call_ended' }, ({ payload }) => {
+        console.log('[useWhatsAppCall] 📵 call_ended received:', payload)
+        cleanupResources()
+        setCallState('idle')
+        setCallId(null)
+        callIdRef.current = null
+      })
+      .subscribe((status, err) => {
+        if (err) console.error(`[useWhatsAppCall] call:${callId} subscription error:`, err)
+        else     console.log(`[useWhatsAppCall] call:${callId} subscription:`, status)
+      })
+
+    return () => { supabase.removeChannel(ch) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callId])
+
+
   // ── Cleanup ───────────────────────────────────────────────────────────────
   function cleanupResources() {
     stopRecordingInternal()

@@ -8,8 +8,8 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import type { InboundCallPayload } from '@/hooks/useInboundCall'
 import { createClient } from '@/lib/supabase/client'
+import type { InboundCallPayload } from '@/hooks/useInboundCall'
 
 interface Props {
   call:      InboundCallPayload
@@ -80,10 +80,26 @@ export default function InboundCallBanner({ call, onDismiss }: Props) {
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      cleanup()
-    }
+    return () => { cleanup() }
   }, [])
+
+  // Auto-dismiss when remote party ends the call (webhook → Realtime broadcast)
+  useEffect(() => {
+    const supabase = createClient()
+    const ch = supabase
+      .channel(`call:${call.call_id}`)
+      .on('broadcast', { event: 'call_ended' }, ({ payload }) => {
+        console.log('[InboundCallBanner] 📵 call_ended received:', payload)
+        cleanup()
+        setPhase('ended')
+        setTimeout(onDismiss, 1500)
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(ch) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [call.call_id])
+
 
   function cleanup() {
     if (timerRef.current) clearInterval(timerRef.current)
