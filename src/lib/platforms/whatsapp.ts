@@ -487,6 +487,7 @@ export class WhatsAppClient {
         type: 'interactive',
         interactive: {
           type: 'call_permission_request',
+          action: { name: 'call_permission_request' },
           body: { text: bodyText },
         },
       })

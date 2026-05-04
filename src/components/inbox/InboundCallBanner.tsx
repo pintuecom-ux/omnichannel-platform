@@ -267,7 +267,7 @@ export default function InboundCallBanner({ call, onDismiss }: Props) {
         position:      'fixed',
         bottom:         24,
         right:          24,
-        zIndex:         10000,
+        zIndex:         99999,
         width:          320,
         borderRadius:   20,
         background:     phase === 'connected'

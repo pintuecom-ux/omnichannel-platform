@@ -499,12 +499,7 @@ async function processCall(ev: any) {
     }
   }
 
-  // Update conversation preview
-  await admin.from('conversations').update({
-    last_message:    body,
-    last_message_at: data.timestamp ?? new Date().toISOString(),
-    updated_at:      new Date().toISOString(),
-  }).eq('id', conversationId)
+  // ── Call events do not update conversations.last_message to avoid bumping the inbox ──
 
   // ── Forward SDP answer to browser via Realtime REST broadcast ────────────
   // FIX (Issue 2): admin.channel().send() opens a WebSocket — impossible in
