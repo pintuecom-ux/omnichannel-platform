@@ -127,21 +127,25 @@ const conv = await resolveConversation(conversation_id)
     return NextResponse.json({ error: 'Calling only supported for WhatsApp' }, { status: 400 })
   }
   
-  // ── REMOVED: request_permission ──────────────────────────────────────────
-  // Meta's /calls endpoint does NOT support action:'send_call_permission_request'
-  // Valid actions: accept | connect | media_update | pre_accept | reject | terminate
-if (action === 'request_permission') {
-    const phone = conv?.contact?.phone
-    if (!phone) return NextResponse.json({ error: 'Contact has no phone' }, { status: 400 })
+  if (action === 'request_permission') {
+    const conv = await resolveConversation(conversation_id)
+    if (!conv) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+    if (conv.platform !== 'whatsapp') {
+      return NextResponse.json({ error: 'Calling only supported for WhatsApp' }, { status: 400 })
+    }
+    const phone = conv.contact?.phone
+    if (!phone) return NextResponse.json({ error: 'Contact has no phone number' }, { status: 400 })
+
     const wa = new WhatsAppClient(conv.channel.access_token, conv.channel.external_id)
     try {
       await wa.sendCallPermissionRequest(phone)
-      return NextResponse.json({ ok: true })
+      return NextResponse.json({ ok: true, message: 'Permission request sent.' })
     } catch (err: any) {
       console.error('[Calls POST] sendCallPermissionRequest error:', err.message)
       return NextResponse.json({ ok: false, error: err.message }, { status: 500 })
     }
   }
+
 
   const phone = conv.contact?.phone
   if (!phone) return NextResponse.json({ error: 'Contact has no phone number' }, { status: 400 })

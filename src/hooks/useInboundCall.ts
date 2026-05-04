@@ -24,7 +24,9 @@ export function useInboundCall(workspaceId: string | null) {
         console.log('[InboundCall] Incoming call:', payload)
         setInboundCall(payload as InboundCallPayload)
       })
-      .subscribe()
+      .subscribe((status, err) => {
+        console.log(`[InboundCall] Subscription status for workspace:${workspaceId}:`, status, err || '')
+      })
     return () => { supabase.removeChannel(channel) }
   }, [workspaceId])
 

@@ -1,14 +1,3 @@
-/**
- * src/app/api/whatsapp/calling-settings/route.ts
- *
- * Manage WhatsApp Calling feature settings for a channel.
- *
- *  - GET  ?channel_id=  → get current calling settings
- *  - POST { channel_id, status, call_icon_visibility } → update settings
- *
- * Used from Settings → Channels page to toggle calling on/off.
- */
-
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as serverClient } from '@/lib/supabase/server'
 import { createClient as adminClient } from '@supabase/supabase-js'

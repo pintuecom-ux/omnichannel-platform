@@ -415,6 +415,31 @@ async function processCall(ev: any) {
     if (!dup) {
       await insertCallMessage(conversationId, channel.workspace_id, body, data, status)
     }
+
+    // ── NEW: broadcast inbound ringing call to browser ────────────────────
+    // Only fire when ringing AND data.from is set (= someone is calling YOU).
+    // Outbound calls have no data.from on the ringing event.
+    if (status === 'ringing' && data.from) {
+      const callerPhone = (data.from as string).replace(/^\+/, '')
+
+      // Get contact name for the banner
+      const { data: contactRow } = await admin
+        .from('contacts')
+        .select('name')
+        .eq('workspace_id', channel.workspace_id)
+        .eq('phone', callerPhone)
+        .maybeSingle()
+
+      await broadcastIncomingCall({
+        workspaceId:    channel.workspace_id,
+        callId:         data.call_id,
+        fromPhone:      callerPhone,
+        contactName:    contactRow?.name ?? callerPhone,
+        conversationId: conversationId,
+        sdp:            data.session?.sdp      ?? null,
+        sdpType:        data.session?.sdp_type ?? null,
+      })
+    }
   }
 
   // Update conversation preview
@@ -469,6 +494,53 @@ async function broadcastSdpAnswer(callId: string, sdpType: string, sdp: string) 
     console.error('[WA Call] Realtime broadcast error:', e.message)
   }
 }
+
+async function broadcastIncomingCall(opts: {
+  workspaceId:    string
+  callId:         string
+  fromPhone:      string
+  contactName:    string
+  conversationId: string
+  sdp:            string | null
+  sdpType:        string | null
+}) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+  try {
+    const res = await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+        'apikey':         serviceKey,
+      },
+      body: JSON.stringify({
+        messages: [{
+          topic:   `workspace:${opts.workspaceId}`,
+          event:   'incoming_call',
+          payload: {
+            call_id:         opts.callId,
+            from_phone:      opts.fromPhone,
+            contact_name:    opts.contactName,
+            conversation_id: opts.conversationId,
+            sdp:             opts.sdp,
+            sdp_type:        opts.sdpType,
+          },
+        }],
+      }),
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      console.warn(`[WA Call] incoming_call broadcast failed (${res.status}): ${text}`)
+    } else {
+      console.log(`[WA Call] ✅ incoming_call broadcast for workspace: ${opts.workspaceId}`)
+    }
+  } catch (e: any) {
+    console.error('[WA Call] broadcastIncomingCall error:', e.message)
+  }
+}
+
 
 async function insertCallMessage(
   conversationId: string,
