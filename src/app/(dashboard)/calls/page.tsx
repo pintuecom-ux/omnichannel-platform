@@ -22,7 +22,7 @@ interface CallLog {
   duration_seconds: number | null
   started_at:       string
   ended_at:         string | null
-  recording_id:     string | null
+  recording_id:     string | null   // NULL = no recording; set by call-recording route
   meta:             Record<string, any>
   created_at:       string
   conversation?: {
@@ -155,34 +155,21 @@ export default function CallsPage() {
     return true
   })
 
-  // ── Audio playback — fetch recording on demand by recording_id ──────────────
-  async function playRecording(log: CallLog) {
-    if (!log.recording_id) return
+  // ── Audio playback — fetch signed URL via API route ─────────────────────
+  async function playRecording(recordingId: string) {
     setAudioLoading(true)
     try {
-      // Fetch the recording row first to get storage_path
-      const { data: rec, error: recErr } = await supabase
-        .from('call_recordings')
-        .select('storage_path, duration_s')
-        .eq('id', log.recording_id)
-        .single()
-
-      if (recErr || !rec?.storage_path) {
-        console.error('[Calls] recording fetch error:', recErr?.message)
-        setAudioLoading(false)
-        return
-      }
-
-      const { data } = await supabase.storage
-        .from('recordings')
-        .createSignedUrl(rec.storage_path, 3600)
-      setAudioSrc(data?.signedUrl ?? null)
+      const res  = await fetch(`/api/whatsapp/call-recording?id=${recordingId}`)
+      const data = await res.json()
+      if (!res.ok || !data.signed_url) throw new Error(data.error ?? 'Playback URL failed')
+      setAudioSrc(data.signed_url)
     } catch (e: any) {
-      console.error('[Calls] createSignedUrl error:', e.message)
+      console.error('[Calls] playRecording error:', e.message)
     } finally {
       setAudioLoading(false)
     }
   }
+
 
   const contactName = (log: CallLog) =>
     log.conversation?.contact?.name
@@ -315,9 +302,9 @@ export default function CallsPage() {
                       <th style={{ width: '30%' }}>Contact</th>
                       <th style={{ width: '12%' }}>Direction</th>
                       <th style={{ width: '15%' }}>Status</th>
-                      <th style={{ width: '13%' }}>Duration</th>
-                      <th style={{ width: '18%' }}>Time</th>
-                      <th style={{ width: '12%' }}>Recording</th>
+                      <th style={{ width: '12%' }}>Duration</th>
+                      <th style={{ width: '19%' }}>Time</th>
+                      <th style={{ width: '12%' }}>Rec</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -328,7 +315,7 @@ export default function CallsPage() {
                       return (
                         <tr
                           key={log.id}
-                          onClick={() => { setSelected(isSel ? null : log); setAudioSrc(null) }}
+                          onClick={() => setSelected(isSel ? null : log)}
                           style={{ cursor: 'pointer', background: isSel ? 'var(--bg-active)' : undefined }}
                         >
                           {/* Contact */}
@@ -381,21 +368,26 @@ export default function CallsPage() {
                             <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fmtTime(log.started_at)}</div>
                           </td>
 
-                          {/* Recording */}
+                          {/* Recording play button — only shown if recording_id is set */}
                           <td onClick={e => e.stopPropagation()}>
                             {log.recording_id ? (
                               <button
                                 className="icon-btn"
                                 title="Play recording"
-                                onClick={() => { setSelected(log); playRecording(log) }}
+                                onClick={() => {
+                                  setSelected(log)
+                                  setAudioSrc(null)
+                                  playRecording(log.recording_id!)
+                                }}
                                 style={{ color: 'var(--accent)', fontSize: 12, width: 28, height: 28 }}
                               >
-                                <i className="fa-solid fa-play" />
+                                <i className="fa-solid fa-circle-play" />
                               </button>
                             ) : (
                               <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
                             )}
                           </td>
+
                         </tr>
                       )
                     })}
@@ -429,7 +421,7 @@ export default function CallsPage() {
               <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14 }}>
                 Call Detail
               </span>
-              <button className="icon-btn" onClick={() => { setSelected(null); setAudioSrc(null) }} style={{ fontSize: 13 }}>
+              <button className="icon-btn" onClick={() => setSelected(null)} style={{ fontSize: 13 }}>
                 <i className="fa-solid fa-xmark" />
               </button>
             </div>
@@ -487,11 +479,11 @@ export default function CallsPage() {
                 ))}
               </div>
 
-              {/* Recording player */}
+              {/* Recording player — shown when call has a linked recording */}
               {selected.recording_id && (
                 <div style={{ background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid var(--border)', padding: 12 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: 10 }}>
-                    Recording
+                    🎤 Recording
                   </div>
                   {audioLoading ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13 }}>
@@ -508,7 +500,7 @@ export default function CallsPage() {
                     <button
                       className="btn btn-secondary"
                       style={{ width: '100%', justifyContent: 'center', gap: 7 }}
-                      onClick={() => playRecording(selected)}
+                      onClick={() => playRecording(selected.recording_id!)}
                     >
                       <i className="fa-solid fa-play" style={{ fontSize: 11 }} />
                       Play Recording

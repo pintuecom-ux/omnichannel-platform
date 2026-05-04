@@ -111,6 +111,31 @@ export async function POST(req: NextRequest) {
 
   console.log(`[Recording] ✅ Saved: ${storagePath} (${buffer.byteLength} bytes, ${duration}s)`)
 
+  // ── Backlink recording to call_logs ─────────────────────────────────────────
+  // Set call_logs.recording_id so the dashboard can show a Play button for the call.
+  // Matched by call_id (primary) or conversation_id (fallback).
+  if (callId || conversationId) {
+    const q = admin.from('call_logs').update({
+      recording_id: recording.id,
+      updated_at:   new Date().toISOString(),
+    })
+
+    if (callId) {
+      q.eq('call_id', callId)
+    } else {
+      q.eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+    }
+
+    const { error: linkErr } = await q
+    if (linkErr) {
+      console.warn('[Recording] call_logs backlink warning:', linkErr.message)
+    } else {
+      console.log('[Recording] ✅ call_logs.recording_id linked:', recording.id)
+    }
+  }
+
   return NextResponse.json({
     ok:          true,
     recording_id: recording.id,
