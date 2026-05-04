@@ -29,12 +29,6 @@ interface CallLog {
     id:       string
     contact?: { name: string | null; phone: string | null; avatar_url: string | null }
   } | null
-  recording?: {
-    id:           string
-    storage_path: string
-    duration_s:   number | null
-    created_at:   string
-  } | null
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -130,8 +124,7 @@ export default function CallsPage() {
           conversation:conversations(
             id,
             contact:contacts(name, phone, avatar_url)
-          ),
-          recording:call_recordings(id, storage_path, duration_s, created_at)
+          )
         `)
         .eq('workspace_id', profile.workspace_id)
         .order('created_at', { ascending: false })
@@ -162,14 +155,27 @@ export default function CallsPage() {
     return true
   })
 
-  // ── Audio playback ───────────────────────────────────────────────────────────
+  // ── Audio playback — fetch recording on demand by recording_id ──────────────
   async function playRecording(log: CallLog) {
-    if (!log.recording?.storage_path) return
+    if (!log.recording_id) return
     setAudioLoading(true)
     try {
+      // Fetch the recording row first to get storage_path
+      const { data: rec, error: recErr } = await supabase
+        .from('call_recordings')
+        .select('storage_path, duration_s')
+        .eq('id', log.recording_id)
+        .single()
+
+      if (recErr || !rec?.storage_path) {
+        console.error('[Calls] recording fetch error:', recErr?.message)
+        setAudioLoading(false)
+        return
+      }
+
       const { data } = await supabase.storage
         .from('recordings')
-        .createSignedUrl(log.recording.storage_path, 3600)
+        .createSignedUrl(rec.storage_path, 3600)
       setAudioSrc(data?.signedUrl ?? null)
     } catch (e: any) {
       console.error('[Calls] createSignedUrl error:', e.message)
@@ -377,7 +383,7 @@ export default function CallsPage() {
 
                           {/* Recording */}
                           <td onClick={e => e.stopPropagation()}>
-                            {log.recording ? (
+                            {log.recording_id ? (
                               <button
                                 className="icon-btn"
                                 title="Play recording"
@@ -482,7 +488,7 @@ export default function CallsPage() {
               </div>
 
               {/* Recording player */}
-              {selected.recording && (
+              {selected.recording_id && (
                 <div style={{ background: 'var(--bg-surface)', borderRadius: 10, border: '1px solid var(--border)', padding: 12 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: 10 }}>
                     Recording
@@ -507,11 +513,6 @@ export default function CallsPage() {
                       <i className="fa-solid fa-play" style={{ fontSize: 11 }} />
                       Play Recording
                     </button>
-                  )}
-                  {selected.recording.duration_s && (
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                      Duration: {fmtDuration(selected.recording.duration_s)}
-                    </div>
                   )}
                 </div>
               )}
