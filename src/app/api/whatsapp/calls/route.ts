@@ -128,20 +128,50 @@ const conv = await resolveConversation(conversation_id)
   }
   
   if (action === 'request_permission') {
-    const conv = await resolveConversation(conversation_id)
-    if (!conv) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
-    if (conv.platform !== 'whatsapp') {
-      return NextResponse.json({ error: 'Calling only supported for WhatsApp' }, { status: 400 })
-    }
+    // conv already resolved above at line 124
     const phone = conv.contact?.phone
     if (!phone) return NextResponse.json({ error: 'Contact has no phone number' }, { status: 400 })
 
     const wa = new WhatsAppClient(conv.channel.access_token, conv.channel.external_id)
     try {
-      await wa.sendCallPermissionRequest(phone)
-      return NextResponse.json({ ok: true, message: 'Permission request sent.' })
+      // Use the correct interactive message approach (not the invalid /calls action)
+      const result = await wa.sendCallPermissionMessage(phone)
+      console.log('[Calls POST] ✅ Permission request message sent, id:', result.message_id)
+
+      // Log the permission request in call_logs for tracking
+      await admin.from('call_logs').insert({
+        workspace_id:    conv.workspace_id,
+        conversation_id: conversation_id,
+        direction:       'outbound',
+        status:          'permission_requested',
+        to_phone:        phone,
+        meta:            { message_id: result.message_id, event: 'permission_requested' },
+      }).then(({ error }) => {
+        if (error) console.warn('[Calls POST] call_logs insert warning:', error.message)
+      })
+
+      // Also store as a message so it appears in conversation history
+      await admin.from('messages').insert({
+        conversation_id: conversation_id,
+        workspace_id:    conv.workspace_id,
+        direction:       'outbound',
+        content_type:    'call',
+        body:            '🔔 Call permission request sent',
+        status:          'sent',
+        sender_id:       user.id,
+        is_note:         false,
+        external_id:     result.message_id,
+        meta: {
+          call_event: 'permission_requested',
+          to_phone:   phone,
+        },
+      }).then(({ error }) => {
+        if (error) console.warn('[Calls POST] permission message insert warning:', error.message)
+      })
+
+      return NextResponse.json({ ok: true, message: 'Permission request sent.', message_id: result.message_id })
     } catch (err: any) {
-      console.error('[Calls POST] sendCallPermissionRequest error:', err.message)
+      console.error('[Calls POST] sendCallPermissionMessage error:', err.message)
       return NextResponse.json({ ok: false, error: err.message }, { status: 500 })
     }
   }
@@ -256,8 +286,24 @@ const conv = await resolveConversation(conversation_id)
     }
   }
 
+  /* ---------------------------------------------------------------------- */
+  /* log_status — update call_logs row status (client-side helper)          */
+  /* ---------------------------------------------------------------------- */
+  if (action === 'log_status') {
+    const { call_id: logCallId, status: logStatus } = body
+    if (!logCallId || !logStatus) {
+      return NextResponse.json({ error: 'call_id and status required for log_status' }, { status: 400 })
+    }
+    await admin
+      .from('call_logs')
+      .update({ status: logStatus, meta: { call_event: logStatus }, updated_at: new Date().toISOString() })
+      .eq('conversation_id', conversation_id)
+      .eq('call_id', logCallId)
+    return NextResponse.json({ ok: true })
+  }
+
   return NextResponse.json(
-    { error: `Unknown action: ${action}. Valid: initiate | terminate` },
+    { error: `Unknown action: ${action}. Valid: initiate | terminate | request_permission | accept | reject | log_status` },
     { status: 400 }
   )
 }

@@ -461,25 +461,41 @@ export class WhatsAppClient {
   }
 
   /**
-   * Send a call permission request to a user who has denied/expired permissions.
-   * This sends a special system message the user sees in WhatsApp asking them
-   * to allow your business to call them.
+   * Send a call permission request to a user via an interactive message.
    *
-   * API: POST /{Phone-Number-ID}/calls
-   *      { messaging_product, to, action: "send_call_permission_request" }
+   * IMPORTANT: 'send_call_permission_request' is NOT a valid action on POST /calls.
+   * Valid /calls actions are: accept | connect | media_update | pre_accept | reject | terminate.
    *
-   * Note: This uses the /calls endpoint with a special action, not /messages.
+   * The correct approach is to send an interactive message with type 'call_permission_request'
+   * via the standard /messages endpoint. This requires an open conversation window.
+   *
+   * API: POST /{Phone-Number-ID}/messages
+   *      { messaging_product, to, type: "interactive",
+   *        interactive: { type: "call_permission_request", body: { text: "..." } } }
+   *
+   * Limits: max 1 request per 24h, max 2 per 7 days per user. Resets on connected call.
    */
-  async sendCallPermissionRequest(to: string): Promise<{ call_id?: string }> {
+  async sendCallPermissionMessage(
+    to: string,
+    bodyText = "We'd like to call you to assist you better. Please allow us to call you."
+  ): Promise<{ message_id: string }> {
     try {
-      const res = await this.post(`${BASE}/${this.phoneNumberId}/calls`, {
+      const res = await this.post(`${BASE}/${this.phoneNumberId}/messages`, {
         messaging_product: 'whatsapp',
+        recipient_type: 'individual',
         to: normalizePhone(to),
-        action: 'send_call_permission_request',
+        type: 'interactive',
+        interactive: {
+          type: 'call_permission_request',
+          body: { text: bodyText },
+        },
       })
-      return { call_id: res?.calls?.[0]?.id }
+      const messageId = res?.messages?.[0]?.id
+      if (!messageId) throw new Error('No message_id in WA response')
+      console.log('[WA] ✅ Call permission request message sent, id:', messageId)
+      return { message_id: messageId }
     } catch (err: any) {
-      throw new Error(`sendCallPermissionRequest failed: ${err.message}`)
+      throw new Error(`sendCallPermissionMessage failed: ${err.message}`)
     }
   }
 

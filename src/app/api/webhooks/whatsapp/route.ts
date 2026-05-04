@@ -267,8 +267,7 @@ async function processStatus(ev: any) {
 async function processCall(ev: any) {
   const { phoneNumberId, data } = ev
 
-  // FIX (Issue 2): Meta sends call status as UPPERCASE (COMPLETED, RINGING, etc.)
-  // Normalise to lowercase so callBodyMap lookups always hit.
+  // Meta sends call status as UPPERCASE — normalise to lowercase for all lookups
   const rawStatus  = data.status ?? ''
   const status     = rawStatus.toLowerCase()
 
@@ -312,7 +311,7 @@ async function processCall(ev: any) {
   }
 
   if (!conversationId) {
-    console.warn('[WA Call] Could not resolve conversation for call event — no callback_data and no matching contact')
+    console.warn('[WA Call] Could not resolve conversation — no callback_data and no matching contact')
     return
   }
 
@@ -339,44 +338,8 @@ async function processCall(ev: any) {
   const terminalStatuses = ['ended', 'completed', 'missed', 'failed', 'rejected', 'terminated', 'canceled', 'busy', 'no_answer']
   const isTerminal = terminalStatuses.includes(status)
 
-  if ((status === 'ringing' || status === 'connecting') && data.from) {
-    const contactPhone = (data.from as string).replace(/^\+/, '')
-    // Get contact name for display
-    const { data: contactRow } = await admin
-      .from('contacts')
-      .select('name')
-      .eq('workspace_id', channel.workspace_id)
-      .eq('phone', contactPhone)
-      .maybeSingle()
-    
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY!
-    await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
-      method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${serviceKey}`,
-        'apikey':         serviceKey,
-      },
-      body: JSON.stringify({
-        messages: [{
-          topic:   `workspace:${channel.workspace_id}`,
-          event:   'incoming_call',
-          payload: {
-            call_id:         data.call_id,
-            from_phone:      contactPhone,
-            contact_name:    contactRow?.name ?? contactPhone,
-            conversation_id: conversationId,
-            sdp:             data.session?.sdp    ?? null,
-            sdp_type:        data.session?.sdp_type ?? null,
-          },
-        }],
-      }),
-    }).catch(e => console.warn('[WA Call] incoming_call broadcast failed:', e.message))
-  }
-
   if (isTerminal) {
-    // Update the existing call_started/ringing message for this call_id
+    // Update the existing call message for this call_id
     const { data: existing } = await admin
       .from('messages')
       .select('id, meta')
@@ -402,8 +365,46 @@ async function processCall(ev: any) {
     } else {
       await insertCallMessage(conversationId, channel.workspace_id, body, data, status)
     }
+
+    // ── Update call_logs with terminal status ──────────────────────────────
+    const { data: existingLog } = await admin
+      .from('call_logs')
+      .select('id')
+      .eq('conversation_id', conversationId)
+      .eq('call_id', data.call_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (existingLog) {
+      await admin.from('call_logs').update({
+        status:           status,
+        duration_seconds: data.duration ?? null,
+        ended_at:         data.timestamp ?? new Date().toISOString(),
+        meta:             { call_event: status, reason: data.reason ?? null },
+        updated_at:       new Date().toISOString(),
+      }).eq('id', existingLog.id)
+    } else {
+      // Insert new log if none found (e.g. missed call with no prior ringing event)
+      await admin.from('call_logs').insert({
+        workspace_id:     channel.workspace_id,
+        conversation_id:  conversationId,
+        call_id:          data.call_id,
+        direction:        data.from ? 'inbound' : 'outbound',
+        status:           status,
+        from_phone:       data.from ? (data.from as string).replace(/^\+/, '') : null,
+        to_phone:         data.to   ? (data.to   as string).replace(/^\+/, '') : null,
+        duration_seconds: data.duration ?? null,
+        started_at:       data.timestamp ?? new Date().toISOString(),
+        ended_at:         data.timestamp ?? new Date().toISOString(),
+        meta:             { call_event: status, reason: data.reason ?? null },
+      }).then(({ error }) => {
+        if (error) console.warn('[WA Call] call_logs terminal insert warning:', error.message)
+      })
+    }
+
   } else if (status === 'ringing' || status === 'connecting' || status === 'connected') {
-    // Non-terminal: only insert once per call_id + status pair
+    // Non-terminal: only insert message once per call_id + status pair
     const { data: dup } = await admin
       .from('messages')
       .select('id')
@@ -416,29 +417,61 @@ async function processCall(ev: any) {
       await insertCallMessage(conversationId, channel.workspace_id, body, data, status)
     }
 
-    // ── NEW: broadcast inbound ringing call to browser ────────────────────
-    // Only fire when ringing AND data.from is set (= someone is calling YOU).
-    // Outbound calls have no data.from on the ringing event.
-    if (status === 'ringing' && data.from) {
-      const callerPhone = (data.from as string).replace(/^\+/, '')
 
-      // Get contact name for the banner
-      const { data: contactRow } = await admin
-        .from('contacts')
-        .select('name')
-        .eq('workspace_id', channel.workspace_id)
-        .eq('phone', callerPhone)
+    // ── call_logs + inbound broadcast ────────────────────────────────────────
+    if (status === 'ringing') {
+      // Insert call_log row (deduplicated by call_id)
+      const { data: existingLog } = await admin
+        .from('call_logs')
+        .select('id')
+        .eq('conversation_id', conversationId)
+        .eq('call_id', data.call_id)
         .maybeSingle()
 
-      await broadcastIncomingCall({
-        workspaceId:    channel.workspace_id,
-        callId:         data.call_id,
-        fromPhone:      callerPhone,
-        contactName:    contactRow?.name ?? callerPhone,
-        conversationId: conversationId,
-        sdp:            data.session?.sdp      ?? null,
-        sdpType:        data.session?.sdp_type ?? null,
-      })
+      if (!existingLog) {
+        await admin.from('call_logs').insert({
+          workspace_id:    channel.workspace_id,
+          conversation_id: conversationId,
+          call_id:         data.call_id,
+          direction:       data.from ? 'inbound' : 'outbound',
+          status:          'ringing',
+          from_phone:      data.from ? (data.from as string).replace(/^\+/, '') : null,
+          to_phone:        data.to   ? (data.to   as string).replace(/^\+/, '') : null,
+          started_at:      data.timestamp ?? new Date().toISOString(),
+          meta:            { call_event: 'ringing' },
+        }).then(({ error }) => {
+          if (error) console.warn('[WA Call] call_logs ringing insert warning:', error.message)
+        })
+      }
+
+      // Only broadcast inbound ringing (data.from = someone calling you)
+      if (data.from) {
+        const callerPhone = (data.from as string).replace(/^\+/, '')
+        const { data: contactRow } = await admin
+          .from('contacts')
+          .select('name')
+          .eq('workspace_id', channel.workspace_id)
+          .eq('phone', callerPhone)
+          .maybeSingle()
+
+        await broadcastIncomingCall({
+          workspaceId:    channel.workspace_id,
+          callId:         data.call_id,
+          fromPhone:      callerPhone,
+          contactName:    contactRow?.name ?? callerPhone,
+          conversationId: conversationId,
+          sdp:            data.session?.sdp      ?? null,
+          sdpType:        data.session?.sdp_type ?? null,
+        })
+      }
+    } else if (status === 'connected') {
+      await admin.from('call_logs')
+        .update({ status: 'connected', meta: { call_event: 'connected' }, updated_at: new Date().toISOString() })
+        .eq('conversation_id', conversationId)
+        .eq('call_id', data.call_id)
+        .then(({ error }) => {
+          if (error) console.warn('[WA Call] call_logs connected update warning:', error.message)
+        })
     }
   }
 

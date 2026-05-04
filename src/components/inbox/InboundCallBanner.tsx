@@ -33,27 +33,41 @@ export default function InboundCallBanner({ call, onDismiss }: Props) {
   const timerRef        = useRef<ReturnType<typeof setInterval> | null>(null)
   const remoteAudioRef  = useRef<HTMLAudioElement | null>(null)
 
-  // Play ringtone while ringing
+  // Play dual-tone ringtone while ringing (more noticeable than single beep)
   useEffect(() => {
     if (phase !== 'ringing') return
-    // Use a repeating beep pattern via AudioContext (no file dependency)
     let stopped = false
-    const ctx   = new AudioContext()
-    const beep  = () => {
+
+    async function ring() {
       if (stopped) return
-      const osc  = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain); gain.connect(ctx.destination)
-      osc.frequency.value = 440
-      osc.type = 'sine'
-      gain.gain.setValueAtTime(0.3, ctx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
-      osc.start(ctx.currentTime)
-      osc.stop(ctx.currentTime + 0.4)
-      setTimeout(beep, 2000)
+      try {
+        const ctx  = new AudioContext()
+        const tone = (freq: number, start: number, dur: number) => {
+          const osc  = ctx.createOscillator()
+          const gain = ctx.createGain()
+          osc.connect(gain)
+          gain.connect(ctx.destination)
+          osc.frequency.value = freq
+          osc.type = 'sine'
+          gain.gain.setValueAtTime(0.25, ctx.currentTime + start)
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur)
+          osc.start(ctx.currentTime + start)
+          osc.stop(ctx.currentTime + start + dur)
+        }
+        // Double-ring: 480Hz + 620Hz (classic phone ring pair)
+        tone(480, 0,    0.4)
+        tone(620, 0,    0.4)
+        tone(480, 0.5,  0.4)
+        tone(620, 0.5,  0.4)
+        // Wait 3s total before next ring cycle
+        await new Promise(r => setTimeout(r, 3000))
+        ctx.close().catch(() => {})
+      } catch { /* AudioContext may fail in some environments */ }
+      if (!stopped) ring()
     }
-    beep()
-    return () => { stopped = true; ctx.close().catch(() => {}) }
+
+    ring()
+    return () => { stopped = true }
   }, [phase])
 
   // Duration timer
@@ -140,7 +154,7 @@ export default function InboundCallBanner({ call, onDismiss }: Props) {
         answerSdp = pc.localDescription?.sdp ?? ''
       }
 
-      // 3. Tell WhatsApp API we're accepting
+      // Tell WhatsApp API we're accepting
       const res  = await fetch('/api/whatsapp/calls', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -153,6 +167,20 @@ export default function InboundCallBanner({ call, onDismiss }: Props) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Accept failed')
+
+      // Update call_logs to accepted
+      if (call.conversation_id) {
+        fetch('/api/whatsapp/calls', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            action:          'log_status',
+            call_id:         call.call_id,
+            conversation_id: call.conversation_id,
+            status:          'accepted',
+          }),
+        }).catch(() => {})
+      }
 
       // If no SDP offer in webhook, state becomes connected when ICE resolves
       if (!call.sdp) setPhase('connected')
@@ -200,11 +228,11 @@ export default function InboundCallBanner({ call, onDismiss }: Props) {
     setIsMuted(next)
   }
 
-  const initials = call.contact_name
+  const initials = (call.contactName || call.contact_name || call.fromPhone || call.from_phone || '?')
     .split(' ')
     .slice(0, 2)
-    .map(w => w[0]?.toUpperCase() ?? '')
-    .join('')
+    .map((w: string) => w[0]?.toUpperCase() ?? '')
+    .join('') || '?'
 
   return (
     <>

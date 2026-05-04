@@ -351,6 +351,25 @@ const {
                   : 'You need permission to call this contact. Send them a request and they can approve it in WhatsApp.'}
               </div>
 
+              {/* Show API error if any */}
+              {error && (
+                <div style={{
+                  background:   'rgba(239,68,68,0.12)',
+                  borderRadius:  10,
+                  padding:      '10px 14px',
+                  color:        '#fca5a5',
+                  fontSize:      12,
+                  textAlign:    'center',
+                  display:      'flex',
+                  gap:           6,
+                  alignItems:   'center',
+                  justifyContent: 'center',
+                }}>
+                  <AlertIcon />
+                  {error}
+                </div>
+              )}
+
               {permission?.can_request && permission?.status !== 'pending' && (
                 <button
                   onClick={requestPermission}
@@ -437,71 +456,73 @@ const {
 
           {/* ── Connecting / Ringing / Connected call controls ── */}
           {(callState === 'connecting' || callState === 'ringing' || callState === 'connected' || callState === 'ending') && (
-            <div style={{ display: 'flex', gap: 24, alignItems: 'center', marginTop: 4 }}>
+            <>
+              <div style={{ display: 'flex', gap: 24, alignItems: 'center', marginTop: 4 }}>
 
-              {/* Record */}
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-    <CircleBtn
-      onClick={isRecording ? stopRecording : startRecording}
-      disabled={callState !== 'connected'}
-      danger={isRecording}
-      label={isRecording ? 'Stop Recording' : 'Record'}
-    >
-      {isRecording ? (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <rect x="6" y="6" width="12" height="12" rx="2" />
-        </svg>
-      ) : (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="12" cy="12" r="8" />
-        </svg>
-      )}
-    </CircleBtn>
-    <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11 }}>
-      {isRecording ? 'Stop' : 'Record'}
-    </span>
-  </div>
+                {/* Record */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <CircleBtn
+                    onClick={isRecording ? stopRecording : startRecording}
+                    disabled={callState !== 'connected'}
+                    danger={isRecording}
+                    label={isRecording ? 'Stop Recording' : 'Record'}
+                  >
+                    {isRecording ? (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="6" width="12" height="12" rx="2" />
+                      </svg>
+                    ) : (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="12" cy="12" r="8" />
+                      </svg>
+                    )}
+                  </CircleBtn>
+                  <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11 }}>
+                    {isRecording ? 'Stop' : 'Record'}
+                  </span>
+                </div>
 
-AND add recording status display after the controls section:
-  {recordingUploading && (
-    <div style={{ fontSize: 12, color: '#a78bfa', textAlign: 'center' }}>
-      Uploading recording…
-    </div>
-  )}
-  {recordingUrl && !recordingUploading && (
-    <div style={{ fontSize: 12, color: '#86efac', textAlign: 'center' }}>
-      ✓ Recording saved
-    </div>
-  )}
+                {/* Mute */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <CircleBtn
+                    onClick={toggleMute}
+                    disabled={callState !== 'connected'}
+                    label={isMuted ? 'Unmute' : 'Mute'}
+                  >
+                    <MicIcon muted={isMuted} />
+                  </CircleBtn>
+                  <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11 }}>
+                    {isMuted ? 'Unmute' : 'Mute'}
+                  </span>
+                </div>
 
-              {/* Mute */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                <CircleBtn
-                  onClick={toggleMute}
-                  disabled={callState !== 'connected'}
-                  label={isMuted ? 'Unmute' : 'Mute'}
-                >
-                  <MicIcon muted={isMuted} />
-                </CircleBtn>
-                <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11 }}>
-                  {isMuted ? 'Unmute' : 'Mute'}
-                </span>
+                {/* End Call */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <CircleBtn
+                    onClick={() => endCall().then(onClose)}
+                    danger
+                    size={64}
+                    disabled={callState === 'ending'}
+                    label="End call"
+                  >
+                    <PhoneOffIcon />
+                  </CircleBtn>
+                  <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11 }}>End</span>
+                </div>
               </div>
 
-              {/* End Call */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                <CircleBtn
-                  onClick={() => endCall().then(onClose)}
-                  danger
-                  size={64}
-                  disabled={callState === 'ending'}
-                  label="End call"
-                >
-                  <PhoneOffIcon />
-                </CircleBtn>
-                <span style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11 }}>End</span>
-              </div>
-            </div>
+              {/* Recording status */}
+              {recordingUploading && (
+                <div style={{ fontSize: 12, color: '#a78bfa', textAlign: 'center' }}>
+                  Uploading recording…
+                </div>
+              )}
+              {recordingUrl && !recordingUploading && (
+                <div style={{ fontSize: 12, color: '#86efac', textAlign: 'center' }}>
+                  ✓ Recording saved
+                </div>
+              )}
+            </>
           )}
 
           {/* Retry button on error */}

@@ -305,20 +305,24 @@ export function useWhatsAppCall(
         body:    JSON.stringify({ action: 'request_permission', conversation_id: conversationId }),
       })
       const data = await res.json()
-        if (!res.ok || !data.ok) {
-    // Don't set error state — show info message instead
-    setCallState('permission_required')
-    setPermission(prev => prev ? { 
-      ...prev, 
-      status: 'pending',
-      _manual_required: true  // add this flag to CallPermission type if needed
-    } : null)
-    return
-  }
+
+      if (!res.ok || !data.ok) {
+        // Surface the error to the user — don't swallow it
+        const errorMsg = data.error ?? data.message ?? 'Failed to send permission request'
+        console.error('[useWhatsAppCall] requestPermission failed:', errorMsg)
+        setError(errorMsg)
+        setCallState('permission_required')
+        return
+      }
+
+      // Success — permission request message sent
+      console.log('[useWhatsAppCall] ✅ Permission request sent')
       setCallState('permission_required')
       setPermission(prev => prev ? { ...prev, status: 'pending' } : null)
     } catch (e: any) {
-      setErr(e.message)
+      console.error('[useWhatsAppCall] requestPermission error:', e.message)
+      setError(e.message)
+      setCallState('permission_required')
     }
   }, [conversationId])
 
