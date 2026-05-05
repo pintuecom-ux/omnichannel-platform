@@ -33,7 +33,7 @@ export default function InstagramChannelSettings() {
   const searchParams = useSearchParams()
   const [data, setData] = useState<ChannelResponse['channel']>(null)
   const [loading, setLoading] = useState(true)
-  const [busy, setBusy] = useState<'connect' | 'disconnect' | 'media' | 'analytics' | null>(null)
+  const [busy, setBusy] = useState<'connect' | 'disconnect' | 'media' | 'analytics' | 'webhooks' | null>(null)
 
   async function loadChannel() {
     setLoading(true)
@@ -72,6 +72,19 @@ export default function InstagramChannelSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function repairWebhooks() {
+    setBusy('webhooks')
+    try {
+      await fetch('/api/instagram/channel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      await loadChannel()
     } finally {
       setBusy(null)
     }
@@ -159,6 +172,17 @@ export default function InstagramChannelSettings() {
           <code style={{ display: 'block', padding: '10px 12px', borderRadius: 10, background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--accent3)', fontSize: 12 }}>
             META_WEBHOOK_VERIFY_TOKEN
           </code>
+        </div>
+        <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>Webhook Subscription</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              {data?.meta?.webhook_subscribed ? 'Page subscription is recorded for this channel.' : 'Page subscription has not been confirmed yet.'}
+            </div>
+          </div>
+          <button className="btn btn-secondary" disabled={!connected || busy === 'webhooks'} onClick={repairWebhooks}>
+            {busy === 'webhooks' ? 'Repairing…' : 'Repair Webhooks'}
+          </button>
         </div>
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>Granted Scopes</div>

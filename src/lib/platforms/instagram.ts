@@ -17,6 +17,8 @@ export interface InstagramAccountProfile {
   followers_count?: number
   media_count?: number
   account_type?: string
+  page_id?: string
+  page_name?: string
 }
 
 export interface InstagramMediaContainerPayload {
@@ -229,12 +231,12 @@ export class InstagramClient {
   }
 
   static async getAuthorizedAccount(accessToken: string) {
-    const pagesRes = await axios.get<{ data: Array<{ id: string; name: string; instagram_business_account?: { id: string } }> }>(
+    const pagesRes = await axios.get<{ data: Array<{ id: string; name: string; access_token?: string; instagram_business_account?: { id: string } }> }>(
       buildMetaGraphUrl('me/accounts'),
       {
         params: {
           access_token: accessToken,
-          fields: 'id,name,instagram_business_account',
+          fields: 'id,name,access_token,instagram_business_account',
         },
       }
     )
@@ -252,10 +254,38 @@ export class InstagramClient {
       return {
         ...accountRes.data,
         account_type: 'PROFESSIONAL',
+        page_id: page.id,
+        page_name: page.name,
       }
     }
 
     throw new Error('No Instagram Business Account found on the connected Facebook Pages')
+  }
+
+  static async subscribeAppToPage(pageId: string, pageAccessToken: string) {
+    const res = await axios.post<{ success?: boolean }>(
+      buildMetaGraphUrl(`${pageId}/subscribed_apps`),
+      null,
+      {
+        params: {
+          access_token: pageAccessToken,
+        },
+      }
+    )
+    return res.data
+  }
+
+  static async getManagedPages(accessToken: string) {
+    const res = await axios.get<{ data: Array<{ id: string; name: string; access_token?: string; instagram_business_account?: { id: string } }> }>(
+      buildMetaGraphUrl('me/accounts'),
+      {
+        params: {
+          access_token: accessToken,
+          fields: 'id,name,access_token,instagram_business_account',
+        },
+      }
+    )
+    return res.data?.data ?? []
   }
 }
 

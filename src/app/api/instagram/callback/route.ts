@@ -51,6 +51,16 @@ export async function GET(req: NextRequest) {
     })
     const longToken = await InstagramClient.exchangeLongLivedToken(shortToken.access_token, clientId, clientSecret)
     const account = await InstagramClient.getAuthorizedAccount(longToken.access_token)
+    const managedPages = await InstagramClient.getManagedPages(longToken.access_token).catch(() => [])
+    const linkedPage = managedPages.find(page => page.instagram_business_account?.id === account.id) ?? null
+    const pageAccessToken = linkedPage?.access_token ?? null
+
+    if (linkedPage?.id && pageAccessToken) {
+      await InstagramClient.subscribeAppToPage(linkedPage.id, pageAccessToken).catch((err: any) => {
+        console.warn('[IG callback] Page subscription failed:', err?.response?.data ?? err?.message ?? err)
+      })
+    }
+
     const debugToken = await debugInstagramToken(longToken.access_token).catch(() => null)
     const existing = await getInstagramChannel(profile.workspace_id)
 
@@ -63,7 +73,9 @@ export async function GET(req: NextRequest) {
         ? new Date(Date.now() + longToken.expires_in * 1000).toISOString()
         : null,
       granted_scopes: normalizeScopes(shortToken.permissions ?? debugToken?.scopes ?? []),
-      webhook_subscribed: true,
+      webhook_subscribed: Boolean(linkedPage?.id && pageAccessToken),
+      page_id: linkedPage?.id ?? account.page_id ?? existing?.meta?.page_id ?? null,
+      legacy_page_name: linkedPage?.name ?? account.page_name ?? existing?.meta?.legacy_page_name ?? null,
       permissions_health: {
         granted: normalizeScopes(shortToken.permissions ?? debugToken?.scopes ?? []),
         missing: [],
