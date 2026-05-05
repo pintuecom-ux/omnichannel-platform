@@ -561,6 +561,50 @@ export class WhatsAppClient {
   }
 
   /**
+   * Accept an incoming WhatsApp call with an SDP answer.
+   *
+   * API: POST /{Phone-Number-ID}/calls
+   *      { messaging_product, call_id, action: "accept", session: { sdp_type: "answer", sdp: sdpAnswer } }
+   */
+  async acceptCall(callId: string, sdpAnswer: string): Promise<boolean> {
+    try {
+      const res = await this.post(`${BASE}/${this.phoneNumberId}/calls`, {
+        messaging_product: 'whatsapp',
+        call_id: callId,
+        action: 'accept',
+        session: {
+          sdp_type: 'answer',
+          sdp: sdpAnswer,
+        },
+      })
+      return res?.success === true
+    } catch (err: any) {
+      console.error('[WA] acceptCall error:', err.message)
+      return false
+    }
+  }
+
+  /**
+   * Reject an incoming WhatsApp call.
+   *
+   * API: POST /{Phone-Number-ID}/calls
+   *      { messaging_product, call_id, action: "reject" }
+   */
+  async rejectCall(callId: string): Promise<boolean> {
+    try {
+      const res = await this.post(`${BASE}/${this.phoneNumberId}/calls`, {
+        messaging_product: 'whatsapp',
+        call_id: callId,
+        action: 'reject',
+      })
+      return res?.success === true
+    } catch (err: any) {
+      console.error('[WA] rejectCall error:', err.message)
+      return false
+    }
+  }
+
+  /**
    * Get current calling settings for this phone number.
    *
    * Returns: status (enabled/disabled), call_icon_visibility,

@@ -142,10 +142,12 @@ const conv = await resolveConversation(conversation_id)
       // NOTE: channel_id is required (NOT NULL constraint) — must be included
       // NOTE: We do NOT insert into `messages` — call events should only appear
       //       in the Calls page (call_logs), not in the Conversations inbox.
+      const pseudoCallId = `perm_${crypto.randomUUID()}`
       const { error: logErr } = await admin.from('call_logs').insert({
         workspace_id:    conv.workspace_id,
         channel_id:      conv.channel.id,
         conversation_id: conversation_id,
+        call_id:         pseudoCallId,
         direction:       'outbound',
         status:          'permission_requested',
         to_phone:        phone,
@@ -170,6 +172,40 @@ const conv = await resolveConversation(conversation_id)
   if (!phone) return NextResponse.json({ error: 'Contact has no phone number' }, { status: 400 })
 
   const wa = new WhatsAppClient(conv.channel.access_token, conv.channel.external_id)
+
+  /* ---------------------------------------------------------------------- */
+  /* accept — action: 'accept'                                              */
+  /* ---------------------------------------------------------------------- */
+  if (action === 'accept') {
+    if (!call_id || !body.sdp_answer) {
+      return NextResponse.json({ error: 'call_id and sdp_answer required for accept' }, { status: 400 })
+    }
+
+    try {
+      const success = await wa.acceptCall(call_id, body.sdp_answer)
+      return NextResponse.json({ ok: success })
+    } catch (err: any) {
+      console.error('[Calls POST] accept error:', err.message)
+      return NextResponse.json({ ok: false, error: err.message }, { status: 500 })
+    }
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* reject — action: 'reject'                                              */
+  /* ---------------------------------------------------------------------- */
+  if (action === 'reject') {
+    if (!call_id) {
+      return NextResponse.json({ error: 'call_id required for reject' }, { status: 400 })
+    }
+
+    try {
+      const success = await wa.rejectCall(call_id)
+      return NextResponse.json({ ok: success })
+    } catch (err: any) {
+      console.error('[Calls POST] reject error:', err.message)
+      return NextResponse.json({ ok: false, error: err.message }, { status: 500 })
+    }
+  }
 
   /* ---------------------------------------------------------------------- */
   /* initiate — action: 'connect'                                           */
