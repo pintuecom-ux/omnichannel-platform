@@ -15,13 +15,14 @@
 
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useWhatsAppCall, CallState } from '@/hooks/useWhatsAppCall'
 
 interface CallModalProps {
   conversationId: string
   contactName:    string
   contactPhone?:  string
+  incomingCall?:  any
   onClose:        () => void
 }
 
@@ -192,18 +193,47 @@ const AlertIcon = () => (
 )
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function CallModal({ conversationId, contactName, contactPhone, onClose }: CallModalProps) {
-const {
+export default function CallModal({ conversationId, contactName, contactPhone, incomingCall, onClose }: CallModalProps) {
+  const {
     callState, callId, permission, duration, isMuted, error,
     isRecording, recordingUploading, recordingUrl,
-    checkPermission, requestPermission, startCall, endCall, toggleMute, reset,
+    checkPermission, requestPermission, startCall, acceptCall, rejectCall, endCall, toggleMute, reset,
     startRecording, stopRecording,
   } = useWhatsAppCall(conversationId)
 
-  // Check permission on open
+  const [notes, setNotes] = useState('')
+  const [savingNotes, setSavingNotes] = useState(false)
+
+  // Check permission on open, OR accept incoming call
   useEffect(() => {
-    checkPermission()
-  }, [checkPermission])
+    if (incomingCall) {
+      acceptCall(incomingCall)
+    } else {
+      checkPermission()
+    }
+  }, [checkPermission, acceptCall, incomingCall])
+
+  async function saveNotes() {
+    if (!notes.trim() || savingNotes) return
+    setSavingNotes(true)
+    try {
+      await fetch('/api/messages/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: conversationId,
+          content_type:    'text',
+          body:            `📞 Call Notes:\n${notes}`,
+          is_note:         true,
+        }),
+      })
+      setNotes('')
+    } catch (e: any) {
+      console.error('[CallModal] Failed to save notes:', e)
+    } finally {
+      setSavingNotes(false)
+    }
+  }
 
   // ESC to close (only when not in an active call)
   useEffect(() => {
@@ -577,6 +607,57 @@ const {
             </svg>
             WhatsApp Call
           </div>
+          {/* Notes UI (only shown when connected) */}
+          {isActive && (
+            <div style={{
+              width:        '100%',
+              marginTop:    10,
+              background:   '#f0f2f5',
+              borderRadius: 16,
+              padding:      '12px',
+              display:      'flex',
+              flexDirection: 'column',
+              gap:          8,
+              position:     'relative',
+            }}>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Take Call Notes..."
+                disabled={savingNotes}
+                style={{
+                  width:        '100%',
+                  minHeight:    70,
+                  background:   'transparent',
+                  border:       'none',
+                  outline:      'none',
+                  resize:       'none',
+                  fontSize:     14,
+                  color:        '#111b21',
+                  fontFamily:   'inherit',
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={saveNotes}
+                  disabled={!notes.trim() || savingNotes}
+                  style={{
+                    background:   notes.trim() ? '#075e54' : '#cbd5e1',
+                    color:        '#fff',
+                    border:       'none',
+                    borderRadius: 20,
+                    padding:      '6px 16px',
+                    fontSize:     13,
+                    fontWeight:   600,
+                    cursor:       notes.trim() && !savingNotes ? 'pointer' : 'not-allowed',
+                    transition:   'background 0.2s',
+                  }}
+                >
+                  {savingNotes ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

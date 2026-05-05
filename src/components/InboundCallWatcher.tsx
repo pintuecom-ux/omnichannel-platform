@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useInboundCall } from '@/hooks/useInboundCall'
 import InboundCallBanner from '@/components/inbox/InboundCallBanner'
+import CallModal from '@/components/inbox/CallModal'
 
 export default function InboundCallWatcher() {
   const supabase = createClient()
@@ -68,6 +69,12 @@ export default function InboundCallWatcher() {
   }, [fetchWorkspace])
 
   const { inboundCall, dismissCall } = useInboundCall(workspaceId)
+  const [isAccepted, setIsAccepted] = useState(false)
+
+  // Reset acceptance when call ends/clears
+  useEffect(() => {
+    if (!inboundCall) setIsAccepted(false)
+  }, [inboundCall])
 
   // ── Browser Notification API — system-level alert ─────────────────────────
   useEffect(() => {
@@ -96,5 +103,27 @@ export default function InboundCallWatcher() {
   }, [inboundCall?.callId])
 
   if (!inboundCall) return null
-  return <InboundCallBanner call={inboundCall} onDismiss={dismissCall} />
+
+  if (isAccepted) {
+    return (
+      <CallModal
+        conversationId={inboundCall.conversation_id || ''}
+        contactName={inboundCall.contactName}
+        contactPhone={inboundCall.fromPhone}
+        incomingCall={inboundCall}
+        onClose={() => {
+          setIsAccepted(false)
+          dismissCall()
+        }}
+      />
+    )
+  }
+
+  return (
+    <InboundCallBanner
+      call={inboundCall}
+      onDismiss={dismissCall}
+      onAccept={() => setIsAccepted(true)}
+    />
+  )
 }

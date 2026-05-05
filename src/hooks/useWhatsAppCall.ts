@@ -45,6 +45,8 @@ export interface UseWhatsAppCallReturn {
   checkPermission:    () => Promise<void>
   requestPermission:  () => Promise<void>
   startCall:          () => Promise<void>
+  acceptCall:         (callPayload: any) => Promise<void>
+  rejectCall:         (callPayload: any) => Promise<void>
   endCall:            () => Promise<void>
   toggleMute:         () => void
   startRecording:     () => void
@@ -435,11 +437,127 @@ export function useWhatsAppCall(
 
       const newCallId = data.call_id
       setCallId(newCallId)
-      subscribeToCallEvents(newCallId)
       console.log('[useWhatsAppCall] ✅ Initiated, call_id:', newCallId)
     } catch (e: any) {
       setErr(`Initiate failed: ${e.message}`)
     }
+  }, [conversationId])
+
+  // ── acceptCall ────────────────────────────────────────────────────────────
+  const acceptCall = useCallback(async (callPayload: any) => {
+    if (!conversationId) return
+    setCallState('connecting')
+    setError(null)
+    setDuration(0)
+    setRecordingBlob(null)
+    setRecordingUrl(null)
+    setCallId(callPayload.call_id)
+    callIdRef.current = callPayload.call_id
+
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      localStreamRef.current = stream
+    } catch (e: any) {
+      setErr(e.name === 'NotAllowedError'
+        ? 'Microphone access denied. Please allow microphone and try again.'
+        : `Microphone error: ${e.message}`)
+      return
+    }
+
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    pcRef.current = pc
+    stream.getTracks().forEach(t => pc.addTrack(t, stream))
+
+    pc.ontrack = (event) => {
+      const [rs] = event.streams
+      if (rs) {
+        remoteStreamRef.current = rs
+        const audio = new Audio()
+        audio.srcObject = rs
+        audio.autoplay  = true
+        ;(window as any).__waCallAudio = audio
+        audio.play().catch(e => console.warn('[useWhatsAppCall] Audio play:', e))
+      }
+    }
+
+    pc.oniceconnectionstatechange = () => {
+      const state = pc.iceConnectionState
+      console.log('[useWhatsAppCall] ICE:', state)
+      if (state === 'connected' || state === 'completed') setCallState('connected')
+      else if (state === 'failed' || state === 'closed')  setErr('Connection lost')
+    }
+
+    let answerSdp = ''
+    if (callPayload.sdp && callPayload.sdp_type === 'offer') {
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: callPayload.sdp }))
+        const answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+
+        await new Promise<void>(resolve => {
+          if (pc.iceGatheringState === 'complete') { resolve(); return }
+          const t = setTimeout(resolve, 5000)
+          pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') { clearTimeout(t); resolve() }
+          }
+        })
+        answerSdp = pc.localDescription?.sdp ?? ''
+      } catch (e: any) {
+        setErr(`SDP answer failed: ${e.message}`)
+        return
+      }
+    }
+
+    try {
+      const res  = await fetch('/api/whatsapp/calls', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          action:          'accept',
+          call_id:         callPayload.call_id,
+          conversation_id: conversationId,
+          sdp_answer:      answerSdp,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setErr(data.error ?? 'Accept failed'); return }
+
+      // Update call_logs to accepted
+      fetch('/api/whatsapp/calls', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          action:          'log_status',
+          call_id:         callPayload.call_id,
+          conversation_id: conversationId,
+          status:          'accepted',
+        }),
+      }).catch(() => {})
+
+      if (!callPayload.sdp) setCallState('connected')
+      console.log('[useWhatsAppCall] ✅ Accepted, call_id:', callPayload.call_id)
+    } catch (e: any) {
+      setErr(`Accept failed: ${e.message}`)
+    }
+  }, [conversationId])
+
+  // ── rejectCall ────────────────────────────────────────────────────────────
+  const rejectCall = useCallback(async (callPayload: any) => {
+    try {
+      await fetch('/api/whatsapp/calls', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          action:          'reject',
+          call_id:         callPayload.call_id,
+          conversation_id: conversationId || callPayload.conversation_id,
+        }),
+      })
+    } catch (e: any) {
+      console.warn('[useWhatsAppCall] reject error:', e.message)
+    }
+    reset()
   }, [conversationId])
 
   // ── endCall ───────────────────────────────────────────────────────────────
@@ -497,7 +615,7 @@ export function useWhatsAppCall(
     callState, callId, permission, duration, isMuted,
     isRecording, recordingBlob, recordingUploading, recordingUrl,
     error,
-    checkPermission, requestPermission, startCall, endCall,
+    checkPermission, requestPermission, startCall, acceptCall, rejectCall, endCall,
     toggleMute, startRecording, stopRecording, reset,
   }
 }

@@ -14,6 +14,7 @@ import type { InboundCallPayload } from '@/hooks/useInboundCall'
 interface Props {
   call:      InboundCallPayload
   onDismiss: () => void
+  onAccept:  () => void
 }
 
 function fmtDur(s: number): string {
@@ -22,7 +23,7 @@ function fmtDur(s: number): string {
   return `${String(m).padStart(2, '0')}:${sec}`
 }
 
-export default function InboundCallBanner({ call, onDismiss }: Props) {
+export default function InboundCallBanner({ call, onDismiss, onAccept }: Props) {
   const [phase,    setPhase]    = useState<'ringing' | 'connected' | 'ended'>('ringing')
   const [duration, setDuration] = useState(0)
   const [isMuted,  setIsMuted]  = useState(false)
@@ -113,99 +114,9 @@ export default function InboundCallBanner({ call, onDismiss }: Props) {
     }
   }
 
-  async function acceptCall() {
-    setError(null)
-    try {
-      // 1. Get microphone
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-      localStreamRef.current = stream
-
-      // 2. Create RTCPeerConnection
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      })
-      pcRef.current = pc
-      stream.getTracks().forEach(t => pc.addTrack(t, stream))
-
-      pc.ontrack = (ev) => {
-        const [rs] = ev.streams
-        if (rs) {
-          const audio = new Audio()
-          audio.srcObject = rs
-          audio.autoplay  = true
-          remoteAudioRef.current = audio
-          audio.play().catch(() => {})
-        }
-      }
-
-      pc.oniceconnectionstatechange = () => {
-        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-          setPhase('connected')
-        } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') {
-          setError('Connection lost')
-          setPhase('ended')
-        }
-      }
-
-      let answerSdp = ''
-
-      if (call.sdp && call.sdp_type === 'offer') {
-        // We have the SDP offer from the webhook — do proper WebRTC negotiation
-        await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: call.sdp }))
-        const answer = await pc.createAnswer()
-        await pc.setLocalDescription(answer)
-
-        // Wait for ICE gathering (max 5s)
-        await new Promise<void>(resolve => {
-          if (pc.iceGatheringState === 'complete') { resolve(); return }
-          const t = setTimeout(resolve, 5000)
-          pc.onicegatheringstatechange = () => {
-            if (pc.iceGatheringState === 'complete') { clearTimeout(t); resolve() }
-          }
-        })
-
-        answerSdp = pc.localDescription?.sdp ?? ''
-      }
-
-      // Tell WhatsApp API we're accepting
-      const res  = await fetch('/api/whatsapp/calls', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          action:          'accept',
-          call_id:         call.call_id,
-          conversation_id: call.conversation_id,
-          sdp_answer:      answerSdp,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Accept failed')
-
-      // Update call_logs to accepted
-      if (call.conversation_id) {
-        fetch('/api/whatsapp/calls', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({
-            action:          'log_status',
-            call_id:         call.call_id,
-            conversation_id: call.conversation_id,
-            status:          'accepted',
-          }),
-        }).catch(() => {})
-      }
-
-      // If no SDP offer in webhook, state becomes connected when ICE resolves
-      if (!call.sdp) setPhase('connected')
-
-    } catch (e: any) {
-      console.error('[InboundCallBanner] accept error:', e)
-      setError(e.message)
-      cleanup()
-    }
+  function acceptCall() {
+    cleanup()
+    onAccept()
   }
 
   async function rejectCall() {
