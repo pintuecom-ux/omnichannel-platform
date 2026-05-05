@@ -4,10 +4,10 @@ import { InstagramClient } from '@/lib/platforms/instagram'
 import { getAuthenticatedUser, getWorkspaceProfile } from '@/lib/instagram/helpers'
 
 const DEFAULT_SCOPES = [
-  'instagram_basic',
-  'instagram_manage_messages',
-  'instagram_manage_comments',
-  'instagram_content_publish',
+  'instagram_business_basic',
+  'instagram_business_manage_messages',
+  'instagram_business_manage_comments',
+  'instagram_business_content_publish',
 ]
 
 function encodeState(payload: Record<string, string | number>) {

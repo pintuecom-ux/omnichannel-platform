@@ -199,40 +199,77 @@ export class InstagramClient {
     redirectUri: string
     code: string
   }) {
-    const form = new URLSearchParams()
-    form.set('client_id', params.clientId)
-    form.set('client_secret', params.clientSecret)
-    form.set('grant_type', 'authorization_code')
-    form.set('redirect_uri', params.redirectUri)
-    form.set('code', params.code)
-
-    const res = await axios.post<InstagramOAuthTokenResponse>(
-      'https://api.instagram.com/oauth/access_token',
-      form,
-      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    // The login dialog uses facebook.com/dialog/oauth (Meta/Facebook OAuth),
+    // so the code must be exchanged at the Meta Graph API endpoint — NOT
+    // api.instagram.com (which is the old Instagram Basic Display API only).
+    const res = await axios.get<{ access_token: string; token_type: string }>(
+      `https://graph.facebook.com/v25.0/oauth/access_token`,
+      {
+        params: {
+          client_id: params.clientId,
+          client_secret: params.clientSecret,
+          redirect_uri: params.redirectUri,
+          code: params.code,
+        },
+      }
     )
-    return res.data
+    // Graph API token exchange does not return `permissions` inline;
+    // scopes are fetched separately via debugInstagramToken if needed.
+    return { access_token: res.data.access_token, permissions: [] as string[] }
   }
 
-  static async exchangeLongLivedToken(accessToken: string, clientSecret: string) {
-    const res = await axios.get<InstagramOAuthTokenResponse>('https://graph.instagram.com/access_token', {
-      params: {
-        grant_type: 'ig_exchange_token',
-        client_secret: clientSecret,
-        access_token: accessToken,
-      },
-    })
-    return res.data
+  static async exchangeLongLivedToken(accessToken: string, clientId: string, clientSecret: string) {
+    // For Meta/Facebook OAuth tokens use fb_exchange_token at graph.facebook.com.
+    // ig_exchange_token at graph.instagram.com is Basic Display API only.
+    const res = await axios.get<{ access_token: string; token_type: string; expires_in?: number }>(
+      'https://graph.facebook.com/v25.0/oauth/access_token',
+      {
+        params: {
+          grant_type: 'fb_exchange_token',
+          client_id: clientId,
+          client_secret: clientSecret,
+          fb_exchange_token: accessToken,
+        },
+      }
+    )
+    return { access_token: res.data.access_token, expires_in: res.data.expires_in }
   }
 
-  static async getAuthorizedAccount(accessToken: string) {
-    const res = await axios.get<InstagramAccountProfile>('https://graph.instagram.com/me', {
-      params: {
-        fields: 'id,username,account_type,media_count',
-        access_token: accessToken,
-      },
-    })
-    return res.data
+  static async getAuthorizedAccount(accessToken: string): Promise<InstagramAccountProfile> {
+    // graph.instagram.com/me is the Instagram Basic Display API — it does NOT
+    // work with tokens issued by facebook.com/dialog/oauth (Meta OAuth flow).
+    // Instead: fetch the user's Facebook Pages, then look for the connected
+    // Instagram Business Account on each page.
+    const pagesRes = await axios.get<{ data: Array<{ id: string; name: string; instagram_business_account?: { id: string } }> }>(
+      'https://graph.facebook.com/v25.0/me/accounts',
+      {
+        params: {
+          access_token: accessToken,
+          fields: 'id,name,instagram_business_account',
+        },
+      }
+    )
+
+    for (const page of pagesRes.data?.data ?? []) {
+      const igId = page.instagram_business_account?.id
+      if (!igId) continue
+
+      const detailRes = await axios.get<InstagramAccountProfile>(
+        `https://graph.facebook.com/v25.0/${igId}`,
+        {
+          params: {
+            access_token: accessToken,
+            fields: 'id,username,account_type,followers_count,media_count,profile_picture_url',
+          },
+        }
+      )
+      return detailRes.data
+    }
+
+    throw new Error(
+      'No Instagram Business Account found on the connected Facebook Pages. ' +
+      'Make sure you linked a Professional (Business or Creator) Instagram account to a Facebook Page.'
+    )
   }
 }
 

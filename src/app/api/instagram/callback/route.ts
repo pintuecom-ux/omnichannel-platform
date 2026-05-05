@@ -38,17 +38,36 @@ export async function GET(req: NextRequest) {
   const clientId = process.env.INSTAGRAM_APP_ID ?? process.env.META_APP_ID
   const clientSecret = process.env.INSTAGRAM_APP_SECRET ?? process.env.META_APP_SECRET
   const redirectUri = process.env.INSTAGRAM_REDIRECT_URI
+  const configId = process.env.INSTAGRAM_CONFIGURATION_ID ?? process.env.META_CONFIGURATION_ID
   if (!clientId || !clientSecret || !redirectUri) {
     return NextResponse.redirect(new URL('/settings/channels?tab=instagram&error=instagram_env_missing', req.url))
   }
 
   try {
-    const shortToken = await InstagramClient.exchangeCodeForToken({
-      clientId,
-      clientSecret,
-      redirectUri,
-      code,
-    })
+    let shortToken
+    try {
+      shortToken = await InstagramClient.exchangeCodeForToken({
+        clientId,
+        clientSecret,
+        redirectUri,
+        code,
+      })
+    } catch (exchangeErr: any) {
+      const message = exchangeErr?.response?.data?.error_message || exchangeErr?.response?.data?.error?.message || exchangeErr?.message || ''
+      const shouldRetryWithMetaGraph =
+        Boolean(configId) &&
+        /invalid platform app/i.test(message)
+
+      if (!shouldRetryWithMetaGraph) throw exchangeErr
+
+      shortToken = await InstagramClient.exchangeCodeForTokenWithMetaGraph({
+        clientId,
+        clientSecret,
+        redirectUri,
+        code,
+      })
+    }
+
     const longToken = await InstagramClient.exchangeLongLivedToken(shortToken.access_token, clientSecret)
     const account = await InstagramClient.getAuthorizedAccount(longToken.access_token)
     const debugToken = await debugInstagramToken(longToken.access_token).catch(() => null)
