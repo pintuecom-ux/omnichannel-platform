@@ -23,6 +23,7 @@ export async function GET() {
 
   const appId = process.env.INSTAGRAM_APP_ID ?? process.env.META_APP_ID
   const redirectUri = process.env.INSTAGRAM_REDIRECT_URI
+  const configId = process.env.INSTAGRAM_CONFIGURATION_ID ?? process.env.META_CONFIGURATION_ID
   if (!appId || !redirectUri) {
     return NextResponse.json({ error: 'Instagram app credentials are not configured' }, { status: 500 })
   }
@@ -44,5 +45,6 @@ export async function GET() {
     redirectUri,
     state,
     scopes,
+    configId: configId ?? undefined,
   }))
 }

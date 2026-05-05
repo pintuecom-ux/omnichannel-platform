@@ -174,13 +174,22 @@ export class InstagramClient {
     redirectUri: string
     state: string
     scopes: string[]
+    configId?: string
   }) {
-    const url = new URL('https://www.instagram.com/oauth/authorize')
+    const url = new URL(`${META_GRAPH_BASE.replace(/\/$/, '')}/dialog/oauth`)
     url.searchParams.set('client_id', params.appId)
     url.searchParams.set('redirect_uri', params.redirectUri)
-    url.searchParams.set('response_type', 'code')
-    url.searchParams.set('scope', params.scopes.join(','))
     url.searchParams.set('state', params.state)
+
+    if (params.configId) {
+      url.searchParams.set('config_id', params.configId)
+      url.searchParams.set('response_type', 'code')
+      url.searchParams.set('override_default_response_type', 'true')
+    } else {
+      url.searchParams.set('response_type', 'code')
+      url.searchParams.set('scope', params.scopes.join(','))
+    }
+
     return url.toString()
   }
 
