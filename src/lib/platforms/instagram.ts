@@ -113,7 +113,7 @@ export class InstagramClient {
 
   async getAccountProfile() {
     return this.get<InstagramAccountProfile>(this.igAccountId, {
-      fields: 'id,username,profile_picture_url,followers_count,media_count,account_type',
+      fields: 'id,username,profile_picture_url,followers_count,media_count',
     })
   }
 
@@ -246,10 +246,13 @@ export class InstagramClient {
       const accountRes = await axios.get<InstagramAccountProfile>(buildMetaGraphUrl(igId), {
         params: {
           access_token: accessToken,
-          fields: 'id,username,account_type,media_count,followers_count,profile_picture_url',
+          fields: 'id,username,media_count,followers_count,profile_picture_url',
         },
       })
-      return accountRes.data
+      return {
+        ...accountRes.data,
+        account_type: 'PROFESSIONAL',
+      }
     }
 
     throw new Error('No Instagram Business Account found on the connected Facebook Pages')
