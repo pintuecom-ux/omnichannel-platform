@@ -139,35 +139,24 @@ const conv = await resolveConversation(conversation_id)
       console.log('[Calls POST] ✅ Permission request message sent, id:', result.message_id)
 
       // Log the permission request in call_logs for tracking
-      await admin.from('call_logs').insert({
+      // NOTE: channel_id is required (NOT NULL constraint) — must be included
+      // NOTE: We do NOT insert into `messages` — call events should only appear
+      //       in the Calls page (call_logs), not in the Conversations inbox.
+      const { error: logErr } = await admin.from('call_logs').insert({
         workspace_id:    conv.workspace_id,
+        channel_id:      conv.channel.id,
         conversation_id: conversation_id,
         direction:       'outbound',
         status:          'permission_requested',
         to_phone:        phone,
         meta:            { message_id: result.message_id, event: 'permission_requested' },
-      }).then(({ error }) => {
-        if (error) console.warn('[Calls POST] call_logs insert warning:', error.message)
       })
 
-      // Also store as a message so it appears in conversation history
-      await admin.from('messages').insert({
-        conversation_id: conversation_id,
-        workspace_id:    conv.workspace_id,
-        direction:       'outbound',
-        content_type:    'call',
-        body:            '🔔 Call permission request sent',
-        status:          'sent',
-        sender_id:       user.id,
-        is_note:         false,
-        external_id:     result.message_id,
-        meta: {
-          call_event: 'permission_requested',
-          to_phone:   phone,
-        },
-      }).then(({ error }) => {
-        if (error) console.warn('[Calls POST] permission message insert warning:', error.message)
-      })
+      if (logErr) {
+        console.error('[Calls POST] call_logs insert error:', logErr.message)
+        // Non-fatal: the WA message was already sent, so we still return ok
+        // but include a warning so the frontend is aware
+      }
 
       return NextResponse.json({ ok: true, message: 'Permission request sent.', message_id: result.message_id })
     } catch (err: any) {

@@ -268,10 +268,14 @@ async function processCall(ev: any) {
   const { phoneNumberId, data } = ev
 
   // Meta sends call status as UPPERCASE — normalise to lowercase for all lookups
+  // IMPORTANT: The first inbound call webhook from Meta may arrive with an EMPTY
+  // status field. For inbound calls (has `from`, no `callback_data`), we treat
+  // an empty/missing status as 'ringing' — this is the initial ring notification.
   const rawStatus  = data.status ?? ''
-  const status     = rawStatus.toLowerCase()
+  const isInbound  = !!data.from && !data.callback_data
+  const status     = rawStatus.toLowerCase() || (isInbound ? 'ringing' : '')
 
-  console.log(`[WA Call] event: ${status} (raw: ${rawStatus}) call_id: ${data.call_id}`)
+  console.log(`[WA Call] event: ${status} (raw: ${rawStatus}) call_id: ${data.call_id} inbound: ${isInbound}`)
 
   const { data: channel } = await admin
     .from('channels')
