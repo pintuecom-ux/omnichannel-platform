@@ -199,11 +199,8 @@ export class InstagramClient {
     redirectUri: string
     code: string
   }) {
-    // The login dialog uses facebook.com/dialog/oauth (Meta/Facebook OAuth),
-    // so the code must be exchanged at the Meta Graph API endpoint — NOT
-    // api.instagram.com (which is the old Instagram Basic Display API only).
     const res = await axios.get<{ access_token: string; token_type: string }>(
-      `https://graph.facebook.com/v25.0/oauth/access_token`,
+      buildMetaGraphUrl('oauth/access_token'),
       {
         params: {
           client_id: params.clientId,
@@ -213,16 +210,12 @@ export class InstagramClient {
         },
       }
     )
-    // Graph API token exchange does not return `permissions` inline;
-    // scopes are fetched separately via debugInstagramToken if needed.
-    return { access_token: res.data.access_token, permissions: [] as string[] }
+    return { access_token: res.data.access_token, permissions: [] }
   }
 
   static async exchangeLongLivedToken(accessToken: string, clientId: string, clientSecret: string) {
-    // For Meta/Facebook OAuth tokens use fb_exchange_token at graph.facebook.com.
-    // ig_exchange_token at graph.instagram.com is Basic Display API only.
     const res = await axios.get<{ access_token: string; token_type: string; expires_in?: number }>(
-      'https://graph.facebook.com/v25.0/oauth/access_token',
+      buildMetaGraphUrl('oauth/access_token'),
       {
         params: {
           grant_type: 'fb_exchange_token',
@@ -232,16 +225,12 @@ export class InstagramClient {
         },
       }
     )
-    return { access_token: res.data.access_token, expires_in: res.data.expires_in }
+    return { access_token: res.data.access_token, expires_in: res.data.expires_in, permissions: [] }
   }
 
-  static async getAuthorizedAccount(accessToken: string): Promise<InstagramAccountProfile> {
-    // graph.instagram.com/me is the Instagram Basic Display API — it does NOT
-    // work with tokens issued by facebook.com/dialog/oauth (Meta OAuth flow).
-    // Instead: fetch the user's Facebook Pages, then look for the connected
-    // Instagram Business Account on each page.
+  static async getAuthorizedAccount(accessToken: string) {
     const pagesRes = await axios.get<{ data: Array<{ id: string; name: string; instagram_business_account?: { id: string } }> }>(
-      'https://graph.facebook.com/v25.0/me/accounts',
+      buildMetaGraphUrl('me/accounts'),
       {
         params: {
           access_token: accessToken,
@@ -254,22 +243,16 @@ export class InstagramClient {
       const igId = page.instagram_business_account?.id
       if (!igId) continue
 
-      const detailRes = await axios.get<InstagramAccountProfile>(
-        `https://graph.facebook.com/v25.0/${igId}`,
-        {
-          params: {
-            access_token: accessToken,
-            fields: 'id,username,account_type,followers_count,media_count,profile_picture_url',
-          },
-        }
-      )
-      return detailRes.data
+      const accountRes = await axios.get<InstagramAccountProfile>(buildMetaGraphUrl(igId), {
+        params: {
+          access_token: accessToken,
+          fields: 'id,username,account_type,media_count,followers_count,profile_picture_url',
+        },
+      })
+      return accountRes.data
     }
 
-    throw new Error(
-      'No Instagram Business Account found on the connected Facebook Pages. ' +
-      'Make sure you linked a Professional (Business or Creator) Instagram account to a Facebook Page.'
-    )
+    throw new Error('No Instagram Business Account found on the connected Facebook Pages')
   }
 }
 
