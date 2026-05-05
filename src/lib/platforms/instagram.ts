@@ -176,7 +176,7 @@ export class InstagramClient {
     scopes: string[]
     configId?: string
   }) {
-    const url = new URL(`${META_GRAPH_BASE.replace(/\/$/, '')}/dialog/oauth`)
+    const url = new URL('https://www.facebook.com/v25.0/dialog/oauth')
     url.searchParams.set('client_id', params.appId)
     url.searchParams.set('redirect_uri', params.redirectUri)
     url.searchParams.set('state', params.state)
