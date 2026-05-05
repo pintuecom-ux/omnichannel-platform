@@ -21,7 +21,7 @@ export async function GET() {
   const profile = await getWorkspaceProfile(user.id)
   if (!profile?.workspace_id) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
-  const appId = process.env.INSTAGRAM_APP_ID
+  const appId = process.env.INSTAGRAM_APP_ID ?? process.env.META_APP_ID
   const redirectUri = process.env.INSTAGRAM_REDIRECT_URI
   if (!appId || !redirectUri) {
     return NextResponse.json({ error: 'Instagram app credentials are not configured' }, { status: 500 })

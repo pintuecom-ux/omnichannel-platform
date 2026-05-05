@@ -35,8 +35,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL('/settings/channels?tab=instagram&error=workspace_mismatch', req.url))
   }
 
-  const clientId = process.env.INSTAGRAM_APP_ID
-  const clientSecret = process.env.INSTAGRAM_APP_SECRET
+  const clientId = process.env.INSTAGRAM_APP_ID ?? process.env.META_APP_ID
+  const clientSecret = process.env.INSTAGRAM_APP_SECRET ?? process.env.META_APP_SECRET
   const redirectUri = process.env.INSTAGRAM_REDIRECT_URI
   if (!clientId || !clientSecret || !redirectUri) {
     return NextResponse.redirect(new URL('/settings/channels?tab=instagram&error=instagram_env_missing', req.url))
