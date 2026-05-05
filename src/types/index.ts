@@ -70,6 +70,8 @@ export interface Contact {
   phone: string | null
   email: string | null
   instagram_username: string | null
+  instagram_scoped_id?: string | null
+  facebook_scoped_id?: string | null
   facebook_id: string | null
   avatar_url: string | null
   tags: string[]
@@ -120,6 +122,109 @@ export interface Message {
   created_at: string
   // Joined fields
   sender?: Profile
+}
+
+export interface InstagramChannelMeta {
+  login_mode?: 'instagram_login' | 'page_linked'
+  username?: string | null
+  account_type?: 'BUSINESS' | 'CREATOR' | string | null
+  token_expires_at?: string | null
+  granted_scopes?: string[]
+  profile_picture_url?: string | null
+  webhook_subscribed?: boolean
+  page_id?: string | null
+  legacy_page_id?: string | null
+  legacy_page_name?: string | null
+  app_scoped_user_id?: string | null
+  permissions_health?: {
+    missing: string[]
+    granted: string[]
+  }
+  [key: string]: any
+}
+
+export interface InstagramIdentity {
+  instagram_scoped_id: string
+  facebook_scoped_id?: string | null
+  username?: string | null
+}
+
+export interface ScheduledPublication {
+  id: string
+  workspace_id: string
+  channel_id: string
+  platform: 'instagram'
+  status: 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'canceled'
+  caption: string | null
+  media_payload: Array<{
+    storage_path?: string | null
+    public_url?: string | null
+    media_type: 'image' | 'video' | 'carousel'
+    mime_type?: string | null
+    file_name?: string | null
+    alt_text?: string | null
+  }>
+  publish_at: string | null
+  published_at?: string | null
+  timezone?: string | null
+  retry_count: number
+  last_error?: string | null
+  idempotency_key?: string | null
+  resulting_media_id?: string | null
+  meta: Record<string, any>
+  created_by?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface InstagramMediaItem {
+  id: string
+  workspace_id: string
+  channel_id: string
+  publication_id?: string | null
+  instagram_media_id: string
+  caption: string | null
+  media_type: 'image' | 'video' | 'carousel'
+  media_product_type?: string | null
+  permalink?: string | null
+  thumbnail_url?: string | null
+  media_url?: string | null
+  timestamp?: string | null
+  comment_count: number
+  like_count: number
+  metrics?: Record<string, number | null>
+  meta: Record<string, any>
+  created_at: string
+  updated_at: string
+}
+
+export interface InstagramAnalyticsSnapshot {
+  id: string
+  workspace_id: string
+  channel_id: string
+  snapshot_at: string
+  range_start?: string | null
+  range_end?: string | null
+  account_metrics: Record<string, any>
+  content_metrics: Array<Record<string, any>>
+  operational_metrics: Record<string, any>
+  meta: Record<string, any>
+  created_at: string
+}
+
+export interface InstagramExecutiveMetrics {
+  published_posts: number
+  publish_failures: number
+  impressions: number
+  reach: number
+  engagement: number
+  engagement_rate: number
+  inbound_dms: number
+  inbound_comments: number
+  response_rate: number
+  avg_reply_minutes: number | null
+  followers_count: number | null
+  follower_growth: number | null
 }
 
 export interface Template {

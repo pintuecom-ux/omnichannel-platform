@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/process-deletions",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/instagram-publications",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}

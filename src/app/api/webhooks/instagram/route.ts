@@ -1,14 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { parseInstagramWebhook, verifyIGSignature, InstagramClient } from '@/lib/platforms/instagram'
+import { admin, getInstagramCommentThreadKey } from '@/lib/instagram/helpers'
 
-const admin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
-// ── GET: Meta webhook verification challenge ────────────────────────────────
-// FIX: was using WHATSAPP_WEBHOOK_VERIFY_TOKEN — now uses META_WEBHOOK_VERIFY_TOKEN
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams
   if (
@@ -20,25 +14,20 @@ export async function GET(req: NextRequest) {
   return new NextResponse('Forbidden', { status: 403 })
 }
 
-// ── POST: Receive events ────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text()
     const signature = req.headers.get('x-hub-signature-256') ?? ''
 
-    // FIX: Instagram webhook was missing signature verification entirely
     if (process.env.META_APP_SECRET && !verifyIGSignature(rawBody, signature, process.env.META_APP_SECRET)) {
       return new NextResponse('Invalid signature', { status: 403 })
     }
 
     const body = JSON.parse(rawBody)
-
-    // Validate this is an instagram object
     if (body.object !== 'instagram') {
       return NextResponse.json({ status: 'ignored' })
     }
 
-    // Process async — return 200 immediately to avoid Meta retry storms
     handleIGEvents(body).catch(err => console.error('[IG webhook] error:', err))
     return NextResponse.json({ status: 'ok' })
   } catch (err) {
@@ -70,36 +59,39 @@ async function processIGDM(ev: any) {
     return
   }
 
-  // Ignore messages sent by the business account itself
   if (data.sender_id === igAccountId) return
 
-  // Find or create contact — IG users are identified by their IGSID (stored in facebook_id)
   let { data: contact } = await admin
     .from('contacts')
     .select('*')
     .eq('workspace_id', channel.workspace_id)
-    .eq('facebook_id', data.sender_id)
+    .or(`instagram_scoped_id.eq.${data.sender_id},facebook_id.eq.${data.sender_id}`)
     .maybeSingle()
 
   if (!contact) {
-    // Try to enrich with Meta profile data
     let name = data.sender_id
     let avatarUrl: string | null = null
+    let username: string | null = null
     if (channel.access_token) {
       const ig = new InstagramClient(channel.access_token, igAccountId)
       const profile = await ig.getUserProfile(data.sender_id)
       if (profile) {
-        name = profile.name
+        name = profile.name || profile.username || name
         avatarUrl = profile.profile_pic ?? null
+        username = profile.username ?? null
       }
     }
     const { data: c } = await admin
       .from('contacts')
       .insert({
         workspace_id: channel.workspace_id,
-        facebook_id: data.sender_id,
+        instagram_scoped_id: data.sender_id,
+        instagram_username: username,
         name,
         avatar_url: avatarUrl,
+        meta: {
+          identity_source: 'instagram_dm',
+        },
       })
       .select()
       .single()
@@ -107,7 +99,6 @@ async function processIGDM(ev: any) {
   }
   if (!contact) return
 
-  // Find open DM conversation or create one (DMs have no external_id)
   let { data: conv } = await admin
     .from('conversations')
     .select('*')
@@ -116,6 +107,11 @@ async function processIGDM(ev: any) {
     .is('external_id', null)
     .in('status', ['open', 'pending'])
     .maybeSingle()
+
+  const conversationMeta = {
+    ...(conv?.meta ?? {}),
+    thread_type: 'dm',
+  }
 
   if (!conv) {
     const { data: c } = await admin
@@ -129,6 +125,7 @@ async function processIGDM(ev: any) {
         last_message: data.text || '[media]',
         last_message_at: data.timestamp,
         unread_count: 1,
+        meta: conversationMeta,
       })
       .select()
       .single()
@@ -141,12 +138,12 @@ async function processIGDM(ev: any) {
         last_message_at: data.timestamp,
         unread_count: (conv.unread_count || 0) + 1,
         updated_at: data.timestamp,
+        meta: conversationMeta,
       })
       .eq('id', conv.id)
   }
   if (!conv) return
 
-  // Dedup
   const { data: exists } = await admin
     .from('messages')
     .select('id')
@@ -163,7 +160,15 @@ async function processIGDM(ev: any) {
     body: data.text,
     status: 'delivered',
     is_note: false,
-    meta: { sender_id: data.sender_id, attachments: data.attachments },
+    meta: {
+      sender_id: data.sender_id,
+      attachments: data.attachments,
+      identity: {
+        instagram_scoped_id: data.sender_id,
+        username: contact.instagram_username ?? null,
+      },
+      raw: data,
+    },
   })
 }
 
@@ -178,12 +183,15 @@ async function processIGComment(ev: any) {
     .maybeSingle()
   if (!channel) return
 
-  // Find or create contact from commenter
+  const commenterId = data.from?.id ?? null
+  const threadKey = getInstagramCommentThreadKey(data.post_id, commenterId)
+  if (!commenterId || !threadKey) return
+
   let { data: contact } = await admin
     .from('contacts')
     .select('*')
     .eq('workspace_id', channel.workspace_id)
-    .eq('facebook_id', data.from?.id)
+    .or(`instagram_scoped_id.eq.${commenterId},facebook_id.eq.${commenterId}`)
     .maybeSingle()
 
   if (!contact) {
@@ -191,9 +199,12 @@ async function processIGComment(ev: any) {
       .from('contacts')
       .insert({
         workspace_id: channel.workspace_id,
-        facebook_id: data.from?.id ?? null,
+        instagram_scoped_id: commenterId,
         instagram_username: data.from?.username ?? null,
         name: data.from?.name || data.from?.username || 'IG User',
+        meta: {
+          identity_source: 'instagram_comment',
+        },
       })
       .select()
       .single()
@@ -201,14 +212,23 @@ async function processIGComment(ev: any) {
   }
   if (!contact) return
 
-  // Comment threads grouped by post (external_id = post/media ID)
   let { data: conv } = await admin
     .from('conversations')
     .select('*')
     .eq('workspace_id', channel.workspace_id)
     .eq('platform', 'instagram')
-    .eq('external_id', data.post_id)
+    .eq('channel_id', channel.id)
+    .eq('external_id', threadKey)
     .maybeSingle()
+
+  const conversationMeta = {
+    ...(conv?.meta ?? {}),
+    thread_type: 'instagram_comment',
+    post_id: data.post_id ?? null,
+    commenter_id: commenterId,
+    commenter_username: data.from?.username ?? null,
+    media_id: data.media_id ?? data.post_id ?? null,
+  }
 
   if (!conv) {
     const { data: c } = await admin
@@ -218,12 +238,13 @@ async function processIGComment(ev: any) {
         contact_id: contact.id,
         channel_id: channel.id,
         platform: 'instagram',
-        external_id: data.post_id,
-        title: data.isMention ? 'Mention' : 'Post Comments',
+        external_id: threadKey,
+        title: data.isMention ? `@${data.from?.username || 'mention'}` : `Comments: @${data.from?.username || 'user'}`,
         status: 'open',
         last_message: data.text,
         last_message_at: data.timestamp,
         unread_count: 1,
+        meta: conversationMeta,
       })
       .select()
       .single()
@@ -232,16 +253,17 @@ async function processIGComment(ev: any) {
     await admin
       .from('conversations')
       .update({
+        contact_id: contact.id,
         last_message: data.text,
         last_message_at: data.timestamp,
         unread_count: (conv.unread_count || 0) + 1,
         updated_at: data.timestamp,
+        meta: conversationMeta,
       })
       .eq('id', conv.id)
   }
   if (!conv) return
 
-  // Dedup
   const { data: exists } = await admin
     .from('messages')
     .select('id')
@@ -260,9 +282,13 @@ async function processIGComment(ev: any) {
     is_note: false,
     meta: {
       comment_id: data.comment_id,
+      parent_comment_id: data.parent_comment_id ?? null,
       post_id: data.post_id,
+      media_id: data.media_id ?? data.post_id ?? null,
       from: data.from,
-      is_mention: data.isMention ?? false,
+      mentioned: data.isMention ?? false,
+      hidden: data.hidden ?? false,
+      raw: data,
     },
   })
 }

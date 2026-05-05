@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { parseFacebookWebhook, verifyFBSignature, FacebookClient } from '@/lib/platforms/facebook'
@@ -76,7 +77,7 @@ async function processFBMessage(ev: any) {
     .from('contacts')
     .select('*')
     .eq('workspace_id', channel.workspace_id)
-    .eq('facebook_id', data.sender_id)
+    .or(`facebook_scoped_id.eq.${data.sender_id},facebook_id.eq.${data.sender_id}`)
     .maybeSingle()
 
   if (!contact) {
@@ -93,7 +94,13 @@ async function processFBMessage(ev: any) {
     }
     const { data: c } = await admin
       .from('contacts')
-      .insert({ workspace_id: channel.workspace_id, facebook_id: data.sender_id, name, avatar_url: avatarUrl })
+      .insert({
+        workspace_id: channel.workspace_id,
+        facebook_scoped_id: data.sender_id,
+        facebook_id: data.sender_id,
+        name,
+        avatar_url: avatarUrl,
+      })
       .select()
       .single()
     contact = c
@@ -122,6 +129,7 @@ async function processFBMessage(ev: any) {
         last_message: data.text || '[attachment]',
         last_message_at: data.timestamp,
         unread_count: 1,
+        meta: { thread_type: 'dm' },
       })
       .select()
       .single()
@@ -134,6 +142,7 @@ async function processFBMessage(ev: any) {
         last_message_at: data.timestamp,
         unread_count: (conv.unread_count || 0) + 1,
         updated_at: data.timestamp,
+        meta: { ...(conv.meta ?? {}), thread_type: 'dm' },
       })
       .eq('id', conv.id)
   }
@@ -156,7 +165,7 @@ async function processFBMessage(ev: any) {
     body: data.text,
     status: 'delivered',
     is_note: false,
-    meta: { sender_id: data.sender_id, attachments: data.attachments },
+    meta: { sender_id: data.sender_id, attachments: data.attachments, raw: data },
   })
 }
 
@@ -176,7 +185,7 @@ async function processFBComment(ev: any) {
     .from('contacts')
     .select('*')
     .eq('workspace_id', channel.workspace_id)
-    .eq('facebook_id', data.from?.id)
+    .or(`facebook_scoped_id.eq.${data.from?.id},facebook_id.eq.${data.from?.id}`)
     .maybeSingle()
 
   if (!contact && data.from?.id) {
@@ -184,6 +193,7 @@ async function processFBComment(ev: any) {
       .from('contacts')
       .insert({
         workspace_id: channel.workspace_id,
+        facebook_scoped_id: data.from.id,
         facebook_id: data.from.id,
         name: data.from?.name || 'Facebook User',
       })
@@ -216,6 +226,7 @@ async function processFBComment(ev: any) {
         last_message: data.text,
         last_message_at: data.timestamp,
         unread_count: 1,
+        meta: { thread_type: 'comment', post_id: data.post_id },
       })
       .select()
       .single()
@@ -228,6 +239,7 @@ async function processFBComment(ev: any) {
         last_message_at: data.timestamp,
         unread_count: (conv.unread_count || 0) + 1,
         updated_at: data.timestamp,
+        meta: { ...(conv.meta ?? {}), thread_type: 'comment', post_id: data.post_id },
       })
       .eq('id', conv.id)
   }
@@ -250,6 +262,6 @@ async function processFBComment(ev: any) {
     body: data.text,
     status: 'delivered',
     is_note: false,
-    meta: { comment_id: data.comment_id, post_id: data.post_id, from: data.from },
+    meta: { comment_id: data.comment_id, post_id: data.post_id, from: data.from, raw: data },
   })
 }

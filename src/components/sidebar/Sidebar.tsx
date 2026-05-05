@@ -21,11 +21,11 @@ const NAV = [
   { id: 'broadcast', icon: 'fa-solid fa-satellite-dish',  label: 'Broadcast',        soon: true,        section: 'Automation' },
   { id: 'flows',     icon: 'fa-solid fa-diagram-project', label: 'WA Flows',         href: '/flows',    section: 'Automation' },
   { id: 'aibots',    icon: 'fa-solid fa-robot',           label: 'AI Bots',          soon: true,        section: 'Automation' },
-  { id: 'planner',   icon: 'fa-solid fa-calendar-days',   label: 'Content Planner',  soon: true,        section: 'Publishing' },
+  { id: 'planner',   icon: 'fa-solid fa-calendar-days',   label: 'Content Planner',  href: '/planner',  section: 'Publishing' },
   { id: 'templates', icon: 'fa-solid fa-file-code',       label: 'Templates',        href: '/templates',section: 'Publishing' },
-  { id: 'pages',     icon: 'fa-solid fa-layer-group',     label: 'Pages & Posts',    soon: true,        section: 'Publishing' },
+  { id: 'pages',     icon: 'fa-solid fa-layer-group',     label: 'Pages & Posts',    href: '/pages',    section: 'Publishing' },
   { id: 'ads',       icon: 'fa-solid fa-rectangle-ad',    label: 'Ad Manager',       soon: true,        section: 'Ads & Analytics' },
-  { id: 'analytics', icon: 'fa-solid fa-chart-column',    label: 'Analytics',        soon: true,        section: 'Ads & Analytics' },
+  { id: 'analytics', icon: 'fa-solid fa-chart-column',    label: 'Analytics',        href: '/analytics',section: 'Ads & Analytics' },
   { id: 'numbers',   icon: 'fa-solid fa-sim-card',        label: 'Buy Numbers',      soon: true,        section: 'Numbers & Calling' },
   { id: 'voip',      icon: 'fa-solid fa-headset',         label: 'VoIP / Dialer',    soon: true,        section: 'Numbers & Calling' },
   { id: 'ivr',       icon: 'fa-solid fa-sitemap',         label: 'IVR Builder',      soon: true,        section: 'Numbers & Calling' },
@@ -74,8 +74,8 @@ export default function Sidebar() {
                 >
                   <span className="nav-icon"><i className={item.icon} /></span>
                   <span className="nav-label">{item.label}</span>
-                  {'badge' in item && (item as any).badge > 0 && !isSoon && (
-                    <span className="nav-badge" id={`badge-${item.id}`}>{(item as any).badge}</span>
+                  {'badge' in item && typeof item.badge === 'number' && item.badge > 0 && !isSoon && (
+                    <span className="nav-badge" id={`badge-${item.id}`}>{item.badge}</span>
                   )}
                   {isSoon && <span className="cs-badge">Soon</span>}
                 </div>

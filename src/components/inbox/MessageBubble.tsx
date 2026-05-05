@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useRef, useState } from 'react'
+import React, { useState } from 'react'
 import { useInboxStore } from '@/stores/useInboxStore'
 import { formatMessageTime } from '@/lib/utils'
 import type { Message } from '@/types'
@@ -23,7 +23,7 @@ interface Props {
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function safeText(v: any) {
+function safeText(v: unknown) {
   return v == null ? '' : String(v)
 }
 
@@ -236,7 +236,7 @@ function CommentBubble({
   const from = msg.meta?.from
   const { busy, localHidden, deleted, doAction } = useCommentAction(msg.id)
 
-  const hidden = localHidden ?? msg.meta?.is_hidden ?? false
+  const hidden = localHidden ?? msg.meta?.hidden ?? msg.meta?.is_hidden ?? false
   const externalId = msg.external_id ?? msg.meta?.comment_id ?? msg.id
 
   if (deleted) {

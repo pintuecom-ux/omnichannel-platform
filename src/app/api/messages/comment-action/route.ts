@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * /api/messages/comment-action
  *
@@ -71,12 +72,12 @@ export async function POST(req: NextRequest) {
         case 'hide':
           await fb.hideComment(commentId, true)
           // Update local record
-          await admin.from('messages').update({ meta: { ...message.meta, is_hidden: true } }).eq('id', message_id)
+          await admin.from('messages').update({ meta: { ...message.meta, is_hidden: true, hidden: true } }).eq('id', message_id)
           break
 
         case 'unhide':
           await fb.hideComment(commentId, false)
-          await admin.from('messages').update({ meta: { ...message.meta, is_hidden: false } }).eq('id', message_id)
+          await admin.from('messages').update({ meta: { ...message.meta, is_hidden: false, hidden: false } }).eq('id', message_id)
           break
 
         case 'delete':
@@ -103,12 +104,12 @@ export async function POST(req: NextRequest) {
 
         case 'hide':
           await ig.hideComment(commentId, true)
-          await admin.from('messages').update({ meta: { ...message.meta, is_hidden: true } }).eq('id', message_id)
+          await admin.from('messages').update({ meta: { ...message.meta, is_hidden: true, hidden: true } }).eq('id', message_id)
           break
 
         case 'unhide':
           await ig.hideComment(commentId, false)
-          await admin.from('messages').update({ meta: { ...message.meta, is_hidden: false } }).eq('id', message_id)
+          await admin.from('messages').update({ meta: { ...message.meta, is_hidden: false, hidden: false } }).eq('id', message_id)
           break
 
         case 'delete':
@@ -148,18 +149,28 @@ async function handleToDM({
 }) {
   // The commenter's identity is in message.meta.from or the contact already linked
   const fromMeta = message.meta?.from
-  const facebookId = fromMeta?.id ?? conv.contact?.facebook_id
+  const instagramId = fromMeta?.id ?? conv.contact?.instagram_scoped_id ?? conv.contact?.facebook_id
+  const facebookId = fromMeta?.id ?? conv.contact?.facebook_scoped_id ?? conv.contact?.facebook_id
 
-  if (!facebookId) {
+  if (platform === 'instagram' && !instagramId) {
+    return NextResponse.json({ error: 'Cannot identify Instagram commenter to start DM' }, { status: 400 })
+  }
+  if (platform === 'facebook' && !facebookId) {
     return NextResponse.json({ error: 'Cannot identify commenter to start DM' }, { status: 400 })
   }
+
+  const recipientId = platform === 'instagram' ? instagramId : facebookId
 
   // Find or create the contact
   let { data: contact } = await admin
     .from('contacts')
     .select('*')
     .eq('workspace_id', conv.workspace_id)
-    .eq('facebook_id', facebookId)
+    .or(
+      platform === 'instagram'
+        ? `instagram_scoped_id.eq.${recipientId},facebook_id.eq.${recipientId}`
+        : `facebook_scoped_id.eq.${recipientId},facebook_id.eq.${recipientId}`
+    )
     .maybeSingle()
 
   if (!contact) {
@@ -167,9 +178,11 @@ async function handleToDM({
       .from('contacts')
       .insert({
         workspace_id: conv.workspace_id,
-        facebook_id: facebookId,
+        instagram_scoped_id: platform === 'instagram' ? recipientId : null,
+        facebook_scoped_id: platform === 'facebook' ? recipientId : null,
+        facebook_id: platform === 'facebook' ? recipientId : null,
         instagram_username: fromMeta?.username ?? null,
-        name: fromMeta?.name || fromMeta?.username || facebookId,
+        name: fromMeta?.name || fromMeta?.username || recipientId,
       })
       .select()
       .single()
@@ -201,6 +214,7 @@ async function handleToDM({
         last_message: null,
         last_message_at: new Date().toISOString(),
         unread_count: 0,
+        meta: { thread_type: 'dm' },
       })
       .select('*, contact:contacts(*), channel:channels(*)')
       .single()

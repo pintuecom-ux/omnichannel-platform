@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as serverClient } from '@/lib/supabase/server'
 import { createClient as adminClient } from '@supabase/supabase-js'
 import { WhatsAppClient } from '@/lib/platforms/whatsapp'
 import { FacebookClient } from '@/lib/platforms/facebook'
 import { InstagramClient } from '@/lib/platforms/instagram'
+import { getInstagramIdentity } from '@/lib/instagram/helpers'
 
 const admin = adminClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,6 +22,10 @@ function detectMediaType(mime: string): 'image' | 'video' | 'audio' | 'document'
   if (mime.startsWith('video/'))     return 'video'
   if (mime.startsWith('audio/'))     return 'audio'
   return 'document'
+}
+
+function getFacebookRecipient(contact: any) {
+  return contact?.facebook_scoped_id ?? contact?.facebook_id ?? null
 }
 
 /**
@@ -388,9 +394,13 @@ export async function POST(req: NextRequest) {
 
     else if (conv.platform === 'facebook') {
       const fb = new FacebookClient(conv.channel.access_token, conv.channel.external_id)
+      const recipientId = getFacebookRecipient(conv.contact)
 
       if (type === 'text') {
-        externalId   = (await fb.sendMessage(conv.contact.facebook_id, body))?.message_id
+        if (!recipientId) {
+          return NextResponse.json({ error: 'Contact has no Facebook recipient ID' }, { status: 400 })
+        }
+        externalId   = (await fb.sendMessage(recipientId, body))?.message_id
         contentType2 = 'text'
       } else if (type === 'comment_reply') {
         externalId   = (await fb.replyToComment(comment_id, body))?.id
@@ -406,9 +416,13 @@ export async function POST(req: NextRequest) {
 
     else if (conv.platform === 'instagram') {
       const ig = new InstagramClient(conv.channel.access_token, conv.channel.external_id)
+      const identity = getInstagramIdentity(conv.contact)
 
       if (type === 'text') {
-        externalId   = (await ig.sendDM(conv.contact.facebook_id, body))?.message_id
+        if (!identity?.instagram_scoped_id) {
+          return NextResponse.json({ error: 'Contact has no Instagram recipient ID' }, { status: 400 })
+        }
+        externalId   = (await ig.sendDM(identity.instagram_scoped_id, body))?.message_id
         contentType2 = 'text'
       } else if (type === 'comment_reply') {
         externalId   = (await ig.replyToComment(comment_id, body))?.id

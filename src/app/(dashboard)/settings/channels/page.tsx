@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import SettingsShell from '@/components/settings/SettingsShell'
+import InstagramChannelSettings from '@/components/settings/InstagramChannelSettings'
 import { createClient } from '@/lib/supabase/client'
 
 const CHANNEL_TABS = [
@@ -225,8 +226,7 @@ function WebChatTab() {
 
 // ── WhatsApp Tab ──────────────────────────────────────────────────────────────
 function WhatsAppTab() {
-  const [channels, setChannels] = useState<any[]>([])
-  const [saving, setSaving] = useState(false)
+  const [channels, setChannels] = useState<Array<{ id: string; external_id: string; name: string }>>([])
   const supabase = createClient()
 
   useEffect(() => {
@@ -438,9 +438,10 @@ export default function ChannelsPage() {
         <div style={{ flex: 1, overflowY: 'auto', padding: 28 }}>
           {tab === 'web-chat'   && <WebChatTab />}
           {tab === 'whatsapp'   && <WhatsAppTab />}
+          {tab === 'instagram'  && <InstagramChannelSettings />}
           {tab === 'sms'        && <SMSTab />}
           {tab === 'email'      && <EmailTab />}
-          {!['web-chat','whatsapp','sms','email'].includes(tab) && <GenericChannelTab tabInfo={activeTab} />}
+          {!['web-chat','whatsapp','instagram','sms','email'].includes(tab) && <GenericChannelTab tabInfo={activeTab} />}
         </div>
       </div>
     </SettingsShell>
