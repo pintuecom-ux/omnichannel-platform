@@ -263,12 +263,20 @@ export class InstagramClient {
   }
 
   static async subscribeAppToPage(pageId: string, pageAccessToken: string) {
-    // CRITICAL: subscribed_fields MUST be specified or Meta sends nothing.
-    // 'messages' = Instagram DMs routed via the Page
-    // 'messaging_postbacks' = button taps, quick replies
-    // 'comments' = Instagram comments on posts
-    // 'feed' = Page post comments and mentions
-    // 'mention' = @mentions of the IG account
+    // IMPORTANT: Only valid Page subscription fields are listed here.
+    // 'comments' is NOT valid for /{page-id}/subscribed_apps — Meta returns #100.
+    // Instagram comment events are delivered via the Instagram webhook object
+    // configured separately in the Meta App Dashboard (not via page subscription).
+    //
+    // Valid page fields used here:
+    //  messages           — DMs via Messenger Platform (page-linked Instagram DMs)
+    //  messaging_postbacks — button taps / quick replies
+    //  messaging_optins   — opt-in events
+    //  message_deliveries  — delivery receipts
+    //  message_reads      — read receipts
+    //  messaging_referrals — referral payloads
+    //  feed               — page post comments, likes (broad coverage)
+    //  mention            — @mentions of the page
     const res = await axios.post<{ success?: boolean }>(
       buildMetaGraphUrl(`${pageId}/subscribed_apps`),
       null,
@@ -281,7 +289,7 @@ export class InstagramClient {
             'messaging_optins',
             'message_deliveries',
             'message_reads',
-            'comments',
+            'messaging_referrals',
             'feed',
             'mention',
           ].join(','),
