@@ -8,11 +8,12 @@ interface InboxState {
   messages: Message[]
   isLoading: boolean
   platformFilter: 'all' | 'whatsapp' | 'instagram' | 'facebook'
+  // 'chats' = DMs (WA + IG DMs + FB DMs); 'comments' = IG comment threads
+  viewFilter: 'chats' | 'comments'
   tabFilter: 'all' | 'unread' | 'pinned' | 'groups'
   searchQuery: string
   isBulkMode: boolean
   selectedIds: Set<string>
-  // NEW: reply-to state
   replyToMessage: Message | null
 
   setConversations: (convs: Conversation[]) => void
@@ -23,13 +24,13 @@ interface InboxState {
   addMessage: (msg: Message) => void
   updateMessage: (id: string, updates: Partial<Message>) => void
   setPlatformFilter: (p: InboxState['platformFilter']) => void
+  setViewFilter: (v: InboxState['viewFilter']) => void
   setTabFilter: (t: InboxState['tabFilter']) => void
   setSearchQuery: (q: string) => void
   toggleBulkMode: () => void
   toggleSelectConv: (id: string) => void
   clearSelection: () => void
   setLoading: (v: boolean) => void
-  // NEW: reply actions
   setReplyTo: (msg: Message | null) => void
 }
 
@@ -39,6 +40,7 @@ export const useInboxStore = create<InboxState>((set) => ({
   messages: [],
   isLoading: false,
   platformFilter: 'all',
+  viewFilter: 'chats',
   tabFilter: 'all',
   searchQuery: '',
   isBulkMode: false,
@@ -71,6 +73,7 @@ export const useInboxStore = create<InboxState>((set) => ({
   })),
 
   setPlatformFilter: (platformFilter) => set({ platformFilter }),
+  setViewFilter: (viewFilter) => set({ viewFilter, activeConversationId: null }),
   setTabFilter: (tabFilter) => set({ tabFilter }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
 
@@ -87,8 +90,6 @@ export const useInboxStore = create<InboxState>((set) => ({
 
   clearSelection: () => set({ selectedIds: new Set() }),
   setLoading: (isLoading) => set({ isLoading }),
-
-  // NEW: set or clear the message being replied to
   setReplyTo: (replyToMessage) => set({ replyToMessage }),
 }))
 
@@ -97,38 +98,52 @@ export const useInboxStore = create<InboxState>((set) => ({
 // selector function. Derived arrays are computed in useMemo in the component.
 
 export function useFilteredConversations() {
-  // Read each slice as a primitive/stable reference
   const conversations = useInboxStore(state => state.conversations)
   const platformFilter = useInboxStore(state => state.platformFilter)
+  const viewFilter = useInboxStore(state => state.viewFilter)
   const tabFilter = useInboxStore(state => state.tabFilter)
   const searchQuery = useInboxStore(state => state.searchQuery)
 
   return useMemo(() => {
     let list = conversations
 
+    // ── Chats vs Comments panel tabs ─────────────────────────────────────────
+    // Comments tab: only IG comment threads (meta.thread_type === 'instagram_comment')
+    // Chats tab:    everything else — WA, IG DMs, FB DMs
+    if (viewFilter === 'comments') {
+      list = list.filter(c => (c.meta?.thread_type ?? 'dm') === 'instagram_comment')
+    } else {
+      // 'chats' — exclude comment threads
+      list = list.filter(c => (c.meta?.thread_type ?? 'dm') !== 'instagram_comment')
+    }
+
+    // ── Platform filter ───────────────────────────────────────────────────────
     if (platformFilter !== 'all') {
       list = list.filter(c => c.platform === platformFilter)
     }
 
+    // ── Sub-tabs: unread / pinned ─────────────────────────────────────────────
     if (tabFilter === 'unread') {
       list = list.filter(c => c.unread_count > 0)
     } else if (tabFilter === 'pinned') {
       list = list.filter(c => c.is_pinned)
     }
 
+    // ── Search ────────────────────────────────────────────────────────────────
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       list = list.filter(c =>
         c.contact?.name?.toLowerCase().includes(q) ||
         c.last_message?.toLowerCase().includes(q) ||
-        c.contact?.phone?.includes(q)
+        c.contact?.phone?.includes(q) ||
+        c.title?.toLowerCase().includes(q)
       )
     }
 
     return [...list].sort(
       (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
     )
-  }, [conversations, platformFilter, tabFilter, searchQuery])
+  }, [conversations, platformFilter, viewFilter, tabFilter, searchQuery])
 }
 
 export function useActiveConversation() {

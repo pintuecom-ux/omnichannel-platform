@@ -9,6 +9,7 @@ interface Props {
 export default function ConversationPanel({ onRefresh }: Props) {
   const {
     platformFilter, setPlatformFilter,
+    viewFilter, setViewFilter,
     tabFilter, setTabFilter,
     searchQuery, setSearchQuery,
     isBulkMode, toggleBulkMode,
@@ -28,9 +29,20 @@ export default function ConversationPanel({ onRefresh }: Props) {
       {/* Header */}
       <div className="panel-header">
         <div className="panel-title-tabs">
-          <button className="ptab active">Chats</button>
+          <button
+            className={`ptab ${viewFilter === 'chats' ? 'active' : ''}`}
+            onClick={() => setViewFilter('chats')}
+          >
+            Chats
+          </button>
           <div className="ptab-sep" />
-          <button className="ptab">Comments</button>
+          <button
+            className={`ptab ${viewFilter === 'comments' ? 'active' : ''}`}
+            onClick={() => setViewFilter('comments')}
+          >
+            <i className="fa-regular fa-comment" style={{ fontSize: 11, marginRight: 4 }} />
+            Comments
+          </button>
         </div>
         <div className="header-actions">
           <button
@@ -82,21 +94,32 @@ export default function ConversationPanel({ onRefresh }: Props) {
         </div>
       </div>
 
-      {/* Platform filters */}
-      <div className="platform-filter-row">
-        {(['all', 'whatsapp', 'instagram', 'facebook'] as const).map(p => (
-          <button
-            key={p}
-            className={`pf-btn ${platformFilter === p ? 'active' : ''}`}
-            onClick={() => setPlatformFilter(p)}
-          >
-            {p === 'all' && 'All'}
-            {p === 'whatsapp' && <><i className="fa-brands fa-whatsapp" style={{ color: '#25d366' }} /> WA</>}
-            {p === 'instagram' && <><i className="fa-brands fa-instagram" style={{ color: '#e1306c' }} /> IG</>}
-            {p === 'facebook' && <><i className="fa-brands fa-facebook" style={{ color: '#1877f2' }} /> FB</>}
-          </button>
-        ))}
-      </div>
+      {/* Platform filters — hidden on Comments view (comments are always IG) */}
+      {viewFilter === 'chats' && (
+        <div className="platform-filter-row">
+          {(['all', 'whatsapp', 'instagram', 'facebook'] as const).map(p => (
+            <button
+              key={p}
+              className={`pf-btn ${platformFilter === p ? 'active' : ''}`}
+              onClick={() => setPlatformFilter(p)}
+            >
+              {p === 'all' && 'All'}
+              {p === 'whatsapp' && <><i className="fa-brands fa-whatsapp" style={{ color: '#25d366' }} /> WA</>}
+              {p === 'instagram' && <><i className="fa-brands fa-instagram" style={{ color: '#e1306c' }} /> IG</>}
+              {p === 'facebook' && <><i className="fa-brands fa-facebook" style={{ color: '#1877f2' }} /> FB</>}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Comments-view label */}
+      {viewFilter === 'comments' && (
+        <div className="platform-filter-row">
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 4px' }}>
+            <i className="fa-brands fa-instagram" style={{ color: '#e1306c', marginRight: 4 }} />
+            Instagram Comments
+          </span>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="conv-tabs">

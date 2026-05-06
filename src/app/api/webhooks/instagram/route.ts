@@ -24,7 +24,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = JSON.parse(rawBody)
-    if (body.object !== 'instagram') {
+
+    // Accept both 'instagram' (Business Login for Instagram — instagram_business_* scopes)
+    // and 'page' (Page subscription — DMs routed via Messenger Platform, page comments)
+    if (body.object !== 'instagram' && body.object !== 'page') {
       return NextResponse.json({ status: 'ignored' })
     }
 
@@ -45,21 +48,26 @@ async function handleIGEvents(body: any) {
 }
 
 async function processIGDM(ev: any) {
-  const { igAccountId, data } = ev
+  const { igAccountId, data, isPageObject } = ev
 
-  const { data: channel } = await admin
+  // If the event came from object:'page', igAccountId is the PAGE ID.
+  // Look up the channel either by external_id (IG account ID) or meta->page_id.
+  let channelQuery = admin
     .from('channels')
     .select('*')
     .eq('platform', 'instagram')
-    .eq('external_id', igAccountId)
-    .maybeSingle()
+
+  const { data: channel } = isPageObject
+    ? await channelQuery.contains('meta', { page_id: igAccountId }).maybeSingle()
+    : await channelQuery.eq('external_id', igAccountId).maybeSingle()
 
   if (!channel) {
-    console.warn(`[IG webhook] No channel found for igAccountId=${igAccountId}`)
+    console.warn(`[IG webhook] No channel found for ${isPageObject ? 'page_id' : 'ig_account_id'}=${igAccountId}`)
     return
   }
 
-  if (data.sender_id === igAccountId) return
+  // Ignore echo messages (messages sent by the business itself)
+  if (data.sender_id === igAccountId || data.sender_id === channel.external_id) return
 
   let { data: contact } = await admin
     .from('contacts')
@@ -173,14 +181,17 @@ async function processIGDM(ev: any) {
 }
 
 async function processIGComment(ev: any) {
-  const { igAccountId, data } = ev
+  const { igAccountId, data, isPageObject } = ev
 
-  const { data: channel } = await admin
+  let channelQuery = admin
     .from('channels')
     .select('*')
     .eq('platform', 'instagram')
-    .eq('external_id', igAccountId)
-    .maybeSingle()
+
+  const { data: channel } = isPageObject
+    ? await channelQuery.contains('meta', { page_id: igAccountId }).maybeSingle()
+    : await channelQuery.eq('external_id', igAccountId).maybeSingle()
+
   if (!channel) return
 
   const commenterId = data.from?.id ?? null

@@ -263,12 +263,28 @@ export class InstagramClient {
   }
 
   static async subscribeAppToPage(pageId: string, pageAccessToken: string) {
+    // CRITICAL: subscribed_fields MUST be specified or Meta sends nothing.
+    // 'messages' = Instagram DMs routed via the Page
+    // 'messaging_postbacks' = button taps, quick replies
+    // 'comments' = Instagram comments on posts
+    // 'feed' = Page post comments and mentions
+    // 'mention' = @mentions of the IG account
     const res = await axios.post<{ success?: boolean }>(
       buildMetaGraphUrl(`${pageId}/subscribed_apps`),
       null,
       {
         params: {
           access_token: pageAccessToken,
+          subscribed_fields: [
+            'messages',
+            'messaging_postbacks',
+            'messaging_optins',
+            'message_deliveries',
+            'message_reads',
+            'comments',
+            'feed',
+            'mention',
+          ].join(','),
         },
       }
     )
@@ -298,11 +314,16 @@ export function verifyIGSignature(rawBody: string, signature: string, appSecret:
 export interface ParsedIGEvent {
   type: 'dm' | 'comment'
   igAccountId: string
+  /** True when the webhook object was 'page' (Messenger Platform / page subscription).
+   *  In this case igAccountId is the Facebook Page ID, not the IG account ID.
+   *  Channel lookup must use meta->page_id instead of external_id. */
+  isPageObject: boolean
   data: any
 }
 
 export function parseInstagramWebhook(body: any): ParsedIGEvent[] {
   const events: ParsedIGEvent[] = []
+  const isPageObject = body.object === 'page'
 
   for (const entry of body.entry ?? []) {
     const igAccountId: string = entry.id ?? ''
@@ -314,6 +335,7 @@ export function parseInstagramWebhook(body: any): ParsedIGEvent[] {
       events.push({
         type: 'dm',
         igAccountId,
+        isPageObject,
         data: {
           sender_id: messaging.sender.id,
           recipient_id: messaging.recipient.id,
@@ -331,6 +353,7 @@ export function parseInstagramWebhook(body: any): ParsedIGEvent[] {
         events.push({
           type: 'comment',
           igAccountId,
+          isPageObject,
           data: {
             comment_id: v.id,
             parent_comment_id: v.parent_id ?? null,
@@ -349,6 +372,7 @@ export function parseInstagramWebhook(body: any): ParsedIGEvent[] {
         events.push({
           type: 'comment',
           igAccountId,
+          isPageObject,
           data: {
             comment_id: v.comment_id ?? v.id,
             parent_comment_id: v.parent_id ?? null,
