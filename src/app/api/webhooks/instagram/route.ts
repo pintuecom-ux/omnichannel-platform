@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
     const signature = req.headers.get('x-hub-signature-256') ?? ''
 
     if (process.env.META_APP_SECRET && !verifyIGSignature(rawBody, signature, process.env.META_APP_SECRET)) {
+      console.error('[IG webhook] ❌ Invalid signature')
       return new NextResponse('Invalid signature', { status: 403 })
     }
 
@@ -28,68 +29,106 @@ export async function POST(req: NextRequest) {
     // Accept both 'instagram' (Business Login for Instagram — instagram_business_* scopes)
     // and 'page' (Page subscription — DMs routed via Messenger Platform, page comments)
     if (body.object !== 'instagram' && body.object !== 'page') {
+      console.log(`[IG webhook] Ignoring object: ${body.object}`)
       return NextResponse.json({ status: 'ignored' })
     }
 
-    handleIGEvents(body).catch(err => console.error('[IG webhook] error:', err))
+    console.log(`[IG webhook] ✅ Received object: ${body.object}, entries: ${body.entry?.length ?? 0}`)
+
+    // CRITICAL: Must AWAIT — on Vercel serverless, fire-and-forget means the
+    // function context is killed after the response is sent, so DB writes
+    // never complete. The WhatsApp webhook correctly uses `await`.
+    await handleIGEvents(body)
+
     return NextResponse.json({ status: 'ok' })
-  } catch (err) {
-    console.error('[IG webhook] parse error:', err)
+  } catch (err: any) {
+    console.error('[IG webhook] ❌ Fatal error:', err?.message ?? err)
     return NextResponse.json({ status: 'error' }, { status: 500 })
   }
 }
 
 async function handleIGEvents(body: any) {
   const events = parseInstagramWebhook(body)
+  console.log(`[IG webhook] Parsed ${events.length} events: ${events.map(e => e.type).join(', ')}`)
+
   for (const ev of events) {
-    if (ev.type === 'dm') await processIGDM(ev)
-    else if (ev.type === 'comment') await processIGComment(ev)
+    try {
+      if (ev.type === 'dm') {
+        await processIGDM(ev)
+      } else if (ev.type === 'comment') {
+        await processIGComment(ev)
+      }
+    } catch (err: any) {
+      console.error(`[IG webhook] ❌ Error processing ${ev.type}:`, err?.message ?? err)
+    }
   }
 }
 
 async function processIGDM(ev: any) {
   const { igAccountId, data, isPageObject } = ev
+  console.log(`[IG DM] Processing: sender=${data.sender_id}, igAccountId=${igAccountId}, isPageObject=${isPageObject}`)
 
-  // If the event came from object:'page', igAccountId is the PAGE ID.
-  // Look up the channel either by external_id (IG account ID) or meta->page_id.
-  let channelQuery = admin
-    .from('channels')
-    .select('*')
-    .eq('platform', 'instagram')
-
-  const { data: channel } = isPageObject
-    ? await channelQuery.contains('meta', { page_id: igAccountId }).maybeSingle()
-    : await channelQuery.eq('external_id', igAccountId).maybeSingle()
+  // Look up the channel either by external_id (IG account ID) or meta->page_id
+  let channel: any = null
+  if (isPageObject) {
+    const { data: ch, error } = await admin
+      .from('channels')
+      .select('*')
+      .eq('platform', 'instagram')
+      .contains('meta', { page_id: igAccountId })
+      .maybeSingle()
+    if (error) console.error('[IG DM] Channel lookup (page_id) error:', error.message)
+    channel = ch
+  } else {
+    const { data: ch, error } = await admin
+      .from('channels')
+      .select('*')
+      .eq('platform', 'instagram')
+      .eq('external_id', igAccountId)
+      .maybeSingle()
+    if (error) console.error('[IG DM] Channel lookup (external_id) error:', error.message)
+    channel = ch
+  }
 
   if (!channel) {
-    console.warn(`[IG webhook] No channel found for ${isPageObject ? 'page_id' : 'ig_account_id'}=${igAccountId}`)
+    console.warn(`[IG DM] ❌ No channel found for ${isPageObject ? 'page_id' : 'ig_account_id'}=${igAccountId}`)
+    return
+  }
+  console.log(`[IG DM] ✅ Found channel: ${channel.id} (external_id: ${channel.external_id})`)
+
+  // Ignore echo messages (messages sent by the business itself)
+  if (data.sender_id === igAccountId || data.sender_id === channel.external_id) {
+    console.log('[IG DM] Skipping echo message (sent by business)')
     return
   }
 
-  // Ignore echo messages (messages sent by the business itself)
-  if (data.sender_id === igAccountId || data.sender_id === channel.external_id) return
-
-  let { data: contact } = await admin
+  let { data: contact, error: contactErr } = await admin
     .from('contacts')
     .select('*')
     .eq('workspace_id', channel.workspace_id)
     .or(`instagram_scoped_id.eq.${data.sender_id},facebook_id.eq.${data.sender_id}`)
     .maybeSingle()
 
+  if (contactErr) console.error('[IG DM] Contact lookup error:', contactErr.message)
+
   if (!contact) {
     let name = data.sender_id
     let avatarUrl: string | null = null
     let username: string | null = null
     if (channel.access_token) {
-      const ig = new InstagramClient(channel.access_token, igAccountId)
-      const profile = await ig.getUserProfile(data.sender_id)
-      if (profile) {
-        name = profile.name || profile.username || name
-        avatarUrl = profile.profile_pic ?? null
-        username = profile.username ?? null
+      try {
+        const ig = new InstagramClient(channel.access_token, channel.external_id)
+        const profile = await ig.getUserProfile(data.sender_id)
+        if (profile) {
+          name = profile.name || profile.username || name
+          avatarUrl = profile.profile_pic ?? null
+          username = profile.username ?? null
+        }
+      } catch (err: any) {
+        console.warn('[IG DM] Profile fetch failed (non-critical):', err?.message)
       }
     }
-    const { data: c } = await admin
+    const { data: c, error: insertErr } = await admin
       .from('contacts')
       .insert({
         workspace_id: channel.workspace_id,
@@ -97,15 +136,15 @@ async function processIGDM(ev: any) {
         instagram_username: username,
         name,
         avatar_url: avatarUrl,
-        meta: {
-          identity_source: 'instagram_dm',
-        },
+        meta: { identity_source: 'instagram_dm' },
       })
       .select()
       .single()
+    if (insertErr) console.error('[IG DM] ❌ Contact insert error:', insertErr.message)
     contact = c
   }
-  if (!contact) return
+  if (!contact) { console.error('[IG DM] ❌ No contact — aborting'); return }
+  console.log(`[IG DM] Contact: ${contact.id} (${contact.name})`)
 
   let { data: conv } = await admin
     .from('conversations')
@@ -116,13 +155,10 @@ async function processIGDM(ev: any) {
     .in('status', ['open', 'pending'])
     .maybeSingle()
 
-  const conversationMeta = {
-    ...(conv?.meta ?? {}),
-    thread_type: 'dm',
-  }
+  const conversationMeta = { ...(conv?.meta ?? {}), thread_type: 'dm' }
 
   if (!conv) {
-    const { data: c } = await admin
+    const { data: c, error: convErr } = await admin
       .from('conversations')
       .insert({
         workspace_id: channel.workspace_id,
@@ -137,6 +173,7 @@ async function processIGDM(ev: any) {
       })
       .select()
       .single()
+    if (convErr) console.error('[IG DM] ❌ Conversation insert error:', convErr.message)
     conv = c
   } else {
     await admin
@@ -150,16 +187,16 @@ async function processIGDM(ev: any) {
       })
       .eq('id', conv.id)
   }
-  if (!conv) return
+  if (!conv) { console.error('[IG DM] ❌ No conversation — aborting'); return }
 
   const { data: exists } = await admin
     .from('messages')
     .select('id')
     .eq('external_id', data.external_id)
     .maybeSingle()
-  if (exists) return
+  if (exists) { console.log(`[IG DM] Duplicate message ${data.external_id} — skipping`); return }
 
-  await admin.from('messages').insert({
+  const { error: msgErr } = await admin.from('messages').insert({
     conversation_id: conv.id,
     workspace_id: channel.workspace_id,
     external_id: data.external_id,
@@ -178,50 +215,76 @@ async function processIGDM(ev: any) {
       raw: data,
     },
   })
+  if (msgErr) console.error('[IG DM] ❌ Message insert error:', msgErr.message)
+  else console.log(`[IG DM] ✅ DM saved → conv ${conv.id}`)
 }
 
 async function processIGComment(ev: any) {
   const { igAccountId, data, isPageObject } = ev
+  console.log(`[IG Comment] Processing: igAccountId=${igAccountId}, isPageObject=${isPageObject}, comment_id=${data.comment_id}`)
+  console.log(`[IG Comment] Data: from=${JSON.stringify(data.from)}, post_id=${data.post_id}, text=${data.text?.substring(0, 80)}`)
 
-  let channelQuery = admin
-    .from('channels')
-    .select('*')
-    .eq('platform', 'instagram')
+  // Look up channel
+  let channel: any = null
+  if (isPageObject) {
+    const { data: ch, error } = await admin
+      .from('channels')
+      .select('*')
+      .eq('platform', 'instagram')
+      .contains('meta', { page_id: igAccountId })
+      .maybeSingle()
+    if (error) console.error('[IG Comment] Channel lookup (page_id) error:', error.message)
+    channel = ch
+  } else {
+    const { data: ch, error } = await admin
+      .from('channels')
+      .select('*')
+      .eq('platform', 'instagram')
+      .eq('external_id', igAccountId)
+      .maybeSingle()
+    if (error) console.error('[IG Comment] Channel lookup (external_id) error:', error.message)
+    channel = ch
+  }
 
-  const { data: channel } = isPageObject
-    ? await channelQuery.contains('meta', { page_id: igAccountId }).maybeSingle()
-    : await channelQuery.eq('external_id', igAccountId).maybeSingle()
-
-  if (!channel) return
+  if (!channel) {
+    console.warn(`[IG Comment] ❌ No channel for ${isPageObject ? 'page_id' : 'ig_account_id'}=${igAccountId}`)
+    return
+  }
+  console.log(`[IG Comment] ✅ Found channel: ${channel.id}`)
 
   const commenterId = data.from?.id ?? null
   const threadKey = getInstagramCommentThreadKey(data.post_id, commenterId)
-  if (!commenterId || !threadKey) return
+  if (!commenterId || !threadKey) {
+    console.warn(`[IG Comment] ❌ Missing commenterId (${commenterId}) or threadKey (${threadKey}) — aborting`)
+    return
+  }
 
-  let { data: contact } = await admin
+  let { data: contact, error: contactErr } = await admin
     .from('contacts')
     .select('*')
     .eq('workspace_id', channel.workspace_id)
     .or(`instagram_scoped_id.eq.${commenterId},facebook_id.eq.${commenterId}`)
     .maybeSingle()
 
+  if (contactErr) console.error('[IG Comment] Contact lookup error:', contactErr.message)
+
   if (!contact) {
-    const { data: c } = await admin
+    const { data: c, error: insertErr } = await admin
       .from('contacts')
       .insert({
         workspace_id: channel.workspace_id,
         instagram_scoped_id: commenterId,
         instagram_username: data.from?.username ?? null,
         name: data.from?.name || data.from?.username || 'IG User',
-        meta: {
-          identity_source: 'instagram_comment',
-        },
+        meta: { identity_source: 'instagram_comment' },
       })
       .select()
       .single()
+    if (insertErr) console.error('[IG Comment] ❌ Contact insert error:', insertErr.message)
     contact = c
   }
-  if (!contact) return
+  if (!contact) { console.error('[IG Comment] ❌ No contact — aborting'); return }
+  console.log(`[IG Comment] Contact: ${contact.id} (${contact.name})`)
 
   let { data: conv } = await admin
     .from('conversations')
@@ -242,7 +305,7 @@ async function processIGComment(ev: any) {
   }
 
   if (!conv) {
-    const { data: c } = await admin
+    const { data: c, error: convErr } = await admin
       .from('conversations')
       .insert({
         workspace_id: channel.workspace_id,
@@ -259,6 +322,8 @@ async function processIGComment(ev: any) {
       })
       .select()
       .single()
+    if (convErr) console.error('[IG Comment] ❌ Conversation insert error:', convErr.message)
+    else console.log(`[IG Comment] ✅ Created new conversation: ${c?.id}`)
     conv = c
   } else {
     await admin
@@ -272,17 +337,18 @@ async function processIGComment(ev: any) {
         meta: conversationMeta,
       })
       .eq('id', conv.id)
+    console.log(`[IG Comment] ✅ Updated existing conversation: ${conv.id}`)
   }
-  if (!conv) return
+  if (!conv) { console.error('[IG Comment] ❌ No conversation — aborting'); return }
 
   const { data: exists } = await admin
     .from('messages')
     .select('id')
     .eq('external_id', data.comment_id)
     .maybeSingle()
-  if (exists) return
+  if (exists) { console.log(`[IG Comment] Duplicate ${data.comment_id} — skipping`); return }
 
-  await admin.from('messages').insert({
+  const { error: msgErr } = await admin.from('messages').insert({
     conversation_id: conv.id,
     workspace_id: channel.workspace_id,
     external_id: data.comment_id,
@@ -302,4 +368,9 @@ async function processIGComment(ev: any) {
       raw: data,
     },
   })
+  if (msgErr) console.error('[IG Comment] ❌ Message insert error:', msgErr.message)
+  else console.log(`[IG Comment] ✅ Comment saved → conv ${conv.id}`)
 }
+
+
+

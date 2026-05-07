@@ -78,9 +78,9 @@ html, body {
 ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.2); border-radius: 4px; }
 
 /* APP LAYOUT */
-#app { display: flex; height: 100vh; width: 100vw; overflow: hidden; position: relative; }
-#content { flex: 1; display: flex; margin-left: 56px; overflow: hidden; }
-.page-inbox { display: flex; flex: 1; flex-direction: row; overflow: hidden; }
+#app { display: flex; height: 100vh; width: 100vw; overflow-x: hidden; position: relative; }
+#content { flex: 1; display: flex; margin-left: 56px; overflow-y: auto; overflow-x: hidden; }
+.page-inbox { display: flex; flex: 1; flex-direction: row; height: 100%; overflow: hidden; }
 
 /* SIDEBAR */
 #sidebar {
