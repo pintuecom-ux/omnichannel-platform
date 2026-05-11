@@ -228,22 +228,51 @@ function CommentBubble({
   msg,
   time,
   onSetReply,
+  allMessages = [],
 }: {
   msg: Message
   time: string
   onSetReply?: (id: string, body: string) => void
+  allMessages?: Message[]
 }) {
   const from = msg.meta?.from
   const { busy, localHidden, deleted, doAction } = useCommentAction(msg.id)
 
   const hidden = localHidden ?? msg.meta?.hidden ?? msg.meta?.is_hidden ?? false
   const externalId = msg.external_id ?? msg.meta?.comment_id ?? msg.id
+  const isOut = msg.direction === 'outbound'
+  const replyContextId =
+    msg.meta?.context?.message_id ??
+    msg.meta?.reply_to_external_id ??
+    msg.meta?.parent_comment_id ??
+    null
 
   if (deleted) {
     return (
       <div className="comment-item" style={{ opacity: 0.5, fontStyle: 'italic' }}>
         Comment deleted
       </div>
+    )
+  }
+
+  if (isOut) {
+    return (
+      <WaBubble
+        isOut
+        isFirst
+        isLast
+        time={time}
+        status={msg.status}
+        contextMsgId={replyContextId}
+        allMessages={allMessages}
+      >
+        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.48)', marginBottom: 4 }}>
+          Public reply
+        </div>
+        <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {safeText(msg.body)}
+        </span>
+      </WaBubble>
     )
   }
 
@@ -256,33 +285,39 @@ function CommentBubble({
         <span style={{ marginLeft: 'auto', fontSize: 11 }}>{time}</span>
       </div>
 
+      {replyContextId && allMessages.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <QuotedPreview contextMsgId={replyContextId} allMessages={allMessages} />
+        </div>
+      )}
+
       <div className="comment-text">{msg.body}</div>
 
-      {msg.direction !== 'outbound' && (
-        <div className="comment-actions">
-          <button onClick={() => onSetReply?.(externalId, safeText(msg.body))}>
+      <div className="comment-actions">
+          <button className="comment-action reply" onClick={() => onSetReply?.(externalId, safeText(msg.body))}>
             Reply
           </button>
-          <button disabled={!!busy} onClick={() => doAction('like')}>
+          <button className="comment-action" disabled={!!busy} onClick={() => doAction('like')}>
             Like
           </button>
           <button
+            className="comment-action"
             disabled={!!busy}
             onClick={() => doAction(hidden ? 'unhide' : 'hide')}
           >
             {hidden ? 'Unhide' : 'Hide'}
           </button>
           <button
+            className="comment-action"
             disabled={!!busy}
             onClick={() => { if (confirm('Delete comment?')) doAction('delete') }}
           >
             Delete
           </button>
-          <button disabled={!!busy} onClick={() => doAction('to_dm')}>
+          <button className="comment-action convert" disabled={!!busy} onClick={() => doAction('to_dm')}>
             → DM
           </button>
         </div>
-      )}
     </div>
   )
 }
@@ -342,7 +377,7 @@ export default function MessageBubble({
 
   /* ── Comments ── */
   if (msg.content_type === 'comment') {
-    return <CommentBubble msg={msg} time={time} onSetReply={onSetReply} />
+    return <CommentBubble msg={msg} time={time} onSetReply={onSetReply} allMessages={msgList} />
   }
 
   /* ── Reaction sent (small status row, not a full bubble) ── */

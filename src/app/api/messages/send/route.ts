@@ -462,6 +462,18 @@ export async function POST(req: NextRequest) {
       meta.reaction_emoji      = reaction_emoji
     }
 
+    if (type === 'comment_reply') {
+      meta.comment_id = externalId
+      meta.parent_comment_id = comment_id
+      meta.reply_to_external_id = comment_id
+      meta.context = { message_id: comment_id }
+      meta.from = {
+        id: user.id,
+        username: 'you',
+        name: 'You',
+      }
+    }
+
     const { data: msg, error: msgErr } = await admin
       .from('messages')
       .insert({

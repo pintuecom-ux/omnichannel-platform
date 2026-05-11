@@ -40,7 +40,6 @@ export default function ConversationPanel({ onRefresh }: Props) {
             className={`ptab ${viewFilter === 'comments' ? 'active' : ''}`}
             onClick={() => setViewFilter('comments')}
           >
-            <i className="fa-regular fa-comment" style={{ fontSize: 11, marginRight: 4 }} />
             Comments
           </button>
         </div>

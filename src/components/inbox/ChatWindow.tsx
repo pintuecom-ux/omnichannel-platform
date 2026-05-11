@@ -11,6 +11,15 @@ import CallModal from '@/components/inbox/CallModal'
 const STATUS_CYCLE = ['open', 'pending', 'closed'] as const
 const STATUS_LABEL = { open: 'Open', pending: 'Pending', closed: 'Closed' }
 
+interface PostPreview {
+  id: string
+  caption: string | null
+  media_url: string | null
+  thumbnail_url: string | null
+  permalink: string | null
+  media_type?: string | null
+}
+
 export default function ChatWindow() {
   const supabase = createClient()
   const {
@@ -24,21 +33,70 @@ export default function ChatWindow() {
   const conversation = useActiveConversation()
   const platform = conversation?.platform ?? 'whatsapp'
   const isWA     = platform === 'whatsapp'
+  const isCommentThread = (conversation?.meta?.thread_type ?? 'dm') === 'instagram_comment'
+  const defaultTab: 'messages' | 'notes' | 'comments' = isCommentThread ? 'comments' : 'messages'
 
-  const [activeTab,   setActiveTab]   = useState<'messages' | 'notes' | 'comments'>('messages')
   const [status,      setStatus]      = useState<'open' | 'pending' | 'closed'>('open')
-  // Track which comment the agent is replying to in the Comments tab
-  const [replyingTo, setReplyingTo]  = useState<{ id: string; body: string } | null>(null)
+  const [commentUi, setCommentUi] = useState<{
+    conversationId: string | null
+    activeTab: 'messages' | 'notes' | 'comments'
+    replyingTo: { id: string; body: string } | null
+  }>({
+    conversationId: null,
+    activeTab: 'messages',
+    replyingTo: null,
+  })
+  const [postPreview, setPostPreview] = useState<PostPreview | null>(null)
 
   // ── WhatsApp Call modal state ──────────────────────────────────────────────
   const [showCallModal, setShowCallModal] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  const isCurrentConversationUi = commentUi.conversationId === activeConversationId
+  const activeTab = isCurrentConversationUi ? commentUi.activeTab : defaultTab
+  const replyingTo = isCurrentConversationUi ? commentUi.replyingTo : null
+
   useEffect(() => {
-    setActiveTab('messages')
-    setReplyingTo(null)
-  }, [activeConversationId])
+    let cancelled = false
+
+    async function loadPostPreview() {
+      if (!conversation || !isCommentThread) {
+        setPostPreview(null)
+        return
+      }
+
+      const mediaId = conversation.meta?.media_id ?? conversation.meta?.post_id
+      if (!mediaId) {
+        setPostPreview(null)
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('instagram_media_items')
+        .select('instagram_media_id, caption, media_url, thumbnail_url, permalink, media_type')
+        .eq('instagram_media_id', mediaId)
+        .maybeSingle()
+
+      if (cancelled) return
+      if (error || !data) {
+        setPostPreview(null)
+        return
+      }
+
+      setPostPreview({
+        id: data.instagram_media_id,
+        caption: data.caption ?? null,
+        media_url: data.media_url ?? null,
+        thumbnail_url: data.thumbnail_url ?? null,
+        permalink: data.permalink ?? null,
+        media_type: data.media_type ?? null,
+      })
+    }
+
+    loadPostPreview()
+    return () => { cancelled = true }
+  }, [conversation, isCommentThread, supabase])
 
   const loadMessages = useCallback(async () => {
     if (!activeConversationId) return
@@ -71,7 +129,7 @@ export default function ChatWindow() {
         })
       }
     }
-  }, [activeConversationId, isWA])
+  }, [activeConversationId, isWA, setMessages, supabase, updateConversation])
 
   useEffect(() => {
     loadMessages()
@@ -104,7 +162,7 @@ export default function ChatWindow() {
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [activeConversationId])
+  }, [activeConversationId, addMessage, supabase, updateMessage])
 
   // Cycle conversation status
   async function cycleStatus() {
@@ -131,6 +189,7 @@ export default function ChatWindow() {
   const platformCls    = { whatsapp: 'pp-wa', instagram: 'pp-ig', facebook: 'pp-fb' }[platform]
   const platformLabel  = { whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook' }[platform]
   const badgeCls       = { whatsapp: 'pb-wa', instagram: 'pb-ig', facebook: 'pb-fb' }[platform]
+  const commentPostId  = conversation.meta?.media_id ?? conversation.meta?.post_id ?? null
 
   // Build date groups — filter messages by active tab
   const dateGroups: { date: string; msgs: Message[] }[] = []
@@ -146,7 +205,12 @@ export default function ChatWindow() {
     else last.msgs.push(msg)
   }
 
-  const tabs: ('messages' | 'notes' | 'comments')[] = isWA ? ['messages', 'notes'] : ['messages', 'notes', 'comments']
+  const tabs: ('messages' | 'notes' | 'comments')[] =
+    isCommentThread
+      ? ['comments', 'notes']
+      : isWA
+        ? ['messages', 'notes']
+        : ['messages', 'notes', 'comments']
 
   return (
     <div id="main-workspace">
@@ -166,6 +230,7 @@ export default function ChatWindow() {
             <div className="name">{contactName}</div>
             <div className="sub">
               <span className={`platform-pill-sm ${platformCls}`}><i className={platformIcon} /> {platformLabel}</span>
+              {isCommentThread && <span style={{ color: '#e1306c', fontSize: 11 }}>Comment thread</span>}
               {conversation.status === 'open' && <span style={{ color: 'var(--accent)', fontSize: 11 }}>● Online</span>}
             </div>
           </div>
@@ -215,11 +280,17 @@ onClick={() => setShowCallModal(true)}
           <div
             key={tab}
             className={`ws-tab ${activeTab === tab ? 'active' : ''}`}
-            onClick={() => { setActiveTab(tab); setReplyingTo(null) }}
+            onClick={() => {
+              setCommentUi({
+                conversationId: activeConversationId,
+                activeTab: tab,
+                replyingTo: null,
+              })
+            }}
           >
             {tab === 'messages' && <><i className="fa-solid fa-message" /> Messages</>}
             {tab === 'notes' && (
-              <><i className="fa-solid fa-note-sticky" /> Notes
+              <><i className="fa-solid fa-note-sticky" /> {isCommentThread ? 'Internal' : 'Notes'}
                 {messages.filter(m => m.is_note).length > 0 && (
                   <span className="tab-badge">{messages.filter(m => m.is_note).length}</span>
                 )}
@@ -227,7 +298,7 @@ onClick={() => setShowCallModal(true)}
             )}
             {tab === 'comments' && (
               <>
-                <i className={platformIcon} style={{ color: platform === 'instagram' ? '#e1306c' : '#1877f2' }} /> Comments
+                Comments
                 {messages.filter(m => m.content_type === 'comment').length > 0 && (
                   <span className="tab-badge">{messages.filter(m => m.content_type === 'comment').length}</span>
                 )}
@@ -243,10 +314,50 @@ onClick={() => setShowCallModal(true)}
           <div className="note-intro"><i className="fa-solid fa-lock" /> Internal notes — never sent to customer.</div>
         )}
         {activeTab === 'comments' && (
-          <div className="note-intro" style={{ borderColor: 'rgba(24,119,242,0.2)', color: 'var(--text-secondary)' }}>
-            <i className={platformIcon} style={{ color: platform === 'instagram' ? '#e1306c' : '#1877f2' }} />
-            {' '}Public comments on your {platform === 'instagram' ? 'Instagram' : 'Facebook'} posts. Click Reply on any comment below.
-          </div>
+          <>
+            {(postPreview || commentPostId) && (
+              <div className="comment-post-preview">
+                <div className="comment-post-preview-media">
+                  {postPreview?.thumbnail_url || postPreview?.media_url ? (
+                    postPreview.media_type?.toLowerCase().includes('video') ? (
+                      <video
+                        src={postPreview.thumbnail_url || postPreview.media_url || undefined}
+                        muted
+                        playsInline
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <img
+                        src={postPreview.thumbnail_url || postPreview.media_url || undefined}
+                        alt="Post preview"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    )
+                  ) : (
+                    <i className="fa-brands fa-instagram" />
+                  )}
+                </div>
+                <div className="comment-post-preview-body">
+                  <div className="comment-post-preview-label">Post this comment belongs to</div>
+                  <div className="comment-post-preview-caption">
+                    {postPreview?.caption?.trim() || `Instagram post ${commentPostId ? `#${commentPostId}` : ''}`.trim()}
+                  </div>
+                  <div className="comment-post-preview-meta">
+                    <span>@{conversation.meta?.commenter_username || conversation.contact?.instagram_username || 'instagram'}</span>
+                    {postPreview?.permalink && (
+                      <a href={postPreview.permalink} target="_blank" rel="noreferrer">
+                        View post
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="note-intro" style={{ borderColor: 'rgba(24,119,242,0.2)', color: 'var(--text-secondary)' }}>
+              <i className={platformIcon} style={{ color: platform === 'instagram' ? '#e1306c' : '#1877f2' }} />
+              {' '}Reply on any customer comment below to continue the same public conversation.
+            </div>
+          </>
         )}
 
         {dateGroups.length === 0 ? (
@@ -279,7 +390,11 @@ onClick={() => setShowCallModal(true)}
                     allMessages={displayMsgs}
                     onSetReply={
                       activeTab === 'comments'
-                        ? (id, body) => setReplyingTo({ id, body })
+                        ? (id, body) => setCommentUi({
+                          conversationId: activeConversationId,
+                          activeTab: 'comments',
+                          replyingTo: { id, body },
+                        })
                         : undefined
                     }
                   />
@@ -298,8 +413,19 @@ onClick={() => setShowCallModal(true)}
         <CommentReplyInput
           conversation={conversation}
           replyingTo={replyingTo}
-          onClearReply={() => setReplyingTo(null)}
-          onSent={() => { loadMessages(); setReplyingTo(null) }}
+          onClearReply={() => setCommentUi({
+            conversationId: activeConversationId,
+            activeTab: 'comments',
+            replyingTo: null,
+          })}
+          onSent={() => {
+            loadMessages()
+            setCommentUi({
+              conversationId: activeConversationId,
+              activeTab: 'comments',
+              replyingTo: null,
+            })
+          }}
         />
       )}
 
@@ -402,8 +528,8 @@ function CommentReplyInput({ conversation, replyingTo, onClearReply, onSent }: C
       const json = await res.json()
       if (!res.ok) setError(json.error || 'Failed to send reply')
       else { setText(''); onSent() }
-    } catch (err: any) {
-      setError(err.message || 'Network error')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Network error')
     } finally {
       setSending(false)
     }
