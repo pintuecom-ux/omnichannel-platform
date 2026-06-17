@@ -4,7 +4,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import SettingsShell from '@/components/settings/SettingsShell'
 import InstagramChannelSettings from '@/components/settings/InstagramChannelSettings'
 import { createClient } from '@/lib/supabase/client'
-
+import WhatsAppProfileModal from '@/components/settings/WhatsAppProfileModal'
 const CHANNEL_TABS = [
   { id: 'web-chat',   label: 'Web Chat',                   icon: 'fa-solid fa-comment-dots',        color: '#2fe774' },
   { id: 'whatsapp',   label: 'WhatsApp',                   icon: 'fa-brands fa-whatsapp',           color: '#25d366' },
@@ -227,6 +227,7 @@ function WebChatTab() {
 // ── WhatsApp Tab ──────────────────────────────────────────────────────────────
 function WhatsAppTab() {
   const [channels, setChannels] = useState<Array<{ id: string; external_id: string; name: string }>>([])
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
@@ -277,7 +278,7 @@ function WhatsAppTab() {
                   <td>{ch.name}</td>
                   <td><span className="pill green">Active</span></td>
                   <td>
-                    <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }}><i className="fa-solid fa-gear" /> Configure</button>
+                    <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => setIsProfileModalOpen(true)}><i className="fa-solid fa-gear" /> Configure</button>
                   </td>
                 </tr>
               ))}
@@ -306,6 +307,11 @@ function WhatsAppTab() {
           </div>
         </FormField>
       </div>
+
+      <WhatsAppProfileModal 
+        isOpen={isProfileModalOpen} 
+        onClose={() => setIsProfileModalOpen(false)} 
+      />
     </div>
   )
 }
