@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 
   if (fbChannel?.access_token && fbChannel?.external_id) {
     try {
-      const res = await axios.get(`https://graph.facebook.com/v22.0/${fbChannel.external_id}/published_posts`, {
+      const res = await axios.get(`https://graph.facebook.com/v25.0/${fbChannel.external_id}/published_posts`, {
         params: {
           fields: 'id,message,full_picture,permalink_url,created_time,shares,comments.summary(true),likes.summary(true)',
           access_token: fbChannel.access_token,

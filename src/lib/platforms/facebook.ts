@@ -1,8 +1,8 @@
 import axios from 'axios'
 import crypto from 'crypto'
 
-// ── Bumped from v19.0 → v22.0 (current stable as of 2025) ──────────────────
-const BASE = 'https://graph.facebook.com/v22.0'
+// ── Bumped from v19.0 → v25.0 (current stable as of 2025) ──────────────────
+const BASE = 'https://graph.facebook.com/v25.0'
 
 export class FacebookClient {
   constructor(
@@ -11,7 +11,7 @@ export class FacebookClient {
   ) {}
 
   static buildLoginUrl(opts: { appId: string; redirectUri: string; state: string; scopes: string[]; configId?: string }) {
-    const url = new URL(`https://www.facebook.com/v22.0/dialog/oauth`)
+    const url = new URL(`https://www.facebook.com/v25.0/dialog/oauth`)
     url.searchParams.set('client_id', opts.appId)
     url.searchParams.set('redirect_uri', opts.redirectUri)
     url.searchParams.set('state', opts.state)

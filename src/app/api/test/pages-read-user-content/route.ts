@@ -7,7 +7,7 @@ const admin = adminClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-const BASE = 'https://graph.facebook.com/v22.0'
+const BASE = 'https://graph.facebook.com/v25.0'
 
 export async function GET(req: NextRequest) {
   try {

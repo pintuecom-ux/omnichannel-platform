@@ -49,6 +49,14 @@ The platform is a CRM/helpdesk application that aggregates messages from various
 
 > **Note to AI Agents:** Upon any modification, feature addition, or significant update to the codebase, append the details below in reverse chronological order.
 
+### [2026-07-25] Media Library, Content Planner & Dual-Platform Simultaneous Publishing
+- **Changes:** Updated `src/components/sidebar/Sidebar.tsx`, `src/app/(dashboard)/pages/page.tsx`, `src/app/(dashboard)/planner/page.tsx`, `src/components/planner/CalendarView.tsx`, `CreatePostModal.tsx`, `src/app/api/media/route.ts`, `src/app/api/planner/posts/route.ts`, and `src/lib/instagram/service.ts`.
+- **Details:**
+  1. Renamed Pages & Posts to **Media Library** across sidebar and dashboard. Built `/api/media` to fetch all social media posts and chat messaging attachments (WhatsApp, Messenger, IG DMs) with Images, Videos, and Docs & PDFs filter tabs.
+  2. Enhanced **Content Planner** with `/api/planner/posts` to sync published social posts (Instagram & Facebook Page) and scheduled publications directly onto their respective calendar date cells.
+  3. Added Meta container status polling (`waitForContainerReady`) to wait for image container processing (`status_code === 'FINISHED'`) before publishing to Instagram.
+  4. Implemented simultaneous dual-platform publishing to both **Instagram** (`publishMediaContainer`) and **Facebook Pages** (`POST /{page_id}/photos`) when selected in `CreatePostModal`.
+
 ### [2026-07-25] Meta App Review Test Endpoints & Frontend Avatar Rendering Upgrades
 - **Changes:** Created `src/app/api/test/pages-read-user-content/route.ts`, `src/app/api/debug/facebook-profile/route.ts`, and updated `src/components/inbox/ConversationItem.tsx`, `ChatWindow.tsx`, and `InfoPanel.tsx`.
 - **Details:** 

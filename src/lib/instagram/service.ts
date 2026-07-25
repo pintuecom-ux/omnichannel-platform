@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import axios from 'axios'
 import type { Channel, InstagramAnalyticsSnapshot, InstagramChannelMeta, InstagramMediaItem, ScheduledPublication } from '@/types'
 import { InstagramClient } from '@/lib/platforms/instagram'
 import { admin, computeInstagramExecutiveMetrics, normalizeMediaType } from './helpers'
@@ -162,7 +163,7 @@ async function publishToFacebookPage(params: {
   try {
     let fbRes: any = null
     if (params.imageUrl) {
-      const res = await axios.post(`https://graph.facebook.com/v22.0/${fbChannel.external_id}/photos`, null, {
+      const res = await axios.post(`https://graph.facebook.com/v25.0/${fbChannel.external_id}/photos`, null, {
         params: {
           url: params.imageUrl,
           caption: params.caption || '',
@@ -171,7 +172,7 @@ async function publishToFacebookPage(params: {
       })
       fbRes = res.data
     } else if (params.caption) {
-      const res = await axios.post(`https://graph.facebook.com/v22.0/${fbChannel.external_id}/feed`, null, {
+      const res = await axios.post(`https://graph.facebook.com/v25.0/${fbChannel.external_id}/feed`, null, {
         params: {
           message: params.caption,
           access_token: fbChannel.access_token,
