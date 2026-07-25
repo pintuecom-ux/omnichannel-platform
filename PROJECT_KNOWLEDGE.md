@@ -49,6 +49,13 @@ The platform is a CRM/helpdesk application that aggregates messages from various
 
 > **Note to AI Agents:** Upon any modification, feature addition, or significant update to the codebase, append the details below in reverse chronological order.
 
+### [2026-07-25] Meta App Review Test Endpoints & Frontend Avatar Rendering Upgrades
+- **Changes:** Created `src/app/api/test/pages-read-user-content/route.ts`, `src/app/api/debug/facebook-profile/route.ts`, and updated `src/components/inbox/ConversationItem.tsx`, `ChatWindow.tsx`, and `InfoPanel.tsx`.
+- **Details:** 
+  1. Built `/api/test/pages-read-user-content` to execute required Graph API queries (`/feed`, `/published_posts`, `/tagged`, `/ratings`) using the Page Access Token to satisfy Meta's "0 of 1 API call(s) required" App Review requirement.
+  2. Created `/api/debug/facebook-profile` to perform comprehensive Meta Graph API diagnostic tests for PSIDs and tokens.
+  3. Updated inbox components to render `contact.avatar_url` images, added `.replace(/&amp;/g, '&')` sanitization for HTML-escaped URLs, and implemented stateful `onError` handlers that fall back to initial avatar badges when Meta Dev Mode restricts PSID picture endpoints.
+
 ### [2026-07-25] Upgraded Facebook Contact Picture Endpoint & Avatar Fallback
 - **Changes:** Modified `src/lib/platforms/facebook.ts`.
 - **Details:** 

@@ -23,7 +23,7 @@ const NAV = [
   { id: 'aibots',    icon: 'fa-solid fa-robot',           label: 'AI Bots',          soon: true,        section: 'Automation' },
   { id: 'planner',   icon: 'fa-solid fa-calendar-days',   label: 'Content Planner',  href: '/planner',  section: 'Publishing' },
   { id: 'templates', icon: 'fa-solid fa-file-code',       label: 'Templates',        href: '/templates',section: 'Publishing' },
-  { id: 'pages',     icon: 'fa-solid fa-layer-group',     label: 'Pages & Posts',    href: '/pages',    section: 'Publishing' },
+  { id: 'pages',     icon: 'fa-solid fa-photo-film',      label: 'Media Library',    href: '/pages',    section: 'Publishing' },
   { id: 'ads',       icon: 'fa-solid fa-rectangle-ad',    label: 'Ad Manager',       soon: true,        section: 'Ads & Analytics' },
   { id: 'analytics', icon: 'fa-solid fa-chart-column',    label: 'Analytics',        href: '/analytics',section: 'Ads & Analytics' },
   { id: 'numbers',   icon: 'fa-solid fa-sim-card',        label: 'Buy Numbers',      soon: true,        section: 'Numbers & Calling' },
