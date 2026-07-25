@@ -82,6 +82,18 @@ export class InstagramClient {
     })
   }
 
+  /** Mark messages as read ("seen") on Instagram DM */
+  async markSeen(recipientId: string) {
+    try {
+      await this.post(`${this.igAccountId}/messages`, {
+        recipient: { id: recipientId },
+        sender_action: 'mark_seen',
+      })
+    } catch (err: any) {
+      console.warn(`[IG markSeen] Could not send read receipt to ${recipientId}:`, err?.response?.data?.error?.message || err.message)
+    }
+  }
+
   /** Reply to an Instagram media comment */
   async replyToComment(commentId: string, text: string) {
     return this.post(`${commentId}/replies`, { message: text })

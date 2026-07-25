@@ -108,28 +108,25 @@ export default function ChatWindow() {
       .limit(200)
     if (error) { console.error('[ChatWindow] loadMessages error:', error.message); return }
     if (data) {
-      // Issue (hide calls): filter out call-type messages — they show in /calls tab only
       setMessages((data as Message[]).filter(m => m.content_type !== 'call'))
     }
 
-    // Mark conversation as read
     await supabase.from('conversations').update({ unread_count: 0 }).eq('id', activeConversationId)
     updateConversation(activeConversationId, { unread_count: 0 })
 
-    // Send WA read receipts for last 5 unread inbound messages
-    if (isWA && data) {
+    if (data && activeConversationId) {
       const unread = data.filter(m => m.direction === 'inbound' && m.status !== 'read' && m.external_id)
       if (unread.length > 0) {
         unread.slice(-5).forEach(m => {
           fetch('/api/messages/mark-read', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message_id: m.id, external_id: m.external_id }),
+            body: JSON.stringify({ conversation_id: activeConversationId, message_id: m.external_id }),
           }).catch(() => {})
         })
       }
     }
-  }, [activeConversationId, isWA, setMessages, supabase, updateConversation])
+  }, [activeConversationId, setMessages, supabase, updateConversation])
 
   useEffect(() => {
     loadMessages()
@@ -150,13 +147,12 @@ export default function ChatWindow() {
         table: 'messages',
         filter: `conversation_id=eq.${activeConversationId}`,
       }, payload => {
-  if (payload.eventType === 'INSERT') {
-    const msg = payload.new as Message
-    // Skip call-type messages — they live in the /calls tab only
-    if (msg.content_type !== 'call') {
-      addMessage(msg)
-    }
-  } else if (payload.eventType === 'UPDATE') {
+        if (payload.eventType === 'INSERT') {
+          const msg = payload.new as Message
+          if (msg.content_type !== 'call') {
+            addMessage(msg)
+          }
+        } else if (payload.eventType === 'UPDATE') {
           updateMessage((payload.new as Message).id, payload.new as Partial<Message>)
         }
       })

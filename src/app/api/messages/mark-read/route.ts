@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as serverClient } from '@/lib/supabase/server'
 import { createClient as adminClient } from '@supabase/supabase-js'
 import { WhatsAppClient } from '@/lib/platforms/whatsapp'
+import { FacebookClient } from '@/lib/platforms/facebook'
+import { InstagramClient } from '@/lib/platforms/instagram'
 
 const admin = adminClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,10 +20,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'conversation_id and message_id required' }, { status: 400 })
   }
 
-  // Get conversation and channel info
+  // Get conversation, contact, and channel info
   const { data: conv } = await admin
     .from('conversations')
-    .select('platform, channel:channels(access_token, external_id)')
+    .select('platform, contact:contacts(*), channel:channels(access_token, external_id)')
     .eq('id', conversation_id)
     .single()
 
@@ -30,11 +32,20 @@ export async function POST(req: NextRequest) {
   }
 
   const channel = conv.channel as any
+  const contact = conv.contact as any
+
   try {
-    // Only call WhatsApp Cloud API if the channel is actually WhatsApp
     if (conv.platform === 'whatsapp') {
       const wa = new WhatsAppClient(channel.access_token, channel.external_id)
       await wa.markRead(message_id)
+    } else if (conv.platform === 'facebook') {
+      const fb = new FacebookClient(channel.access_token, channel.external_id)
+      const recipientId = contact?.facebook_scoped_id ?? contact?.facebook_id
+      if (recipientId) await fb.markSeen(recipientId)
+    } else if (conv.platform === 'instagram') {
+      const ig = new InstagramClient(channel.access_token, channel.external_id)
+      const recipientId = contact?.instagram_scoped_id ?? contact?.instagram_id
+      if (recipientId) await ig.markSeen(recipientId)
     }
 
     // Update message status in DB for all platforms

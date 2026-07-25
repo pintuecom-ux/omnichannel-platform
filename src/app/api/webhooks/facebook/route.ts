@@ -107,6 +107,27 @@ async function processFBMessage(ev: any) {
       .select()
       .single()
     contact = c
+  } else if (contact.name === data.sender_id || contact.name === 'Facebook User' || !contact.avatar_url) {
+    // Contact exists, but previously saved with numerical ID or missing avatar!
+    if (channel.access_token) {
+      const fb = new FacebookClient(channel.access_token, pageId)
+      const profile = await fb.getUserProfile(data.sender_id)
+      if (profile) {
+        const updates: any = {}
+        if (profile.name && profile.name !== data.sender_id) updates.name = profile.name
+        if (profile.profile_pic) updates.avatar_url = profile.profile_pic
+
+        if (Object.keys(updates).length > 0) {
+          const { data: updatedContact } = await admin
+            .from('contacts')
+            .update(updates)
+            .eq('id', contact.id)
+            .select()
+            .single()
+          if (updatedContact) contact = updatedContact
+        }
+      }
+    }
   }
   if (!contact) return
 

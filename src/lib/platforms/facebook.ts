@@ -88,6 +88,22 @@ export class FacebookClient {
     }
   }
 
+  /** Mark messages as read ("seen") on Facebook Messenger */
+  async markSeen(recipientId: string) {
+    try {
+      await axios.post(
+        `${BASE}/${this.pageId}/messages`,
+        {
+          recipient: { id: recipientId },
+          sender_action: 'mark_seen',
+        },
+        { params: { access_token: this.accessToken } }
+      )
+    } catch (err: any) {
+      console.warn(`[FB markSeen] Could not send read receipt to ${recipientId}:`, err?.response?.data?.error?.message || err.message)
+    }
+  }
+
   /** Reply to a Facebook Page post comment */
   async replyToComment(commentId: string, text: string) {
     try {
@@ -133,11 +149,26 @@ export class FacebookClient {
   /** Fetch a user's public profile (name, profile_pic) via their PSID */
   async getUserProfile(psid: string) {
     try {
-      const res = await axios.get(`${BASE}/${psid}`, {
-        params: { fields: 'name,profile_pic', access_token: this.accessToken },
-      })
-      console.log(`[FB getUserProfile] ✅ Success for psid=${psid}:`, res.data)
-      return res.data as { name: string; profile_pic?: string }
+      let data: any
+      try {
+        const res = await axios.get(`${BASE}/${psid}`, {
+          params: { fields: 'first_name,last_name,name,profile_pic', access_token: this.accessToken },
+        })
+        data = res.data
+      } catch {
+        const res = await axios.get(`${BASE}/${psid}`, {
+          params: { fields: 'first_name,last_name,profile_pic', access_token: this.accessToken },
+        })
+        data = res.data
+      }
+
+      const fullName = data.name || [data.first_name, data.last_name].filter(Boolean).join(' ') || psid
+      const picture = typeof data.profile_pic === 'string'
+        ? data.profile_pic
+        : data.profile_pic?.data?.url ?? null
+
+      console.log(`[FB getUserProfile] ✅ Success for psid=${psid}: name="${fullName}"`)
+      return { name: fullName, profile_pic: picture }
     } catch (err: any) {
       console.warn(`[FB getUserProfile] ⚠️ Could not fetch profile for psid=${psid}:`, err?.response?.data?.error?.message || err.message)
       return null
