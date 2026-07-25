@@ -70,26 +70,38 @@ export class FacebookClient {
 
   /** Send a Messenger DM to a Page-scoped user ID (PSID) */
   async sendMessage(recipientId: string, text: string) {
-    const res = await axios.post(
-      `${BASE}/me/messages`,
-      {
-        recipient: { id: recipientId },
-        message: { text },
-        messaging_type: 'RESPONSE',
-      },
-      { params: { access_token: this.accessToken } }
-    )
-    return res.data // { recipient_id, message_id }
+    try {
+      const res = await axios.post(
+        `${BASE}/${this.pageId}/messages`,
+        {
+          recipient: { id: recipientId },
+          message: { text },
+          messaging_type: 'RESPONSE',
+        },
+        { params: { access_token: this.accessToken } }
+      )
+      return res.data // { recipient_id, message_id }
+    } catch (err: any) {
+      const fbError = err?.response?.data?.error?.message || err?.response?.data || err.message
+      console.error(`[FB sendMessage Error] To ${recipientId}:`, fbError)
+      throw new Error(`Meta API Error: ${typeof fbError === 'string' ? fbError : JSON.stringify(fbError)}`)
+    }
   }
 
   /** Reply to a Facebook Page post comment */
   async replyToComment(commentId: string, text: string) {
-    const res = await axios.post(
-      `${BASE}/${commentId}/comments`,
-      { message: text },
-      { params: { access_token: this.accessToken } }
-    )
-    return res.data // { id }
+    try {
+      const res = await axios.post(
+        `${BASE}/${commentId}/comments`,
+        { message: text },
+        { params: { access_token: this.accessToken } }
+      )
+      return res.data // { id }
+    } catch (err: any) {
+      const fbError = err?.response?.data?.error?.message || err.message
+      console.error(`[FB replyToComment Error]:`, fbError)
+      throw new Error(`Meta API Error: ${fbError}`)
+    }
   }
 
   /** Like a comment on behalf of the Page */
@@ -124,8 +136,10 @@ export class FacebookClient {
       const res = await axios.get(`${BASE}/${psid}`, {
         params: { fields: 'name,profile_pic', access_token: this.accessToken },
       })
+      console.log(`[FB getUserProfile] ✅ Success for psid=${psid}:`, res.data)
       return res.data as { name: string; profile_pic?: string }
-    } catch {
+    } catch (err: any) {
+      console.warn(`[FB getUserProfile] ⚠️ Could not fetch profile for psid=${psid}:`, err?.response?.data?.error?.message || err.message)
       return null
     }
   }

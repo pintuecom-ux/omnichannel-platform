@@ -18,10 +18,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'conversation_id and message_id required' }, { status: 400 })
   }
 
-  // Get channel info
+  // Get conversation and channel info
   const { data: conv } = await admin
     .from('conversations')
-    .select('channel:channels(access_token, external_id)')
+    .select('platform, channel:channels(access_token, external_id)')
     .eq('id', conversation_id)
     .single()
 
@@ -31,10 +31,13 @@ export async function POST(req: NextRequest) {
 
   const channel = conv.channel as any
   try {
-    const wa = new WhatsAppClient(channel.access_token, channel.external_id)
-    await wa.markRead(message_id)
+    // Only call WhatsApp Cloud API if the channel is actually WhatsApp
+    if (conv.platform === 'whatsapp') {
+      const wa = new WhatsAppClient(channel.access_token, channel.external_id)
+      await wa.markRead(message_id)
+    }
 
-    // Update message status in DB
+    // Update message status in DB for all platforms
     await admin
       .from('messages')
       .update({ status: 'read' })
@@ -43,7 +46,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (err: any) {
     // Non-critical — don't break the client
-    console.warn('[Mark Read] Failed:', err.message)
+    console.warn('[Mark Read] Failed:', err?.response?.data || err.message)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

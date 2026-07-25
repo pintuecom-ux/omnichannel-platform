@@ -518,7 +518,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ message: msg })
   } catch (err: any) {
-    console.error('[Send API Error]', err.message)
-    return NextResponse.json({ error: err.message || 'Failed to send' }, { status: 500 })
+    const errorMsg = err?.response?.data?.error?.message || err?.message || 'Failed to send'
+    console.error('[Send API Error]', errorMsg, err?.response?.data)
+    return NextResponse.json({ error: errorMsg }, { status: 500 })
   }
 }
