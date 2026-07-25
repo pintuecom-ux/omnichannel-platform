@@ -39,6 +39,7 @@ export default function ConversationItem({ conversation: c }: Props) {
   const isActive = c.id === activeConversationId
   const isSelected = selectedIds.has(c.id)
   const name = c.contact?.name || c.contact?.phone || c.contact?.instagram_username || 'Unknown'
+  const avatarUrl = c.contact?.avatar_url
   const { text: lastText, icon: lastIcon, iconColor: lastIconColor } = getLastMessageDisplay(c.last_message)
 
   function handleClick() {
@@ -52,9 +53,18 @@ export default function ConversationItem({ conversation: c }: Props) {
       {isBulkMode && <div className={`conv-item-checkbox ${isSelected ? 'checked' : ''}`} />}
 
       <div className="avatar-wrap">
-        <div className="avatar" style={{ background: getAvatarColor(c.contact_id || c.id) }}>
-          {getInitials(name)}
-        </div>
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt={name}
+            className="avatar"
+            style={{ objectFit: 'cover', width: 36, height: 36, borderRadius: '50%' }}
+          />
+        ) : (
+          <div className="avatar" style={{ background: getAvatarColor(c.contact_id || c.id) }}>
+            {getInitials(name)}
+          </div>
+        )}
         <div className={`platform-badge ${BADGE_CLS[c.platform]}`}>
           <i className={PLATFORM_ICON[c.platform]} style={{ fontSize: '8px' }} />
         </div>

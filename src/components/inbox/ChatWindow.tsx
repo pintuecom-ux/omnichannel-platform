@@ -214,10 +214,19 @@ export default function ChatWindow() {
       <div className="chat-header">
         <div className="chat-contact">
           <div className="avatar-wrap">
-            <div className="avatar"
-              style={{ background: '#1a6b3a', width: 40, height: 40, fontSize: 14, fontWeight: 700, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-              {contactName.slice(0, 2).toUpperCase()}
-            </div>
+            {conversation.contact?.avatar_url ? (
+              <img
+                src={conversation.contact.avatar_url}
+                alt={contactName}
+                className="avatar"
+                style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }}
+              />
+            ) : (
+              <div className="avatar"
+                style={{ background: '#1a6b3a', width: 40, height: 40, fontSize: 14, fontWeight: 700, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                {contactName.slice(0, 2).toUpperCase()}
+              </div>
+            )}
             <div className={`platform-badge ${badgeCls}`}>
               <i className={platformIcon} style={{ fontSize: '8px' }} />
             </div>

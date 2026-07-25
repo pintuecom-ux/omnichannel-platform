@@ -68,12 +68,21 @@ export default function InfoPanel() {
           <button className="contact-edit-btn" onClick={openDrawer}>
             <i className="fa-solid fa-pen" />
           </button>
-          <div
-            className="contact-big-avatar"
-            style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}
-          >
-            {initials}
-          </div>
+          {contact.avatar_url ? (
+            <img
+              src={contact.avatar_url}
+              alt={name}
+              className="contact-big-avatar"
+              style={{ objectFit: 'cover' }}
+            />
+          ) : (
+            <div
+              className="contact-big-avatar"
+              style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}
+            >
+              {initials}
+            </div>
+          )}
           <div className="contact-big-name">{name}</div>
           <div className="contact-big-phone">
             {contact.phone || contact.instagram_username || contact.facebook_id || 'No contact info'}
