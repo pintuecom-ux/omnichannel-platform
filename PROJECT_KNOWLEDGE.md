@@ -49,6 +49,10 @@ The platform is a CRM/helpdesk application that aggregates messages from various
 
 > **Note to AI Agents:** Upon any modification, feature addition, or significant update to the codebase, append the details below in reverse chronological order.
 
+### [2026-07-25] Fixed Facebook Webhook Vercel Serverless Termination & Added Debug Logs
+- **Changes:** Updated `src/app/api/webhooks/facebook/route.ts` to explicitly `await handleFBEvents(body)` instead of using a fire-and-forget pattern.
+- **Details:** In Vercel serverless environments, returning an HTTP response immediately terminates cloud function CPU execution. By properly awaiting the event processor, Vercel allows the Supabase DB lookups and message insertion transactions to finish. Also added detailed console logs (`[FB DM] ✅ Message saved successfully`, etc.) for easier debugging in production logs.
+
 ### [2026-07-25] Initial Knowledge Base Created
 - **Changes:** Documented the tech stack, core architecture, and the newly implemented Facebook/Instagram integrations.
 - **Details:** Built the Facebook OAuth flow (`/api/facebook/connect`, `callback`, `channel`) and the frontend connection UI (`FacebookChannelSettings`). The Meta App is currently verified and in development mode, ready for App Review submissions.

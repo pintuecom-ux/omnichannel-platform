@@ -9,7 +9,6 @@ const admin = createClient(
 )
 
 // ── GET: Meta webhook verification challenge ────────────────────────────────
-// FIX: was using WHATSAPP_WEBHOOK_VERIFY_TOKEN — now uses META_WEBHOOK_VERIFY_TOKEN
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams
   if (
@@ -39,11 +38,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: 'ignored' })
     }
 
-    // Process async — return 200 immediately to avoid Meta retry storms
-    handleFBEvents(body).catch(err => console.error('[FB webhook] error:', err))
+    // CRITICAL: Must AWAIT on Vercel serverless — otherwise the function terminates immediately before DB writes complete
+    console.log(`[FB webhook] ✅ Received object: ${body.object}, entries: ${body.entry?.length ?? 0}`)
+    await handleFBEvents(body)
     return NextResponse.json({ status: 'ok' })
-  } catch (err) {
-    console.error('[FB webhook] parse error:', err)
+  } catch (err: any) {
+    console.error('[FB webhook] parse error:', err?.message ?? err)
     return NextResponse.json({ status: 'error' }, { status: 500 })
   }
 }
@@ -58,19 +58,22 @@ async function handleFBEvents(body: any) {
 
 async function processFBMessage(ev: any) {
   const { pageId, data } = ev
+  console.log(`[FB DM] Processing: sender=${data.sender_id}, pageId=${pageId}`)
 
   // Find the channel matching this Facebook Page ID
-  const { data: channel } = await admin
+  const { data: channel, error: chErr } = await admin
     .from('channels')
     .select('*')
     .eq('platform', 'facebook')
     .eq('external_id', pageId)
     .maybeSingle()
 
+  if (chErr) console.error('[FB DM] Channel lookup error:', chErr.message)
   if (!channel) {
-    console.warn(`[FB webhook] No channel found for pageId=${pageId}`)
+    console.warn(`[FB DM] ❌ No active channel found in database for pageId=${pageId}`)
     return
   }
+  console.log(`[FB DM] ✅ Found channel: ${channel.id}`)
 
   // Find or create the contact
   let { data: contact } = await admin
@@ -156,7 +159,7 @@ async function processFBMessage(ev: any) {
     .maybeSingle()
   if (exists) return
 
-  await admin.from('messages').insert({
+  const { error: msgErr } = await admin.from('messages').insert({
     conversation_id: conv.id,
     workspace_id: channel.workspace_id,
     external_id: data.external_id,
@@ -167,10 +170,14 @@ async function processFBMessage(ev: any) {
     is_note: false,
     meta: { sender_id: data.sender_id, attachments: data.attachments, raw: data },
   })
+
+  if (msgErr) console.error('[FB DM] ❌ Message insert error:', msgErr.message)
+  else console.log(`[FB DM] ✅ Message saved successfully → conv ${conv.id}`)
 }
 
 async function processFBComment(ev: any) {
   const { pageId, data } = ev
+  console.log(`[FB Comment] Processing: comment_id=${data.comment_id}, pageId=${pageId}`)
 
   const { data: channel } = await admin
     .from('channels')
