@@ -41,6 +41,7 @@ export default function CreatePostModal({ onClose, onSave, initialDate }: { onCl
       const formData = new FormData()
       formData.append('caption', caption)
       formData.append('action', scheduleOption === 'now' ? 'publish_now' : 'schedule')
+      formData.append('target_platforms', JSON.stringify(platforms))
       
       if (scheduleOption === 'later' && scheduleDate && scheduleTime) {
         // Create ISO string for the local time

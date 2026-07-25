@@ -50,79 +50,167 @@ export async function publishScheduledPublication(params: {
 }) {
   const client = new InstagramClient(params.channel.access_token, params.channel.external_id)
   const payload = params.publication.media_payload ?? []
+  const targetPlatforms = params.publication.meta?.target_platforms ?? { instagram: true, facebook: true }
 
   if (payload.length === 0) {
     throw new Error('Publication has no media payload')
   }
 
   try {
-    const creationIds: string[] = []
+    let mediaId: string | null = null
 
-    for (const item of payload) {
-      const mediaType = item.media_type === 'carousel'
-        ? 'IMAGE'
-        : item.media_type === 'video'
-          ? 'VIDEO'
-          : 'IMAGE'
+    // 1. Publish to Instagram if selected
+    if (targetPlatforms.instagram !== false) {
+      const creationIds: string[] = []
 
-      const container = await client.createMediaContainer({
-        ...(item.media_type === 'video'
-          ? { video_url: item.public_url ?? undefined }
-          : { image_url: item.public_url ?? undefined }),
-        media_type: payload.length > 1 ? undefined : mediaType,
-        is_carousel_item: payload.length > 1,
-        caption: payload.length > 1 ? undefined : (params.publication.caption ?? undefined),
-        alt_text: item.alt_text ?? undefined,
+      for (const item of payload) {
+        const mediaType = item.media_type === 'carousel'
+          ? 'IMAGE'
+          : item.media_type === 'video'
+            ? 'VIDEO'
+            : 'IMAGE'
+
+        const container = await client.createMediaContainer({
+          ...(item.media_type === 'video'
+            ? { video_url: item.public_url ?? undefined }
+            : { image_url: item.public_url ?? undefined }),
+          media_type: payload.length > 1 ? undefined : mediaType,
+          is_carousel_item: payload.length > 1,
+          caption: payload.length > 1 ? undefined : (params.publication.caption ?? undefined),
+          alt_text: item.alt_text ?? undefined,
+        })
+        creationIds.push(container.id)
+      }
+
+      let creationId = creationIds[0]
+
+      if (creationIds.length > 1) {
+        const carousel = await client.createMediaContainer({
+          media_type: 'CAROUSEL',
+          children: creationIds,
+          caption: params.publication.caption ?? undefined,
+        })
+        creationId = carousel.id
+      }
+
+      // Wait for Meta container to finish processing before publishing
+      await waitForContainerReady(client, creationId)
+
+      const published = await client.publishMediaContainer(creationId)
+      mediaId = published.id
+      const media = await client.getMedia(mediaId)
+
+      await upsertInstagramMedia({
+        workspaceId: params.publication.workspace_id,
+        channelId: params.publication.channel_id,
+        publicationId: params.publication.id,
+        media,
       })
-      creationIds.push(container.id)
     }
 
-    let creationId = creationIds[0]
-
-    if (creationIds.length > 1) {
-      const carousel = await client.createMediaContainer({
-        media_type: 'CAROUSEL',
-        children: creationIds,
-        caption: params.publication.caption ?? undefined,
+    // 2. Publish to Facebook Page if selected
+    let fbRes: any = null
+    if (targetPlatforms.facebook !== false) {
+      fbRes = await publishToFacebookPage({
+        workspaceId: params.publication.workspace_id,
+        caption: params.publication.caption,
+        imageUrl: payload[0]?.public_url ?? null,
       })
-      creationId = carousel.id
     }
-
-    // Wait for Meta container to finish processing before publishing
-    await waitForContainerReady(client, creationId)
-
-    const published = await client.publishMediaContainer(creationId)
-    const mediaId = published.id
-    const media = await client.getMedia(mediaId)
 
     await admin
       .from('scheduled_publications')
       .update({
         status: 'published',
-        resulting_media_id: mediaId,
+        resulting_media_id: mediaId || fbRes?.id || 'published',
         published_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         last_error: null,
         meta: {
           ...(params.publication.meta ?? {}),
-          creation_ids: creationIds,
-          publish_response: published,
+          facebook_response: fbRes,
         },
       })
       .eq('id', params.publication.id)
 
-    await upsertInstagramMedia({
-      workspaceId: params.publication.workspace_id,
-      channelId: params.publication.channel_id,
-      publicationId: params.publication.id,
-      media,
-    })
-
-    return mediaId
+    return mediaId || fbRes?.id || 'published'
   } catch (err: any) {
     const detail = err.response?.data?.error?.message || err.message || 'Meta publish failed'
     console.error('[publishScheduledPublication] Meta Error:', detail, err.response?.data)
     throw new Error(detail)
+  }
+}
+
+async function publishToFacebookPage(params: {
+  workspaceId: string
+  caption?: string | null
+  imageUrl?: string | null
+}) {
+  const { data: fbChannel } = await admin
+    .from('channels')
+    .select('*')
+    .eq('workspace_id', params.workspaceId)
+    .eq('platform', 'facebook')
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (!fbChannel?.access_token || !fbChannel?.external_id) {
+    console.warn('[FB Page Publish] No active Facebook channel found for workspace:', params.workspaceId)
+    return null
+  }
+
+  try {
+    let fbRes: any = null
+    if (params.imageUrl) {
+      const res = await axios.post(`https://graph.facebook.com/v22.0/${fbChannel.external_id}/photos`, null, {
+        params: {
+          url: params.imageUrl,
+          caption: params.caption || '',
+          access_token: fbChannel.access_token,
+        },
+      })
+      fbRes = res.data
+    } else if (params.caption) {
+      const res = await axios.post(`https://graph.facebook.com/v22.0/${fbChannel.external_id}/feed`, null, {
+        params: {
+          message: params.caption,
+          access_token: fbChannel.access_token,
+        },
+      })
+      fbRes = res.data
+    }
+
+    if (fbRes?.id) {
+      // Record Facebook post into DB so it shows up in Media Library and Content Planner
+      const record = {
+        workspace_id: params.workspaceId,
+        channel_id: fbChannel.id,
+        instagram_media_id: `fb_${fbRes.id}`,
+        caption: params.caption || 'Facebook Post',
+        media_type: params.imageUrl ? 'IMAGE' : 'TEXT',
+        media_url: params.imageUrl || null,
+        timestamp: new Date().toISOString(),
+        comment_count: 0,
+        like_count: 0,
+        meta: { platform: 'facebook', raw: fbRes },
+        updated_at: new Date().toISOString(),
+      }
+      const { data: existing } = await admin
+        .from('instagram_media')
+        .select('id')
+        .eq('instagram_media_id', record.instagram_media_id)
+        .maybeSingle()
+
+      if (existing) {
+        await admin.from('instagram_media').update(record).eq('id', existing.id)
+      } else {
+        await admin.from('instagram_media').insert(record)
+      }
+    }
+    return fbRes
+  } catch (err: any) {
+    console.warn('[FB Page Publish] Error publishing to FB Page:', err?.response?.data?.error?.message || err.message)
+    return null
   }
 }
 

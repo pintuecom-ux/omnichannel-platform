@@ -42,6 +42,12 @@ export async function POST(req: NextRequest) {
   const caption = String(form.get('caption') ?? '').trim() || null
   const publishAt = String(form.get('publish_at') ?? '').trim() || null
   const action = String(form.get('action') ?? 'draft')
+  const rawPlatforms = String(form.get('target_platforms') ?? '')
+  let targetPlatforms = { instagram: true, facebook: true }
+  if (rawPlatforms) {
+    try { targetPlatforms = JSON.parse(rawPlatforms) } catch {}
+  }
+
   const publicationId = crypto.randomUUID()
   const files = form.getAll('files').filter((item): item is File => item instanceof File && item.size > 0)
 
@@ -71,7 +77,7 @@ export async function POST(req: NextRequest) {
     id: publicationId,
     workspace_id: profile.workspace_id,
     channel_id: channel.id,
-    platform: 'instagram',
+    platform: targetPlatforms.facebook ? 'instagram,facebook' : 'instagram',
     status,
     caption,
     media_payload: mediaPayload,
@@ -80,6 +86,7 @@ export async function POST(req: NextRequest) {
     idempotency_key: crypto.randomUUID(),
     meta: {
       source: 'planner',
+      target_platforms: targetPlatforms,
     },
     created_by: user.id,
   }
