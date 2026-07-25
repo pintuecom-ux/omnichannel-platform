@@ -190,7 +190,7 @@ export default function MediaLibraryPage() {
                     background: '#0d1117',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyIn: 'center',
+                    justifyContent: 'center',
                     cursor: 'pointer',
                     overflow: 'hidden',
                   }}
