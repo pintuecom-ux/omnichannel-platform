@@ -60,7 +60,9 @@ export default function CalendarView({ currentDate, onPrevMonth, onNextMonth, po
 
   const getPostsForDay = (date: Date) => {
     return posts.filter(post => {
-      const postDate = new Date(post.scheduled_for)
+      const rawDate = post.scheduled_for || post.timestamp
+      if (!rawDate) return false
+      const postDate = new Date(rawDate)
       return postDate.getDate() === date.getDate() &&
              postDate.getMonth() === date.getMonth() &&
              postDate.getFullYear() === date.getFullYear()
@@ -100,22 +102,57 @@ export default function CalendarView({ currentDate, onPrevMonth, onNextMonth, po
             >
               <span className="day-number">{dayObj.date.getDate()}</span>
               
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {dayPosts.map((post, idx) => (
-                  <div key={idx} className="scheduled-post" onClick={(e) => { e.stopPropagation(); /* edit post */ }}>
-                    <div className="post-header">
-                      <span className="post-time">
-                        {new Date(post.scheduled_for).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <div className={`post-status ${post.status}`}></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: 4 }}>
+                {dayPosts.map((post, idx) => {
+                  const rawDate = post.scheduled_for || post.timestamp
+                  const timeStr = rawDate ? new Date(rawDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
+                  const isPublished = post.status === 'published' || post.type === 'published'
+
+                  return (
+                    <div
+                      key={idx}
+                      className="scheduled-post"
+                      style={{
+                        padding: '4px 6px',
+                        borderRadius: 6,
+                        background: isPublished ? 'rgba(37,211,102,0.12)' : 'rgba(0,168,232,0.12)',
+                        border: `1px solid ${isPublished ? 'rgba(37,211,102,0.3)' : 'rgba(0,168,232,0.3)'}`,
+                        fontSize: 11,
+                        cursor: 'pointer',
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (post.permalink) window.open(post.permalink, '_blank')
+                      }}
+                    >
+                      <div className="post-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                        <span className="post-time" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                          {timeStr}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            padding: '1px 5px',
+                            borderRadius: 4,
+                            background: isPublished ? '#25d366' : '#00a8e8',
+                            color: '#000',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {isPublished ? 'Published' : 'Scheduled'}
+                        </span>
+                      </div>
+                      <div className="post-caption" style={{ fontSize: 11, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {post.caption || 'Social Media Post'}
+                      </div>
+                      <div className="post-platforms" style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 3 }}>
+                        {post.platform?.includes('instagram') && <i className="fa-brands fa-instagram" style={{ color: '#E1306C', fontSize: '11px' }} />}
+                        {post.platform?.includes('facebook') && <i className="fa-brands fa-facebook" style={{ color: '#1877F2', fontSize: '11px' }} />}
+                      </div>
                     </div>
-                    <div className="post-caption">{post.caption}</div>
-                    <div className="post-platforms">
-                      {post.platform.includes('instagram') && <i className="fa-brands fa-instagram" style={{ color: '#E1306C', fontSize: '12px' }}></i>}
-                      {post.platform.includes('facebook') && <i className="fa-brands fa-facebook" style={{ color: '#1877F2', fontSize: '12px' }}></i>}
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )

@@ -3,15 +3,15 @@
 import { useState, useRef } from 'react'
 import { X, Image as ImageIcon, Hash, MapPin, Loader2, Plus } from 'lucide-react'
 
-export default function CreatePostModal({ onClose, onSave }: { onClose: () => void, onSave: () => void }) {
+export default function CreatePostModal({ onClose, onSave, initialDate }: { onClose: () => void, onSave: () => void, initialDate?: Date | null }) {
   const [caption, setCaption] = useState('')
-  const [platforms, setPlatforms] = useState({ instagram: true, facebook: false })
+  const [platforms, setPlatforms] = useState({ instagram: true, facebook: true })
   const [mediaFiles, setMediaFiles] = useState<File[]>([])
   const [mediaPreviews, setMediaPreviews] = useState<string[]>([])
   const [previewTab, setPreviewTab] = useState<'instagram' | 'facebook'>('instagram')
-  const [scheduleOption, setScheduleOption] = useState<'now' | 'later'>('now')
-  const [scheduleDate, setScheduleDate] = useState('')
-  const [scheduleTime, setScheduleTime] = useState('')
+  const [scheduleOption, setScheduleOption] = useState<'now' | 'later'>(initialDate ? 'later' : 'now')
+  const [scheduleDate, setScheduleDate] = useState(initialDate ? initialDate.toISOString().split('T')[0] : '')
+  const [scheduleTime, setScheduleTime] = useState(initialDate ? '10:00' : '')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 

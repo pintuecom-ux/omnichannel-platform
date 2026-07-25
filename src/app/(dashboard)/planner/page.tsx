@@ -9,15 +9,16 @@ export default function PlannerPage() {
   const [view, setView] = useState<'calendar' | 'list'>('calendar')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [scheduledPosts, setScheduledPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchPublications = async () => {
     try {
-      const res = await fetch('/api/instagram/publications')
+      const res = await fetch('/api/planner/posts')
       if (res.ok) {
         const data = await res.json()
-        setScheduledPosts(data.publications || [])
+        setScheduledPosts(data.posts || [])
       }
     } catch (err) {
       console.error('Failed to fetch publications', err)
@@ -105,7 +106,10 @@ export default function PlannerPage() {
           onPrevMonth={prevMonth}
           onNextMonth={nextMonth}
           posts={scheduledPosts}
-          onDayClick={() => setIsCreateModalOpen(true)}
+          onDayClick={(date) => {
+            setSelectedDate(date)
+            setIsCreateModalOpen(true)
+          }}
         />
       ) : (
         <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -115,9 +119,14 @@ export default function PlannerPage() {
 
       {isCreateModalOpen && (
         <CreatePostModal 
-          onClose={() => setIsCreateModalOpen(false)}
+          initialDate={selectedDate}
+          onClose={() => {
+            setIsCreateModalOpen(false)
+            setSelectedDate(null)
+          }}
           onSave={() => {
             setIsCreateModalOpen(false)
+            setSelectedDate(null)
             fetchPublications()
           }}
         />
