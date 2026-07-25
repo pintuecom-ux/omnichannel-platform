@@ -6,7 +6,7 @@ type MediaItem = {
   id: string
   source: 'social_post' | 'chat_message'
   platform: 'whatsapp' | 'instagram' | 'facebook'
-  media_type: 'image' | 'video' | 'audio' | 'document' | 'sticker' | string
+  media_type: 'image' | 'video' | 'audio' | 'document' | 'pdf' | 'sticker' | string
   media_url?: string | null
   thumbnail_url?: string | null
   caption?: string | null
@@ -25,11 +25,26 @@ const PLATFORM_ICONS: Record<string, { icon: string; color: string; label: strin
   facebook: { icon: 'fa-brands fa-facebook', color: '#1877F2', label: 'Facebook' },
 }
 
+function isPdfOrDoc(item: MediaItem, url?: string | null): boolean {
+  const type = (item.media_type || '').toLowerCase()
+  const lowerUrl = (url || '').toLowerCase()
+  return (
+    type === 'document' ||
+    type === 'pdf' ||
+    lowerUrl.includes('.pdf') ||
+    lowerUrl.includes('.doc') ||
+    lowerUrl.includes('.docx') ||
+    lowerUrl.includes('.xls') ||
+    lowerUrl.includes('.xlsx') ||
+    lowerUrl.includes('.txt')
+  )
+}
+
 export default function MediaLibraryPage() {
   const [media, setMedia] = useState<MediaItem[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
-  const [activeTab, setActiveTab] = useState<'all' | 'social' | 'chat' | 'images' | 'videos'>('all')
+  const [activeTab, setActiveTab] = useState<'all' | 'social' | 'chat' | 'images' | 'videos' | 'docs'>('all')
   const [previewMedia, setPreviewMedia] = useState<MediaItem | null>(null)
 
   const [stats, setStats] = useState({ total: 0, social: 0, chat: 0 })
@@ -62,10 +77,12 @@ export default function MediaLibraryPage() {
 
   // Filter media based on active tab
   const filteredMedia = media.filter(item => {
+    const srcUrl = item.media_url || item.thumbnail_url
     if (activeTab === 'social') return item.source === 'social_post'
     if (activeTab === 'chat') return item.source === 'chat_message'
-    if (activeTab === 'images') return item.media_type === 'image'
+    if (activeTab === 'images') return item.media_type === 'image' && !isPdfOrDoc(item, srcUrl)
     if (activeTab === 'videos') return item.media_type === 'video'
+    if (activeTab === 'docs') return isPdfOrDoc(item, srcUrl) || item.media_type === 'audio'
     return true
   })
 
@@ -114,37 +131,52 @@ export default function MediaLibraryPage() {
         </div>
       </div>
 
-      {/* ── Filter Tabs ── */}
-      <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 12, overflowX: 'auto' }}>
+      {/* ── Filter Tabs (Clean Pills UI) ── */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 10,
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          background: 'var(--bg-panel)',
+          padding: 8,
+          borderRadius: 16,
+          border: '1px solid var(--border)',
+        }}
+      >
         {[
           { id: 'all', label: 'All Media', icon: 'fa-solid fa-photo-film' },
           { id: 'social', label: 'Social Posts', icon: 'fa-brands fa-instagram' },
           { id: 'chat', label: 'Chat Messages', icon: 'fa-solid fa-comments' },
           { id: 'images', label: 'Images', icon: 'fa-solid fa-image' },
           { id: 'videos', label: 'Videos', icon: 'fa-solid fa-video' },
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 20,
-              fontSize: 13,
-              fontWeight: 600,
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              background: activeTab === tab.id ? 'var(--accent-dim)' : 'transparent',
-              color: activeTab === tab.id ? 'var(--accent)' : 'var(--text-secondary)',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <i className={tab.icon} />
-            {tab.label}
-          </button>
-        ))}
+          { id: 'docs', label: 'Docs & PDFs', icon: 'fa-solid fa-file-pdf' },
+        ].map(tab => {
+          const isActive = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: '8px 18px',
+                borderRadius: 20,
+                fontSize: 13,
+                fontWeight: 600,
+                border: 'none',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                background: isActive ? 'var(--accent)' : 'transparent',
+                color: isActive ? '#000' : 'var(--text-secondary)',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <i className={tab.icon} />
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* ── Media Grid ── */}
@@ -166,7 +198,9 @@ export default function MediaLibraryPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
           {filteredMedia.map(item => {
             const platformInfo = PLATFORM_ICONS[item.platform] || PLATFORM_ICONS.whatsapp
-            const srcUrl = (item.media_url || item.thumbnail_url)?.replace(/&amp;/g, '&')
+            const rawSrcUrl = (item.media_url || item.thumbnail_url)
+            const srcUrl = rawSrcUrl?.replace(/&amp;/g, '&')
+            const isDoc = isPdfOrDoc(item, srcUrl)
 
             return (
               <article
@@ -183,19 +217,69 @@ export default function MediaLibraryPage() {
               >
                 {/* Media Preview Box */}
                 <div
-                  onClick={() => setPreviewMedia(item)}
+                  onClick={() => {
+                    if (isDoc && srcUrl) {
+                      window.open(srcUrl, '_blank')
+                    } else {
+                      setPreviewMedia(item)
+                    }
+                  }}
                   style={{
                     position: 'relative',
                     aspectRatio: '1 / 1',
                     background: '#0d1117',
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
                     overflow: 'hidden',
                   }}
                 >
-                  {srcUrl ? (
+                  {isDoc ? (
+                    /* ── PDF / Document Render Box ── */
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 12,
+                        width: '100%',
+                        height: '100%',
+                        background: 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(0,0,0,0.4))',
+                        padding: 20,
+                        textAlign: 'center',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 64,
+                          height: 76,
+                          background: '#e11d48',
+                          borderRadius: '8px 16px 8px 8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          boxShadow: '0 8px 20px rgba(225,29,72,0.3)',
+                          position: 'relative',
+                        }}
+                      >
+                        <i className="fa-solid fa-file-pdf" style={{ fontSize: 28, marginBottom: 2 }} />
+                        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.5px' }}>PDF</span>
+                      </div>
+
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.caption || 'Document File'}
+                      </div>
+
+                      <span style={{ fontSize: 11, color: '#f43f5e', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        Click to Open PDF <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: 9 }} />
+                      </span>
+                    </div>
+                  ) : srcUrl ? (
                     item.media_type === 'video' ? (
                       <video src={srcUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
@@ -204,7 +288,6 @@ export default function MediaLibraryPage() {
                         alt={item.caption || 'Media asset'}
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         onError={e => {
-                          // Fallback on load error
                           (e.target as HTMLElement).style.display = 'none'
                         }}
                       />
@@ -240,7 +323,9 @@ export default function MediaLibraryPage() {
                 <div style={{ padding: 16, display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-                      <span style={{ textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px' }}>{item.media_type}</span>
+                      <span style={{ textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px' }}>
+                        {isDoc ? 'DOCUMENT' : item.media_type}
+                      </span>
                       <span>{item.timestamp ? new Date(item.timestamp).toLocaleDateString() : 'Recent'}</span>
                     </div>
 
@@ -279,9 +364,9 @@ export default function MediaLibraryPage() {
                             href={srcUrl}
                             target="_blank"
                             rel="noreferrer"
-                            style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}
+                            style={{ color: isDoc ? '#f43f5e' : 'var(--accent)', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                           >
-                            View File
+                            {isDoc ? 'View PDF' : 'View File'} <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: 9 }} />
                           </a>
                         )}
                       </div>
