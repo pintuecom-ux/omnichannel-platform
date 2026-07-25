@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import { useInboxStore } from '@/stores/useInboxStore'
 import { getInitials, getAvatarColor, formatConvTime } from '@/lib/utils'
 import type { Conversation } from '@/types'
@@ -36,10 +37,11 @@ interface Props { conversation: Conversation }
 
 export default function ConversationItem({ conversation: c }: Props) {
   const { activeConversationId, setActiveConversation, isBulkMode, selectedIds, toggleSelectConv } = useInboxStore()
+  const [imgErr, setImgErr] = useState(false)
   const isActive = c.id === activeConversationId
   const isSelected = selectedIds.has(c.id)
   const name = c.contact?.name || c.contact?.phone || c.contact?.instagram_username || 'Unknown'
-  const avatarUrl = c.contact?.avatar_url
+  const avatarUrl = c.contact?.avatar_url?.replace(/&amp;/g, '&')
   const { text: lastText, icon: lastIcon, iconColor: lastIconColor } = getLastMessageDisplay(c.last_message)
 
   function handleClick() {
@@ -53,12 +55,13 @@ export default function ConversationItem({ conversation: c }: Props) {
       {isBulkMode && <div className={`conv-item-checkbox ${isSelected ? 'checked' : ''}`} />}
 
       <div className="avatar-wrap">
-        {avatarUrl ? (
+        {avatarUrl && !imgErr ? (
           <img
             src={avatarUrl}
             alt={name}
             className="avatar"
             style={{ objectFit: 'cover', width: 36, height: 36, borderRadius: '50%' }}
+            onError={() => setImgErr(true)}
           />
         ) : (
           <div className="avatar" style={{ background: getAvatarColor(c.contact_id || c.id) }}>

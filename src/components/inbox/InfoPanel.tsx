@@ -24,6 +24,7 @@ export default function InfoPanel() {
   const name = contact.name || contact.phone || contact.instagram_username || 'Unknown'
   const initials = getInitials(name)
   const color = getAvatarColor(contact.id)
+  const [panelImgErr, setPanelImgErr] = useState(false)
   const platform = conversation.platform
   const platformIcon = { whatsapp: 'fa-brands fa-whatsapp', instagram: 'fa-brands fa-instagram', facebook: 'fa-brands fa-facebook' }[platform]
   const platformCls = { whatsapp: 'pp-wa', instagram: 'pp-ig', facebook: 'pp-fb' }[platform]
@@ -68,12 +69,13 @@ export default function InfoPanel() {
           <button className="contact-edit-btn" onClick={openDrawer}>
             <i className="fa-solid fa-pen" />
           </button>
-          {contact.avatar_url ? (
+          {contact.avatar_url && !panelImgErr ? (
             <img
-              src={contact.avatar_url}
+              src={contact.avatar_url.replace(/&amp;/g, '&')}
               alt={name}
               className="contact-big-avatar"
               style={{ objectFit: 'cover' }}
+              onError={() => setPanelImgErr(true)}
             />
           ) : (
             <div

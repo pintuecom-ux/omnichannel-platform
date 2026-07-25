@@ -171,20 +171,21 @@ export class FacebookClient {
         ? data.profile_pic
         : data.profile_pic?.data?.url ?? null
 
-      // If picture wasn't returned in fields query, fetch via Meta picture endpoint
-      if (!picture) {
-        try {
-          const picRes = await axios.get(`${BASE}/${psid}/picture`, {
-            params: { redirect: false, type: 'large', access_token: this.accessToken },
-          })
-          if (picRes.data?.data?.url) {
-            picture = picRes.data.data.url
-          }
-        } catch {
-          // Direct Meta Graph CDN fallback URL
+      // Fetch direct CDN URL via Meta picture endpoint (redirect=false)
+      try {
+        const picRes = await axios.get(`${BASE}/${psid}/picture`, {
+          params: { redirect: false, type: 'large', access_token: this.accessToken },
+        })
+        if (picRes.data?.data?.url) {
+          picture = picRes.data.data.url
+        }
+      } catch {
+        if (!picture) {
           picture = `${BASE}/${psid}/picture?type=large&access_token=${this.accessToken}`
         }
       }
+
+      if (picture) picture = picture.replace(/&amp;/g, '&')
 
       console.log(`[FB getUserProfile] ✅ Success for psid=${psid}: name="${fullName}", pic="${picture}"`)
       return {
@@ -193,7 +194,7 @@ export class FacebookClient {
       }
     } catch (err: any) {
       console.warn(`[FB getUserProfile] ⚠️ Error for psid=${psid}:`, err?.response?.data?.error?.message || err.message)
-      const fallbackPic = `${BASE}/${psid}/picture?type=large&access_token=${this.accessToken}`
+      const fallbackPic = `${BASE}/${psid}/picture?type=large&access_token=${this.accessToken}`.replace(/&amp;/g, '&')
       return { name: `Facebook User (${psid.slice(-4)})`, profile_pic: fallbackPic }
     }
   }

@@ -47,6 +47,7 @@ export default function ChatWindow() {
     replyingTo: null,
   })
   const [postPreview, setPostPreview] = useState<PostPreview | null>(null)
+  const [headerImgErr, setHeaderImgErr] = useState(false)
 
   // ── WhatsApp Call modal state ──────────────────────────────────────────────
   const [showCallModal, setShowCallModal] = useState(false)
@@ -214,12 +215,13 @@ export default function ChatWindow() {
       <div className="chat-header">
         <div className="chat-contact">
           <div className="avatar-wrap">
-            {conversation.contact?.avatar_url ? (
+            {conversation.contact?.avatar_url && !headerImgErr ? (
               <img
-                src={conversation.contact.avatar_url}
+                src={conversation.contact.avatar_url.replace(/&amp;/g, '&')}
                 alt={contactName}
                 className="avatar"
                 style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }}
+                onError={() => setHeaderImgErr(true)}
               />
             ) : (
               <div className="avatar"
