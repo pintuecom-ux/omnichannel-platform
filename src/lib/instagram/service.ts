@@ -28,6 +28,22 @@ export async function uploadPublicationAsset(params: {
   }
 }
 
+async function waitForContainerReady(client: InstagramClient, creationId: string, maxAttempts = 10): Promise<void> {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const status = await client.getContainerStatus(creationId)
+      const code = status?.status_code
+      if (code === 'FINISHED') return
+      if (code === 'ERROR') {
+        throw new Error(`Media container processing failed: ${status.error_message || 'Unknown error'}`)
+      }
+    } catch (e: any) {
+      if (e.message.includes('Media container processing failed')) throw e
+    }
+    await new Promise(res => setTimeout(res, 2000))
+  }
+}
+
 export async function publishScheduledPublication(params: {
   publication: ScheduledPublication
   channel: Channel & { meta: InstagramChannelMeta }
@@ -39,66 +55,75 @@ export async function publishScheduledPublication(params: {
     throw new Error('Publication has no media payload')
   }
 
-  const creationIds: string[] = []
+  try {
+    const creationIds: string[] = []
 
-  for (const item of payload) {
-    const mediaType = item.media_type === 'carousel'
-      ? 'IMAGE'
-      : item.media_type === 'video'
-        ? 'VIDEO'
-        : 'IMAGE'
+    for (const item of payload) {
+      const mediaType = item.media_type === 'carousel'
+        ? 'IMAGE'
+        : item.media_type === 'video'
+          ? 'VIDEO'
+          : 'IMAGE'
 
-    const container = await client.createMediaContainer({
-      ...(item.media_type === 'video'
-        ? { video_url: item.public_url ?? undefined }
-        : { image_url: item.public_url ?? undefined }),
-      media_type: payload.length > 1 ? undefined : mediaType,
-      is_carousel_item: payload.length > 1,
-      caption: payload.length > 1 ? undefined : (params.publication.caption ?? undefined),
-      alt_text: item.alt_text ?? undefined,
+      const container = await client.createMediaContainer({
+        ...(item.media_type === 'video'
+          ? { video_url: item.public_url ?? undefined }
+          : { image_url: item.public_url ?? undefined }),
+        media_type: payload.length > 1 ? undefined : mediaType,
+        is_carousel_item: payload.length > 1,
+        caption: payload.length > 1 ? undefined : (params.publication.caption ?? undefined),
+        alt_text: item.alt_text ?? undefined,
+      })
+      creationIds.push(container.id)
+    }
+
+    let creationId = creationIds[0]
+
+    if (creationIds.length > 1) {
+      const carousel = await client.createMediaContainer({
+        media_type: 'CAROUSEL',
+        children: creationIds,
+        caption: params.publication.caption ?? undefined,
+      })
+      creationId = carousel.id
+    }
+
+    // Wait for Meta container to finish processing before publishing
+    await waitForContainerReady(client, creationId)
+
+    const published = await client.publishMediaContainer(creationId)
+    const mediaId = published.id
+    const media = await client.getMedia(mediaId)
+
+    await admin
+      .from('scheduled_publications')
+      .update({
+        status: 'published',
+        resulting_media_id: mediaId,
+        published_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        last_error: null,
+        meta: {
+          ...(params.publication.meta ?? {}),
+          creation_ids: creationIds,
+          publish_response: published,
+        },
+      })
+      .eq('id', params.publication.id)
+
+    await upsertInstagramMedia({
+      workspaceId: params.publication.workspace_id,
+      channelId: params.publication.channel_id,
+      publicationId: params.publication.id,
+      media,
     })
-    creationIds.push(container.id)
+
+    return mediaId
+  } catch (err: any) {
+    const detail = err.response?.data?.error?.message || err.message || 'Meta publish failed'
+    console.error('[publishScheduledPublication] Meta Error:', detail, err.response?.data)
+    throw new Error(detail)
   }
-
-  let creationId = creationIds[0]
-
-  if (creationIds.length > 1) {
-    const carousel = await client.createMediaContainer({
-      media_type: 'CAROUSEL',
-      children: creationIds,
-      caption: params.publication.caption ?? undefined,
-    })
-    creationId = carousel.id
-  }
-
-  const published = await client.publishMediaContainer(creationId)
-  const mediaId = published.id
-  const media = await client.getMedia(mediaId)
-
-  await admin
-    .from('scheduled_publications')
-    .update({
-      status: 'published',
-      resulting_media_id: mediaId,
-      published_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      last_error: null,
-      meta: {
-        ...(params.publication.meta ?? {}),
-        creation_ids: creationIds,
-        publish_response: published,
-      },
-    })
-    .eq('id', params.publication.id)
-
-  await upsertInstagramMedia({
-    workspaceId: params.publication.workspace_id,
-    channelId: params.publication.channel_id,
-    publicationId: params.publication.id,
-    media,
-  })
-
-  return mediaId
 }
 
 export async function upsertInstagramMedia(params: {

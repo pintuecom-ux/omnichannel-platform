@@ -96,12 +96,13 @@ export async function POST(req: NextRequest) {
       const updated = await loadPublication(profile.workspace_id, publicationId)
       return NextResponse.json({ publication: updated, media_id: mediaId })
     } catch (err: any) {
+      const errorMsg = err.response?.data?.error?.message || err.message || 'Publish failed'
       await admin.from('scheduled_publications').update({
         status: 'failed',
-        last_error: err.message ?? 'publish_failed',
+        last_error: errorMsg,
         updated_at: new Date().toISOString(),
       }).eq('id', publicationId)
-      return NextResponse.json({ error: err.message ?? 'Publish failed' }, { status: 500 })
+      return NextResponse.json({ error: errorMsg }, { status: 500 })
     }
   }
 
