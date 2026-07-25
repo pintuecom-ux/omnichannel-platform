@@ -149,29 +149,52 @@ export class FacebookClient {
   /** Fetch a user's public profile (name, profile_pic) via their PSID */
   async getUserProfile(psid: string) {
     try {
-      let data: any
+      let data: any = {}
       try {
         const res = await axios.get(`${BASE}/${psid}`, {
           params: { fields: 'first_name,last_name,name,profile_pic', access_token: this.accessToken },
         })
         data = res.data
       } catch {
-        const res = await axios.get(`${BASE}/${psid}`, {
-          params: { fields: 'first_name,last_name,profile_pic', access_token: this.accessToken },
-        })
-        data = res.data
+        try {
+          const res = await axios.get(`${BASE}/${psid}`, {
+            params: { fields: 'first_name,last_name,profile_pic', access_token: this.accessToken },
+          })
+          data = res.data
+        } catch (e: any) {
+          console.warn(`[FB getUserProfile] Fields query restricted for psid=${psid}:`, e?.response?.data?.error?.message || e.message)
+        }
       }
 
-      const fullName = data.name || [data.first_name, data.last_name].filter(Boolean).join(' ') || psid
-      const picture = typeof data.profile_pic === 'string'
+      const fullName = data.name || [data.first_name, data.last_name].filter(Boolean).join(' ') || null
+      let picture = typeof data.profile_pic === 'string'
         ? data.profile_pic
         : data.profile_pic?.data?.url ?? null
 
-      console.log(`[FB getUserProfile] ✅ Success for psid=${psid}: name="${fullName}"`)
-      return { name: fullName, profile_pic: picture }
+      // If picture wasn't returned in fields query, fetch via Meta picture endpoint
+      if (!picture) {
+        try {
+          const picRes = await axios.get(`${BASE}/${psid}/picture`, {
+            params: { redirect: false, type: 'large', access_token: this.accessToken },
+          })
+          if (picRes.data?.data?.url) {
+            picture = picRes.data.data.url
+          }
+        } catch {
+          // Direct Meta Graph CDN fallback URL
+          picture = `${BASE}/${psid}/picture?type=large&access_token=${this.accessToken}`
+        }
+      }
+
+      console.log(`[FB getUserProfile] ✅ Success for psid=${psid}: name="${fullName}", pic="${picture}"`)
+      return {
+        name: fullName || `Facebook User (${psid.slice(-4)})`,
+        profile_pic: picture,
+      }
     } catch (err: any) {
-      console.warn(`[FB getUserProfile] ⚠️ Could not fetch profile for psid=${psid}:`, err?.response?.data?.error?.message || err.message)
-      return null
+      console.warn(`[FB getUserProfile] ⚠️ Error for psid=${psid}:`, err?.response?.data?.error?.message || err.message)
+      const fallbackPic = `${BASE}/${psid}/picture?type=large&access_token=${this.accessToken}`
+      return { name: `Facebook User (${psid.slice(-4)})`, profile_pic: fallbackPic }
     }
   }
 }
