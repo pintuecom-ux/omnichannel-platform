@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
     let metaFlowId: string | null = null
     let metaStatus = 'DRAFT'
     let metaError: string | null = null
-    let validationErrors: any[] = []
+    const validationErrors: any[] = []
 
     if (hasWaba) {
       try {

@@ -125,7 +125,7 @@ function AgentStudioTab() {
               </div>
               <div style={{ flex: 1, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ alignSelf: 'flex-start', background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 12px', fontSize: 12, color: 'var(--text-secondary)', maxWidth: '80%' }}>
-                  Hi! 👋 I'm {newBot.displayName || 'your AI agent'}. How can I help you today?
+                  Hi! 👋 I&apos;m {newBot.displayName || 'your AI agent'}. How can I help you today?
                 </div>
               </div>
               <div style={{ padding: '8px 10px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>

@@ -281,7 +281,7 @@ export default function LifecycleStagesPage() {
                     style={{ accentColor: 'var(--accent)', width: 16, height: 16, flexShrink: 0 }}
                   />
                   <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    Whenever <strong style={{ color: 'var(--text-primary)' }}>{rule.trigger}</strong>, change contact's stage to
+                    Whenever <strong style={{ color: 'var(--text-primary)' }}>{rule.trigger}</strong>, change contact&apos;s stage to
                   </span>
                   <select
                     value={rule.targetStage}

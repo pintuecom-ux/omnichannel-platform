@@ -98,6 +98,7 @@ export default function InboxPage() {
     setConversations(merged as Conversation[])
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // eslint-disable-next-line
   useEffect(() => { loadData() }, [loadData])
 
   // Realtime subscription for new conversations / updates

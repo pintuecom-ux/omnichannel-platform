@@ -119,7 +119,7 @@ function BusinessHoursTab() {
     <div style={{ maxWidth: 640 }}>
       <Breadcrumb items={[{ label: 'Configuration' }, { label: 'Business Hours' }]} />
       <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 4 }}>Business Hours</div>
-      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 24 }}>Define your team's working hours to control availability and SLA timers</div>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 24 }}>Define your team&apos;s working hours to control availability and SLA timers</div>
 
       <div className="form-section">
         <div style={{ marginBottom: 16 }}>

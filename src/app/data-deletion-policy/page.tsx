@@ -227,14 +227,14 @@ export default function DataDeletionPage() {
             <i className="fa-solid fa-envelope" />
             <div className="alt-method-body">
               <h4>Email Request</h4>
-              <p>Send an email to <a href="mailto:privacy@reactcommerce.app">privacy@reactcommerce.app</a> from the email address registered to your account. Include your workspace name and the subject line <strong>"Data Deletion Request"</strong>. We will verify your identity and action the request within 30 days.</p>
+              <p>Send an email to <a href="mailto:privacy@reactcommerce.app">privacy@reactcommerce.app</a> from the email address registered to your account. Include your workspace name and the subject line <strong>&quot;Data Deletion Request&quot;</strong>. We will verify your identity and action the request within 30 days.</p>
             </div>
           </div>
           <div className="alt-method">
             <i className="fa-brands fa-facebook-messenger" />
             <div className="alt-method-body">
               <h4>Facebook Data Deletion Callback (Meta-required)</h4>
-              <p>If you used Facebook Login to create your account, Meta's platform requires us to provide a data deletion callback URL. When you revoke app permissions from your Facebook settings, a deletion request is automatically sent to: <code style={{ fontSize: 11, color: 'var(--accent)' }}>https://reactcommerce.app/api/auth/facebook-deletion</code>. This triggers the same 15-working-day deletion flow.</p>
+              <p>If you used Facebook Login to create your account, Meta&apos;s platform requires us to provide a data deletion callback URL. When you revoke app permissions from your Facebook settings, a deletion request is automatically sent to: <code style={{ fontSize: 11, color: 'var(--accent)' }}>https://reactcommerce.app/api/auth/facebook-deletion</code>. This triggers the same 15-working-day deletion flow.</p>
             </div>
           </div>
           <div className="alt-method">

@@ -165,7 +165,7 @@ function AccountTab() {
     <div style={{ maxWidth: 580 }}>
       <Breadcrumb leaf="Account" />
       <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 4 }}>Account</div>
-      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 24 }}>Manage your organisation's profile and branding</div>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 24 }}>Manage your organisation&apos;s profile and branding</div>
 
       <div className="form-section" style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 16 }}>Company Profile</div>

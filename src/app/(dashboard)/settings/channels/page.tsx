@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import SettingsShell from '@/components/settings/SettingsShell'
 import InstagramChannelSettings from '@/components/settings/InstagramChannelSettings'
+import FacebookChannelSettings from '@/components/settings/FacebookChannelSettings'
 import { createClient } from '@/lib/supabase/client'
 import WhatsAppProfileModal from '@/components/settings/WhatsAppProfileModal'
 const CHANNEL_TABS = [
@@ -445,9 +446,10 @@ export default function ChannelsPage() {
           {tab === 'web-chat'   && <WebChatTab />}
           {tab === 'whatsapp'   && <WhatsAppTab />}
           {tab === 'instagram'  && <InstagramChannelSettings />}
+          {tab === 'facebook'   && <FacebookChannelSettings />}
           {tab === 'sms'        && <SMSTab />}
           {tab === 'email'      && <EmailTab />}
-          {!['web-chat','whatsapp','instagram','sms','email'].includes(tab) && <GenericChannelTab tabInfo={activeTab} />}
+          {!['web-chat','whatsapp','instagram','facebook','sms','email'].includes(tab) && <GenericChannelTab tabInfo={activeTab} />}
         </div>
       </div>
     </SettingsShell>

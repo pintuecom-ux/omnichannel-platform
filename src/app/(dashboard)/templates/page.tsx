@@ -307,7 +307,7 @@ function DeleteModal({ template, onCancel, onConfirm }: { template: any; onCance
           {template.status === 'approved' && (
             <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, fontSize: 12, color: 'var(--accent3)' }}>
               <i className="fa-solid fa-triangle-exclamation" style={{ marginRight: 5 }} />
-              <strong>Approved template:</strong> the name <strong>"{template.name}"</strong> cannot be reused for 30 days after deletion.
+              <strong>Approved template:</strong> the name <strong>&quot;{template.name}&quot;</strong> cannot be reused for 30 days after deletion.
             </div>
           )}
         </div>
@@ -723,7 +723,7 @@ export default function TemplatesPage() {
                 <i className="fa-solid fa-file-code" style={{ fontSize: 32, opacity: 0.3, display: 'block', marginBottom: 12 }} />
                 {templates.length === 0
                   ? hasWABA
-                    ? <>No templates yet. Create one or click <strong>"Sync from Meta"</strong> to import existing ones.</>
+                    ? <>No templates yet. Create one or click <strong>&quot;Sync from Meta&quot;</strong> to import existing ones.</>
                     : <>Add <code style={{ color: 'var(--accent)' }}>WHATSAPP_WABA_ID</code> to env to enable Meta sync.</>
                   : 'No templates match your filters.'}
               </div>
@@ -853,7 +853,7 @@ export default function TemplatesPage() {
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12 }}>
                       <input type="checkbox" checked={form.add_security_recommendation} onChange={e => upd('add_security_recommendation', e.target.checked)} />
-                      Add "For your security, do not share this code" footer
+                      Add &quot;For your security, do not share this code&quot; footer
                     </label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                       <span style={{ color: 'var(--text-secondary)' }}>OTP expires after</span>

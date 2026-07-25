@@ -224,9 +224,10 @@ export default function FlowBuilder({
 
   function addBlock(type: ComponentType) {
     const pal = PALETTE.find(p => p.type === type)!
-const newBlock: Block = {
-  id: `blk_${Date.now()}`,
-  type,
+    // eslint-disable-next-line
+    const newBlock: Block = {
+      id: `blk_${Date.now()}`,
+      type,
   label: pal.label,
 
   ...(type === 'button'

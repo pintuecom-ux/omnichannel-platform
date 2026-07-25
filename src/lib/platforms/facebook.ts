@@ -10,6 +10,64 @@ export class FacebookClient {
     private pageId: string
   ) {}
 
+  static buildLoginUrl(opts: { appId: string; redirectUri: string; state: string; scopes: string[]; configId?: string }) {
+    const url = new URL(`https://www.facebook.com/v22.0/dialog/oauth`)
+    url.searchParams.set('client_id', opts.appId)
+    url.searchParams.set('redirect_uri', opts.redirectUri)
+    url.searchParams.set('state', opts.state)
+    url.searchParams.set('scope', opts.scopes.join(','))
+    url.searchParams.set('response_type', 'code')
+    if (opts.configId) url.searchParams.set('config_id', opts.configId)
+    return url.toString()
+  }
+
+  static async exchangeToken(code: string, appId: string, appSecret: string, redirectUri: string) {
+    const res = await axios.get(`${BASE}/oauth/access_token`, {
+      params: {
+        client_id: appId,
+        redirect_uri: redirectUri,
+        client_secret: appSecret,
+        code,
+      },
+    })
+    return res.data as { access_token: string; token_type: string; expires_in?: number }
+  }
+
+  static async getLongLivedToken(shortToken: string, appId: string, appSecret: string) {
+    const res = await axios.get(`${BASE}/oauth/access_token`, {
+      params: {
+        grant_type: 'fb_exchange_token',
+        client_id: appId,
+        client_secret: appSecret,
+        fb_exchange_token: shortToken,
+      },
+    })
+    return res.data as { access_token: string; token_type: string; expires_in?: number }
+  }
+
+  static async getPageAccounts(userToken: string) {
+    const res = await axios.get(`${BASE}/me/accounts`, {
+      params: { access_token: userToken },
+    })
+    return res.data.data as Array<{ id: string; name: string; access_token: string; category: string; tasks: string[] }>
+  }
+
+  static async subscribePageWebhook(pageId: string, pageToken: string) {
+    // Subscribe page to webhooks for messages, comments, feed
+    await axios.post(
+      `${BASE}/${pageId}/subscribed_apps`,
+      { subscribed_fields: ['messages', 'messaging_postbacks', 'messaging_optins', 'message_deliveries', 'message_reads', 'feed'] },
+      { params: { access_token: pageToken } }
+    )
+  }
+
+  static async unsubscribePageWebhook(pageId: string, pageToken: string) {
+    await axios.delete(
+      `${BASE}/${pageId}/subscribed_apps`,
+      { params: { access_token: pageToken } }
+    )
+  }
+
   /** Send a Messenger DM to a Page-scoped user ID (PSID) */
   async sendMessage(recipientId: string, text: string) {
     const res = await axios.post(

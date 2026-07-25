@@ -164,9 +164,9 @@ export default function PrivacyPolicyPage() {
               <h2>Overview</h2>
             </div>
             <div className="pp-body">
-              <p>React Commerce ("we", "us", "our") is an omnichannel business messaging platform that enables companies to manage customer conversations across WhatsApp, Facebook Messenger, Instagram DMs, and other channels from a single unified inbox.</p>
+              <p>React Commerce (&quot;we&quot;, &quot;us&quot;, &quot;our&quot;) is an omnichannel business messaging platform that enables companies to manage customer conversations across WhatsApp, Facebook Messenger, Instagram DMs, and other channels from a single unified inbox.</p>
               <p>This Privacy Policy explains what personal data we collect, why we collect it, how we use and protect it, and the rights you have over your information. It applies to all users of our platform, website, and related services.</p>
-              <p>We act as a <strong>Data Controller</strong> for account and usage data, and as a <strong>Data Processor</strong> when handling conversation data on behalf of our customers. In both cases, we are committed to protecting your privacy in accordance with applicable data protection laws including GDPR, UK GDPR, India's DPDP Act 2023, and CCPA.</p>
+              <p>We act as a <strong>Data Controller</strong> for account and usage data, and as a <strong>Data Processor</strong> when handling conversation data on behalf of our customers. In both cases, we are committed to protecting your privacy in accordance with applicable data protection laws including GDPR, UK GDPR, India&apos;s DPDP Act 2023, and CCPA.</p>
               <div className="pp-alert">
                 <i className="fa-solid fa-circle-info" />
                 <div className="pp-alert-body">
@@ -266,7 +266,7 @@ export default function PrivacyPolicyPage() {
               <div className="pp-alert amber">
                 <i className="fa-solid fa-triangle-exclamation" />
                 <div className="pp-alert-body">
-                  When you connect a messaging channel (e.g., WhatsApp), messages are routed through the respective platform's API. Those platforms have their own privacy policies. We do not control how Meta processes data within their infrastructure.
+                  When you connect a messaging channel (e.g., WhatsApp), messages are routed through the respective platform&apos;s API. Those platforms have their own privacy policies. We do not control how Meta processes data within their infrastructure.
                 </div>
               </div>
             </div>
@@ -382,7 +382,7 @@ export default function PrivacyPolicyPage() {
           <div className="pp-section" id="section-children">
             <div className="pp-section-head">
               <div className="pp-section-icon"><i className="fa-solid fa-child" /></div>
-              <h2>Children's Privacy</h2>
+              <h2>Children&apos;s Privacy</h2>
             </div>
             <div className="pp-body">
               <p>React Commerce is a B2B business messaging platform intended for use by individuals aged <strong>18 and over</strong>. We do not knowingly collect personal data from anyone under 18 years of age.</p>
