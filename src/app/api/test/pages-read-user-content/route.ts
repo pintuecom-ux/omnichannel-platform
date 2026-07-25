@@ -29,68 +29,77 @@ export async function GET(req: NextRequest) {
     const token = channel.access_token
     const results: Record<string, any> = {}
 
-    // Call 1: Page Feed / User Posts (pages_read_user_content)
+    // 1. Fetch Page Posts and all User Comments on Page Content
+    try {
+      const res = await axios.get(`${BASE}/${pageId}/published_posts`, {
+        params: {
+          fields: 'id,message,created_time,permalink_url,comments{id,message,from,created_time,like_count}',
+          access_token: token,
+        },
+      })
+      const posts = res.data?.data ?? []
+      const commentsExtracted = posts.flatMap((p: any) => (p.comments?.data ?? []).map((c: any) => ({
+        post_id: p.id,
+        post_message: p.message ?? 'No caption',
+        comment_id: c.id,
+        comment_text: c.message,
+        comment_author: c.from?.name || c.from?.id || 'Anonymous User',
+        created_time: c.created_time,
+      })))
+
+      results.page_posts_and_comments = {
+        success: true,
+        total_posts_found: posts.length,
+        total_comments_extracted: commentsExtracted.length,
+        posts_with_comments: posts,
+        all_user_comments: commentsExtracted,
+      }
+    } catch (e: any) {
+      results.page_posts_and_comments = { success: false, error: e?.response?.data || e.message }
+    }
+
+    // 2. Fetch Page Feed & Comments
     try {
       const res = await axios.get(`${BASE}/${pageId}/feed`, {
-        params: { fields: 'id,message,from,created_time,comments', access_token: token },
+        params: {
+          fields: 'id,message,from,created_time,comments{id,message,from,created_time}',
+          access_token: token,
+        },
       })
-      results.page_feed = { success: true, count: res.data?.data?.length ?? 0 }
+      results.page_feed = {
+        success: true,
+        count: res.data?.data?.length ?? 0,
+        feed_data: res.data,
+      }
     } catch (e: any) {
       results.page_feed = { success: false, error: e?.response?.data || e.message }
     }
 
-    // Call 2: Tagged Posts / User Content (pages_read_user_content)
-    try {
-      const res = await axios.get(`${BASE}/${pageId}/tagged`, {
-        params: { fields: 'id,message,from', access_token: token },
-      })
-      results.page_tagged = { success: true, data: res.data }
-    } catch (e: any) {
-      results.page_tagged = { success: false, error: e?.response?.data || e.message }
-    }
-
-    // Call 3: Visitor Posts / User Content (pages_read_user_content)
-    try {
-      const res = await axios.get(`${BASE}/${pageId}/visitor_posts`, {
-        params: { fields: 'id,message,from', access_token: token },
-      })
-      results.visitor_posts = { success: true, data: res.data }
-    } catch (e: any) {
-      results.visitor_posts = { success: false, error: e?.response?.data || e.message }
-    }
-
-    // Call 4: Page Ratings / Reviews (pages_read_user_content)
-    try {
-      const res = await axios.get(`${BASE}/${pageId}/ratings`, {
-        params: { fields: 'open_graph_story,reviewer,review_text', access_token: token },
-      })
-      results.page_ratings = { success: true, data: res.data }
-    } catch (e: any) {
-      results.page_ratings = { success: false, error: e?.response?.data || e.message }
-    }
-
-    // Call 5: User Profile Access test
-    const { data: contact } = await admin
-      .from('contacts')
-      .select('facebook_scoped_id, facebook_id')
-      .not('facebook_scoped_id', 'is', null)
-      .limit(1)
-      .maybeSingle()
-
-    const psid = contact?.facebook_scoped_id || contact?.facebook_id || '27752548701102295'
-    try {
-      const res = await axios.get(`${BASE}/${psid}`, {
-        params: { fields: 'first_name,last_name,profile_pic', access_token: token },
-      })
-      results.user_profile_access = { success: true, data: res.data }
-    } catch (e: any) {
-      results.user_profile_access = { success: false, error: e?.response?.data || e.message }
+    // 3. Specific Comments Query on first post if available
+    const firstPostId = results.page_posts_and_comments?.posts_with_comments?.[0]?.id
+    if (firstPostId) {
+      try {
+        const res = await axios.get(`${BASE}/${firstPostId}/comments`, {
+          params: {
+            fields: 'id,message,from,created_time,like_count,is_hidden',
+            access_token: token,
+          },
+        })
+        results.direct_post_comments_query = {
+          success: true,
+          post_id: firstPostId,
+          comments: res.data,
+        }
+      } catch (e: any) {
+        results.direct_post_comments_query = { success: false, error: e?.response?.data || e.message }
+      }
     }
 
     return NextResponse.json({
-      status: 'Test API Calls Executed Successfully!',
-      meta_requirement_note: 'Refresh your Meta Developer Dashboard page in 1-2 minutes. The test call counters for pages_read_user_content & Business Asset User Profile Access will turn Green (Completed).',
+      status: 'Page Content & Comments Fetched Successfully!',
       page_id: pageId,
+      page_name: channel.name,
+      timestamp: new Date().toISOString(),
       results,
     }, { status: 200 })
   } catch (err: any) {
