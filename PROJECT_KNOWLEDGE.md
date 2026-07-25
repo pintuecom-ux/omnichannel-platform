@@ -49,6 +49,12 @@ The platform is a CRM/helpdesk application that aggregates messages from various
 
 > **Note to AI Agents:** Upon any modification, feature addition, or significant update to the codebase, append the details below in reverse chronological order.
 
+### [2026-07-25] Upgraded Facebook Contact Picture Endpoint & Avatar Fallback
+- **Changes:** Modified `src/lib/platforms/facebook.ts`.
+- **Details:** 
+  1. Enhanced `FacebookClient.getUserProfile` to query Meta's dedicated `/{psid}/picture` endpoint (`type=large`, `redirect=false`) if the `profile_pic` field is missing from standard field responses.
+  2. Implemented direct Meta Graph CDN avatar URL fallbacks (`/{psid}/picture?type=large&access_token=...`) so user display pictures (DP) are reliably retrieved even if text name fields are restricted during Development Mode.
+
 ### [2026-07-25] Fixed Facebook Messenger Profile Querying & Contact Auto-Upgrading
 - **Changes:** Updated `src/lib/platforms/facebook.ts` and `src/app/api/webhooks/facebook/route.ts`.
 - **Details:** 
