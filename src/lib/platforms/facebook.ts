@@ -183,7 +183,7 @@ export function verifyFBSignature(rawBody: string, signature: string, appSecret:
 }
 
 export interface ParsedFBEvent {
-  type: 'message' | 'comment'
+  type: 'message' | 'comment' | 'read'
   pageId: string
   data: any
 }
@@ -198,7 +198,22 @@ export function parseFacebookWebhook(body: any): ParsedFBEvent[] {
     for (const messaging of entry.messaging ?? []) {
       // FIX: skip echo messages (page messaging itself)
       if (messaging.sender?.id === pageId) continue
-      // Skip delivery/read receipts — they have no .message
+
+      // Read receipts sent when customer reads Page messages on Messenger
+      if (messaging.read) {
+        events.push({
+          type: 'read',
+          pageId,
+          data: {
+            sender_id: messaging.sender.id,
+            watermark: messaging.read.watermark,
+            timestamp: messaging.timestamp,
+          },
+        })
+        continue
+      }
+
+      // Skip delivery receipts or non-message events
       if (!messaging.message) continue
       // Skip echoes sent by the page (echo flag)
       if (messaging.message.is_echo) continue

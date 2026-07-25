@@ -53,7 +53,50 @@ async function handleFBEvents(body: any) {
   for (const ev of events) {
     if (ev.type === 'message') await processFBMessage(ev)
     else if (ev.type === 'comment') await processFBComment(ev)
+    else if (ev.type === 'read') await processFBReadReceipt(ev)
   }
+}
+
+async function processFBReadReceipt(ev: any) {
+  const { pageId, data } = ev
+  console.log(`[FB Read Receipt] Processing for sender=${data.sender_id}, watermark=${data.watermark}`)
+
+  const { data: channel } = await admin
+    .from('channels')
+    .select('id, workspace_id')
+    .eq('platform', 'facebook')
+    .eq('external_id', pageId)
+    .maybeSingle()
+
+  if (!channel) return
+
+  const { data: contact } = await admin
+    .from('contacts')
+    .select('id')
+    .eq('workspace_id', channel.workspace_id)
+    .or(`facebook_scoped_id.eq.${data.sender_id},facebook_id.eq.${data.sender_id}`)
+    .maybeSingle()
+
+  if (!contact) return
+
+  const { data: conv } = await admin
+    .from('conversations')
+    .select('id')
+    .eq('channel_id', channel.id)
+    .eq('contact_id', contact.id)
+    .maybeSingle()
+
+  if (!conv) return
+
+  // Mark all outbound messages in this conversation as read
+  const { error } = await admin
+    .from('messages')
+    .update({ status: 'read' })
+    .eq('conversation_id', conv.id)
+    .eq('direction', 'outbound')
+
+  if (error) console.error('[FB Read Receipt] ❌ Error updating message status:', error.message)
+  else console.log(`[FB Read Receipt] ✅ Outbound messages marked read for conv ${conv.id}`)
 }
 
 async function processFBMessage(ev: any) {
@@ -83,50 +126,61 @@ async function processFBMessage(ev: any) {
     .or(`facebook_scoped_id.eq.${data.sender_id},facebook_id.eq.${data.sender_id}`)
     .maybeSingle()
 
-  if (!contact) {
-    // Try to enrich with Meta profile data
-    let name = data.sender_id
-    let avatarUrl: string | null = null
-    if (channel.access_token) {
-      const fb = new FacebookClient(channel.access_token, pageId)
-      const profile = await fb.getUserProfile(data.sender_id)
-      if (profile) {
-        name = profile.name
-        avatarUrl = profile.profile_pic ?? null
-      }
-    }
-    const { data: c } = await admin
-      .from('contacts')
-      .insert({
-        workspace_id: channel.workspace_id,
-        facebook_scoped_id: data.sender_id,
-        facebook_id: data.sender_id,
-        name,
-        avatar_url: avatarUrl,
-      })
-      .select()
-      .single()
-    contact = c
-  } else if (contact.name === data.sender_id || contact.name === 'Facebook User' || !contact.avatar_url) {
-    // Contact exists, but previously saved with numerical ID or missing avatar!
-    if (channel.access_token) {
-      const fb = new FacebookClient(channel.access_token, pageId)
-      const profile = await fb.getUserProfile(data.sender_id)
-      if (profile) {
-        const updates: any = {}
-        if (profile.name && profile.name !== data.sender_id) updates.name = profile.name
-        if (profile.profile_pic) updates.avatar_url = profile.profile_pic
+  const isGenericName = !contact || contact.name === data.sender_id || contact.name === 'Facebook User' || /^\d+$/.test(contact.name.trim())
+  const isMissingAvatar = !contact?.avatar_url
 
-        if (Object.keys(updates).length > 0) {
+  if (!contact || isGenericName || isMissingAvatar) {
+    if (channel.access_token) {
+      console.log(`[FB DM] Fetching Meta profile for sender_id=${data.sender_id}...`)
+      const fb = new FacebookClient(channel.access_token, pageId)
+      const profile = await fb.getUserProfile(data.sender_id)
+
+      if (profile) {
+        console.log(`[FB DM] ✅ Profile retrieved: name="${profile.name}", pic="${profile.profile_pic}"`)
+        const nameToSave = (profile.name && profile.name !== data.sender_id) ? profile.name : (contact?.name || data.sender_id)
+        const avatarToSave = profile.profile_pic || contact?.avatar_url || null
+
+        if (!contact) {
+          const { data: c } = await admin
+            .from('contacts')
+            .insert({
+              workspace_id: channel.workspace_id,
+              facebook_scoped_id: data.sender_id,
+              facebook_id: data.sender_id,
+              name: nameToSave,
+              avatar_url: avatarToSave,
+            })
+            .select()
+            .single()
+          contact = c
+        } else {
           const { data: updatedContact } = await admin
             .from('contacts')
-            .update(updates)
+            .update({
+              name: nameToSave,
+              avatar_url: avatarToSave,
+              facebook_scoped_id: data.sender_id,
+            })
             .eq('id', contact.id)
             .select()
             .single()
           if (updatedContact) contact = updatedContact
         }
       }
+    }
+
+    if (!contact) {
+      const { data: c } = await admin
+        .from('contacts')
+        .insert({
+          workspace_id: channel.workspace_id,
+          facebook_scoped_id: data.sender_id,
+          facebook_id: data.sender_id,
+          name: data.sender_id,
+        })
+        .select()
+        .single()
+      contact = c
     }
   }
   if (!contact) return
