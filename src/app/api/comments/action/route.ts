@@ -98,9 +98,29 @@ export async function POST(req: NextRequest) {
 
     if (action === 'reply') {
       if (!externalId || !text) return NextResponse.json({ error: 'Missing comment target or text' }, { status: 400 })
-      const res = await axios.post(`${GRAPH_BASE}/${externalId}/comments`, null, {
-        params: { message: text, access_token: accessToken }
-      })
+      
+      const isInstagram = conv.platform === 'instagram' || conv.meta?.thread_type === 'instagram_comment'
+      let res: any
+
+      if (isInstagram) {
+        // Meta Graph API v25.0 uses /{ig_comment_id}/replies for Instagram comment replies
+        try {
+          res = await axios.post(`${GRAPH_BASE}/${externalId}/replies`, { message: text }, {
+            params: { message: text, access_token: accessToken }
+          })
+        } catch (err: any) {
+          console.warn('[Instagram Reply] /replies endpoint failed, trying fallback /comments:', err?.response?.data || err.message)
+          res = await axios.post(`${GRAPH_BASE}/${externalId}/comments`, { message: text }, {
+            params: { message: text, access_token: accessToken }
+          })
+        }
+      } else {
+        // Facebook Page comments use /{fb_comment_id}/comments
+        res = await axios.post(`${GRAPH_BASE}/${externalId}/comments`, { message: text }, {
+          params: { message: text, access_token: accessToken }
+        })
+      }
+
       const newCommentId = res.data?.id || `reply_${Date.now()}`
 
       const { data: insertedMsg, error: insErr } = await admin.from('messages').insert({
@@ -128,7 +148,7 @@ export async function POST(req: NextRequest) {
     if (action === 'comment') {
       // Top-level brand comment on the post
       if (!postId || !text) return NextResponse.json({ error: 'Missing post target or text' }, { status: 400 })
-      const res = await axios.post(`${GRAPH_BASE}/${postId}/comments`, null, {
+      const res = await axios.post(`${GRAPH_BASE}/${postId}/comments`, { message: text }, {
         params: { message: text, access_token: accessToken }
       })
       const newCommentId = res.data?.id || `comment_${Date.now()}`
