@@ -70,10 +70,12 @@ export async function POST() {
   await InstagramClient.subscribeAppToPage(linkedPage.id, linkedPage.access_token)
 
   await admin.from('channels').update({
+    access_token: linkedPage.access_token || channel.access_token,
     meta: {
       ...(channel.meta ?? {}),
       webhook_subscribed: true,
       page_id: linkedPage.id,
+      page_access_token: linkedPage.access_token,
       legacy_page_name: linkedPage.name ?? channel.meta?.legacy_page_name ?? null,
       webhook_resubscribed_at: new Date().toISOString(),
     },

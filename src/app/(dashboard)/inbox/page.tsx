@@ -130,31 +130,6 @@ export default function InboxPage() {
     return () => { supabase.removeChannel(ch) }
   }, [workspaceId, loadData, supabase])
 
-  // 2. Automated Background Polling — silently polls Graph API v25.0 every 25s for new social posts & comments
-  useEffect(() => {
-    if (!workspaceId) return
-
-    const runSilentSync = async () => {
-      try {
-        await fetch('/api/comments/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ workspaceId }),
-        })
-        await loadData()
-      } catch (err) {
-        console.warn('[Auto-sync background poll warning]', err)
-      }
-    }
-
-    // Run silent sync once on mount
-    runSilentSync()
-
-    // Poll every 25 seconds in background
-    const interval = setInterval(runSilentSync, 25000)
-    return () => clearInterval(interval)
-  }, [workspaceId, loadData])
-
   if (loadError) {
     return (
       <div className="page-inbox" style={{ alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, padding: 32 }}>

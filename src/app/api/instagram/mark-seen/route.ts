@@ -50,7 +50,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No Instagram recipient ID found for contact' }, { status: 400 })
     }
 
-    const ig = new InstagramClient(conv.channel.access_token, conv.channel.external_id)
+    const igToken = conv.channel?.meta?.page_access_token || conv.channel?.access_token
+    const ig = new InstagramClient(igToken, conv.channel.external_id)
     await ig.markSeen(recipientId)
 
     if (conv.unread_count > 0) {

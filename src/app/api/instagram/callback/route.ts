@@ -64,11 +64,16 @@ export async function GET(req: NextRequest) {
     const debugToken = await debugInstagramToken(longToken.access_token).catch(() => null)
     const existing = await getInstagramChannel(profile.workspace_id)
 
+    // Primary token for messaging API calls MUST be the linked Page Access Token when available
+    const primaryToken = pageAccessToken || longToken.access_token
+
     const meta = {
       ...(existing?.meta ?? {}),
       login_mode: 'instagram_login',
       username: account.username ?? existing?.meta?.username ?? null,
       account_type: account.account_type ?? existing?.meta?.account_type ?? null,
+      user_access_token: longToken.access_token,
+      page_access_token: pageAccessToken ?? existing?.meta?.page_access_token ?? null,
       token_expires_at: longToken.expires_in
         ? new Date(Date.now() + longToken.expires_in * 1000).toISOString()
         : null,
@@ -87,7 +92,7 @@ export async function GET(req: NextRequest) {
       await admin.from('channels').update({
         name: account.username || existing.name,
         external_id: account.id,
-        access_token: longToken.access_token,
+        access_token: primaryToken,
         is_active: true,
         meta,
       }).eq('id', existing.id)
@@ -97,7 +102,7 @@ export async function GET(req: NextRequest) {
         platform: 'instagram',
         name: account.username || 'Instagram',
         external_id: account.id,
-        access_token: longToken.access_token,
+        access_token: primaryToken,
         is_active: true,
         meta,
       })

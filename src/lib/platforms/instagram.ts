@@ -134,7 +134,12 @@ export class InstagramClient {
         sender_action: 'mark_seen',
       })
     } catch (err: any) {
-      console.warn(`[IG markSeen] Could not send read receipt to ${recipientId}:`, err?.response?.data?.error?.message || err.message)
+      const errorObj = err?.response?.data?.error
+      if (errorObj?.code === 3 || errorObj?.message?.includes('Application does not have the capability to make this API call')) {
+        console.warn(`[IG markSeen] Development Mode restriction: recipient ${recipientId} is not added as an Instagram Tester under Meta App Roles, or token is missing instagram_manage_messages scope.`)
+      } else {
+        console.warn(`[IG markSeen] Could not send read receipt to ${recipientId}:`, errorObj?.message || err.message)
+      }
     }
   }
 

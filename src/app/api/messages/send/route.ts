@@ -415,7 +415,8 @@ export async function POST(req: NextRequest) {
     /* ==================================================================== */
 
     else if (conv.platform === 'instagram') {
-      const ig = new InstagramClient(conv.channel.access_token, conv.channel.external_id)
+      const igToken = conv.channel.meta?.page_access_token || conv.channel.access_token
+      const ig = new InstagramClient(igToken, conv.channel.external_id)
       const identity = getInstagramIdentity(conv.contact)
 
       if (!identity?.instagram_scoped_id && type !== 'comment_reply') {
@@ -562,8 +563,16 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ message: msg })
   } catch (err: any) {
-    const errorMsg = err?.response?.data?.error?.message || err?.message || 'Failed to send'
+    const errorObj = err?.response?.data?.error
+    const errorMsg = errorObj?.message || err?.message || 'Failed to send'
     console.error('[Send API Error]', errorMsg, err?.response?.data)
+
+    // Handle Meta Graph API OAuthException #3 cleanly with developer guidance
+    if (errorObj?.code === 3 || errorMsg.includes('Application does not have the capability to make this API call')) {
+      const diagnosticMsg = "Meta API Error (#3): Your Meta App is in Development Mode or lacks instagram_manage_messages scope. Please add the recipient Instagram account as an 'Instagram Tester' under App Roles in developers.facebook.com and accept the invite in the Instagram app (Settings -> Tester invitations)."
+      return NextResponse.json({ error: diagnosticMsg }, { status: 403 })
+    }
+
     return NextResponse.json({ error: errorMsg }, { status: 500 })
   }
 }
