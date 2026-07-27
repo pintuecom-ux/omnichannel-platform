@@ -2,16 +2,16 @@
 /**
  * src/components/sidebar/Sidebar.tsx
  *
- * CHANGE: 'calls' entry now has href: '/calls' and soon: false.
- * The phone icon in ChatWindow navigates to /calls — it needs to be routable.
+ * UPGRADE: Enterprise docked navigation rail with tooltips & optional pinned drawer mode.
+ * Eliminates accidental hover jitter and layout shifting.
  */
 
+import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 const NAV = [
   { id: 'inbox',     icon: 'fa-solid fa-comments',       label: 'Inbox',            href: '/inbox',    section: 'Messaging' },
-  // FIX Issue 1: removed soon:true, added href so Calls page is accessible
   { id: 'calls',     icon: 'fa-solid fa-phone',           label: 'Calls',            href: '/calls',    section: 'Messaging' },
   { id: 'email',     icon: 'fa-solid fa-envelope',        label: 'Email',            soon: true,        section: 'Messaging' },
   { id: 'livechat',  icon: 'fa-solid fa-bolt',            label: 'Live Chat Widget', soon: true,        section: 'Messaging' },
@@ -35,6 +35,22 @@ export default function Sidebar() {
   const router   = useRouter()
   const pathname = usePathname()
   const sections = [...new Set(NAV.map(n => n.section))]
+  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    const saved = localStorage.getItem('sidebar_expanded') === 'true'
+    setExpanded(saved)
+    const app = document.getElementById('app')
+    if (app && saved) app.classList.add('sidebar-expanded')
+  }, [])
+
+  function toggleExpand() {
+    const next = !expanded
+    setExpanded(next)
+    localStorage.setItem('sidebar_expanded', String(next))
+    const app = document.getElementById('app')
+    if (app) app.classList.toggle('sidebar-expanded', next)
+  }
 
   function toggleTheme() {
     const html = document.documentElement
@@ -51,10 +67,23 @@ export default function Sidebar() {
   }
 
   return (
-    <nav id="sidebar">
+    <nav id="sidebar" className={expanded ? 'expanded' : ''}>
+      {!expanded && (
+        <button className="sidebar-compact-toggle" onClick={toggleExpand} title="Expand Navigation">
+          <i className="fa-solid fa-chevron-right" />
+        </button>
+      )}
+
       <div className="sidebar-logo">
-        <div className="logo-icon" style={{ fontSize: '10px' }}>RC</div>
-        <span className="logo-text">React Commerce</span>
+        <div className="logo-left">
+          <div className="logo-icon">RC</div>
+          <span className="logo-text">React Commerce</span>
+        </div>
+        {expanded && (
+          <button className="sidebar-toggle-btn" onClick={toggleExpand} title="Collapse Navigation">
+            <i className="fa-solid fa-chevron-left" style={{ fontSize: 11 }} />
+          </button>
+        )}
       </div>
 
       <div className="sidebar-nav">
@@ -68,12 +97,12 @@ export default function Sidebar() {
               return (
                 <div
                   key={item.id}
-                  className={`nav-item ${isSoon ? 'coming-soon cs-tooltip' : ''} ${isActive ? 'active' : ''}`}
-                  data-tip={isSoon ? 'Coming Soon' : undefined}
+                  className={`nav-item ${isSoon ? 'coming-soon' : ''} ${isActive ? 'active' : ''}`}
                   onClick={() => { if (!isSoon && href) router.push(href) }}
                 >
                   <span className="nav-icon"><i className={item.icon} /></span>
                   <span className="nav-label">{item.label}</span>
+                  <span className="nav-tooltip">{isSoon ? `${item.label} (Soon)` : item.label}</span>
                   {'badge' in item && typeof item.badge === 'number' && item.badge > 0 && !isSoon && (
                     <span className="nav-badge" id={`badge-${item.id}`}>{item.badge}</span>
                   )}
@@ -90,17 +119,20 @@ export default function Sidebar() {
           <div className="theme-toggle-item" onClick={toggleTheme}>
             <span className="nav-icon"><i className="fa-solid fa-circle-half-stroke" /></span>
             <span className="nav-label">Theme</span>
+            <span className="nav-tooltip">Toggle Theme</span>
             <div className="toggle-track" id="toggleTrack"><div className="toggle-knob" /></div>
           </div>
           <div className="nav-item" onClick={() => router.push('/settings')}>
             <span className="nav-icon"><i className="fa-solid fa-gear" /></span>
             <span className="nav-label">Settings</span>
+            <span className="nav-tooltip">Settings</span>
           </div>
           <div className="nav-item" onClick={handleLogout}>
             <span className="nav-icon">
-              <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--accent2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#000' }}>AK</div>
+              <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent2), var(--accent))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff' }}>AK</div>
             </span>
             <span className="nav-label">Sign Out</span>
+            <span className="nav-tooltip">Sign Out</span>
           </div>
         </div>
       </div>

@@ -205,14 +205,17 @@ export default function MediaLibraryPage() {
             return (
               <article
                 key={item.id}
+                className="media-card"
                 style={{
                   border: '1px solid var(--border)',
                   borderRadius: 16,
                   overflow: 'hidden',
-                  background: 'var(--bg-panel)',
+                  background: 'var(--bg-surface)',
                   display: 'flex',
                   flexDirection: 'column',
-                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                  position: 'relative',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+                  transition: 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.22s',
                 }}
               >
                 {/* Media Preview Box */}
