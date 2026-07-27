@@ -418,6 +418,8 @@ export function parseInstagramWebhook(body: any): ParsedIGEvent[] {
       if (messaging.message?.is_echo) continue
 
       if (messaging.read) {
+        const rawMids = messaging.read.mids || (messaging.read.mid ? [messaging.read.mid] : [])
+        const watermark = messaging.read.watermark || messaging.read.timestamp || messaging.timestamp || Date.now()
         events.push({
           type: 'status',
           igAccountId,
@@ -426,15 +428,17 @@ export function parseInstagramWebhook(body: any): ParsedIGEvent[] {
             status: 'read',
             sender_id: messaging.sender?.id,
             recipient_id: messaging.recipient?.id,
-            watermark: messaging.read.watermark ?? null,
-            mids: messaging.read.mids ?? [],
-            timestamp: new Date(messaging.timestamp || messaging.read.watermark || Date.now()).toISOString(),
+            watermark,
+            mids: rawMids,
+            timestamp: new Date(messaging.timestamp || watermark || Date.now()).toISOString(),
           },
         })
         continue
       }
 
       if (messaging.delivery) {
+        const rawMids = messaging.delivery.mids || (messaging.delivery.mid ? [messaging.delivery.mid] : [])
+        const watermark = messaging.delivery.watermark || messaging.delivery.timestamp || messaging.timestamp || Date.now()
         events.push({
           type: 'status',
           igAccountId,
@@ -443,9 +447,9 @@ export function parseInstagramWebhook(body: any): ParsedIGEvent[] {
             status: 'delivered',
             sender_id: messaging.sender?.id,
             recipient_id: messaging.recipient?.id,
-            watermark: messaging.delivery.watermark ?? null,
-            mids: messaging.delivery.mids ?? [],
-            timestamp: new Date(messaging.timestamp || messaging.delivery.watermark || Date.now()).toISOString(),
+            watermark,
+            mids: rawMids,
+            timestamp: new Date(messaging.timestamp || watermark || Date.now()).toISOString(),
           },
         })
         continue
