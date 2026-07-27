@@ -200,21 +200,50 @@ async function processIGDM(ev: any) {
   let contentType = 'text'
   let mediaUrl: string | null = null
   let mediaMime: string | null = null
+  let bodyText = data.text
 
-  if (data.attachments && data.attachments.length > 0) {
+  const extraMeta: any = {}
+
+  if (data.is_reaction) {
+    contentType = 'reaction'
+    bodyText = `[Reaction: ${data.reaction_emoji || 'removed'}]`
+    extraMeta.reaction_emoji = data.reaction_emoji
+    extraMeta.reaction_message_id = data.target_message_id
+    extraMeta.reaction_action = data.reaction_action
+  } else if (data.attachments && data.attachments.length > 0) {
     const att = data.attachments[0]
     const attType = att.type
     if (attType === 'image') contentType = 'image'
     else if (attType === 'video') contentType = 'video'
     else if (attType === 'audio') contentType = 'audio'
     else if (attType === 'file') contentType = 'document'
-    else if (attType === 'story_mention') contentType = 'story_mention'
-    else if (attType === 'share' || attType === 'ig_reel') contentType = 'share'
-    else contentType = 'image'
+    else if (attType === 'story_mention') {
+      contentType = 'story_mention'
+      extraMeta.is_story_mention = true
+      extraMeta.story_url = att.payload?.url ?? att.payload?.media?.image_url ?? null
+      extraMeta.story_id = att.payload?.id ?? null
+    } else if (attType === 'share' || attType === 'ig_reel') {
+      contentType = 'share'
+      extraMeta.is_story_share = true
+      extraMeta.story_url = att.payload?.url ?? att.payload?.media?.image_url ?? null
+      extraMeta.story_id = att.payload?.id ?? null
+    } else {
+      contentType = 'image'
+    }
 
     mediaUrl = att.payload?.url ?? att.payload?.media?.image_url ?? null
+    bodyText = data.text || `[${contentType}]`
   } else if (!data.text) {
     contentType = 'image'
+    bodyText = `[${contentType}]`
+  }
+
+  if (data.is_story_reply || data.reply_to) {
+    extraMeta.is_story_reply = data.is_story_reply ?? false
+    extraMeta.reply_to = data.reply_to
+    if (data.reply_to?.mid) {
+      extraMeta.reply_to_external_id = data.reply_to.mid
+    }
   }
 
   const { error: msgErr } = await admin.from('messages').insert({
@@ -223,7 +252,7 @@ async function processIGDM(ev: any) {
     external_id: data.external_id,
     direction: 'inbound',
     content_type: contentType,
-    body: data.text || (contentType !== 'text' ? `[${contentType}]` : null),
+    body: bodyText,
     media_url: mediaUrl,
     media_mime: mediaMime,
     status: 'delivered',
@@ -231,12 +260,12 @@ async function processIGDM(ev: any) {
     meta: {
       sender_id: data.sender_id,
       attachments: data.attachments,
-      reply_to: data.reply_to,
       identity: {
         instagram_scoped_id: data.sender_id,
         username: contact.instagram_username ?? null,
       },
       raw: data,
+      ...extraMeta,
     },
   })
   if (msgErr) console.error('[IG DM] ❌ Message insert error:', msgErr.message)

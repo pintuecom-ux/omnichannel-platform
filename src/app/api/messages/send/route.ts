@@ -427,13 +427,45 @@ export async function POST(req: NextRequest) {
       if (type === 'text') {
         externalId   = (await ig.sendDM(recipientId, body))?.message_id
         contentType2 = 'text'
-      } else if (type === 'image' || type === 'video' || type === 'audio' || type === 'document') {
-        if (!savedMediaUrl) {
-          return NextResponse.json({ error: 'Media URL required' }, { status: 400 })
+      } else if (type === 'media' || type === 'image' || type === 'video' || type === 'audio' || type === 'document') {
+        if (!savedMediaUrl && file) {
+          const fileObj   = file as File
+          const buffer    = Buffer.from(await fileObj.arrayBuffer())
+          const mime      = fileObj.type
+          const name      = (filename as string) ?? fileObj.name ?? 'attachment'
+          const mediaType = detectMediaType(mime)
+          
+          const ext = mime.split('/')[1]?.split(';')[0]?.replace(/[^a-z0-9]/g, '') ?? 'bin'
+          const storagePath = `${profile.workspace_id}/${conversation_id}/${Date.now()}.${ext}`
+          const { error: upErr } = await admin.storage
+            .from('media')
+            .upload(storagePath, buffer, { contentType: mime, upsert: true })
+          if (upErr) throw new Error(`Media upload failed: ${upErr.message}`)
+          
+          const { data: pub } = admin.storage.from('media').getPublicUrl(storagePath)
+          savedMediaUrl = pub.publicUrl
+          savedMime = mime
+          contentType2 = mediaType
+        } else if (!savedMediaUrl) {
+          return NextResponse.json({ error: 'Media URL or file attachment required' }, { status: 400 })
+        } else {
+          contentType2 = type === 'media' ? 'image' : type
         }
-        const mediaType = type === 'document' ? 'file' : type
-        externalId   = (await ig.sendMediaDM(recipientId, mediaType, savedMediaUrl))?.message_id
-        contentType2 = type
+        
+        let mediaType: 'image' | 'video' | 'audio' | 'file' = 'file'
+        if (contentType2 === 'image' || contentType2 === 'sticker') mediaType = 'image'
+        else if (contentType2 === 'video') mediaType = 'video'
+        else if (contentType2 === 'audio') mediaType = 'audio'
+
+        externalId = (await ig.sendMediaDM(recipientId, mediaType, savedMediaUrl))?.message_id
+        messageBody = body ?? `[${contentType2}]`
+      } else if (type === 'story_reply') {
+        const storyId = payload.story_id || reply_to_external_id
+        if (!storyId || !body) {
+          return NextResponse.json({ error: 'story_id and body required for story reply' }, { status: 400 })
+        }
+        externalId = (await ig.sendStoryReply(recipientId, storyId, body))?.message_id
+        contentType2 = 'story_reply'
       } else if (type === 'reaction') {
         if (!reaction_message_id) {
           return NextResponse.json({ error: 'reaction_message_id required' }, { status: 400 })

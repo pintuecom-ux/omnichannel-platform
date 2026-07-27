@@ -394,7 +394,33 @@ export function parseInstagramWebhook(body: any): ParsedIGEvent[] {
 
     for (const messaging of entry.messaging ?? []) {
       if (messaging.message?.is_echo) continue
+      
+      if (messaging.reaction) {
+        events.push({
+          type: 'dm',
+          igAccountId,
+          isPageObject,
+          data: {
+            sender_id: messaging.sender?.id,
+            recipient_id: messaging.recipient?.id,
+            external_id: `reaction_${messaging.reaction.mid || Date.now()}_${messaging.sender?.id}`,
+            is_reaction: true,
+            reaction_emoji: messaging.reaction.emoji ?? null,
+            reaction_action: messaging.reaction.action ?? 'react',
+            target_message_id: messaging.reaction.mid ?? null,
+            timestamp: new Date(messaging.timestamp || Date.now()).toISOString(),
+          },
+        })
+        continue
+      }
+
       if (!messaging.message) continue
+
+      const msg = messaging.message
+      const isStoryReply = Boolean(
+        msg.reply_to?.story ||
+        msg.attachments?.some((a: any) => a.type === 'story_mention' || a.type === 'share' || a.type === 'ig_reel')
+      )
 
       events.push({
         type: 'dm',
@@ -403,10 +429,12 @@ export function parseInstagramWebhook(body: any): ParsedIGEvent[] {
         data: {
           sender_id: messaging.sender.id,
           recipient_id: messaging.recipient.id,
-          external_id: messaging.message.mid,
-          text: messaging.message.text ?? null,
-          attachments: messaging.message.attachments ?? null,
-          timestamp: new Date(messaging.timestamp).toISOString(),
+          external_id: msg.mid,
+          text: msg.text ?? null,
+          attachments: msg.attachments ?? null,
+          reply_to: msg.reply_to ?? null,
+          is_story_reply: isStoryReply,
+          timestamp: new Date(messaging.timestamp || Date.now()).toISOString(),
         },
       })
     }

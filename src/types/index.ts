@@ -31,6 +31,8 @@ export type MessageContentType =
   | 'contacts'      // contact card
   | 'unsupported'   // polls, broadcast lists, unknown future types
   | 'call'          // WhatsApp voice call events (started, ended, missed, failed)
+  | 'story_mention' // Instagram Story mention
+  | 'share'         // Instagram Story share or shared post
 
 export interface Profile {
   id: string

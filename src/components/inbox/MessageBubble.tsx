@@ -157,11 +157,11 @@ function WaBubble({
   contextMsgId,
   allMessages,
   reaction,
+  storyTitle,
 }: {
   isOut: boolean
   isFirst: boolean
   isLast: boolean
-  // FIX 1 (same fix): typed as string so 'deleted' comparison never raises ts(2367)
   time: string
   status: string
   mediaPad?: boolean
@@ -169,6 +169,7 @@ function WaBubble({
   contextMsgId?: string | null
   allMessages?: Message[]
   reaction?: string | null
+  storyTitle?: string | null
 }) {
   const br = getBorderRadius(isOut, isFirst, isLast)
 
@@ -183,6 +184,17 @@ function WaBubble({
         }`}
         style={{ borderRadius: br, padding: mediaPad ? 4 : undefined, position: 'relative' }}
       >
+        {storyTitle && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '4px 8px', marginBottom: 6, borderRadius: 6,
+            background: 'linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)',
+            color: '#fff', fontSize: 11, fontWeight: 600,
+          }}>
+            <i className="fa-brands fa-instagram" /> {storyTitle}
+          </div>
+        )}
+
         {/* Quoted reply preview — shows the original message above the reply */}
         {contextMsgId && allMessages && (
           <QuotedPreview contextMsgId={contextMsgId} allMessages={allMessages} />
@@ -294,30 +306,30 @@ function CommentBubble({
       <div className="comment-text">{msg.body}</div>
 
       <div className="comment-actions">
-          <button className="comment-action reply" onClick={() => onSetReply?.(externalId, safeText(msg.body))}>
-            Reply
-          </button>
-          <button className="comment-action" disabled={!!busy} onClick={() => doAction('like')}>
-            Like
-          </button>
-          <button
-            className="comment-action"
-            disabled={!!busy}
-            onClick={() => doAction(hidden ? 'unhide' : 'hide')}
-          >
-            {hidden ? 'Unhide' : 'Hide'}
-          </button>
-          <button
-            className="comment-action"
-            disabled={!!busy}
-            onClick={() => { if (confirm('Delete comment?')) doAction('delete') }}
-          >
-            Delete
-          </button>
-          <button className="comment-action convert" disabled={!!busy} onClick={() => doAction('to_dm')}>
-            → DM
-          </button>
-        </div>
+        <button className="comment-action reply" onClick={() => onSetReply?.(externalId, safeText(msg.body))}>
+          Reply
+        </button>
+        <button className="comment-action" disabled={!!busy} onClick={() => doAction('like')}>
+          Like
+        </button>
+        <button
+          className="comment-action"
+          disabled={!!busy}
+          onClick={() => doAction(hidden ? 'unhide' : 'hide')}
+        >
+          {hidden ? 'Unhide' : 'Hide'}
+        </button>
+        <button
+          className="comment-action"
+          disabled={!!busy}
+          onClick={() => { if (confirm('Delete comment?')) doAction('delete') }}
+        >
+          Delete
+        </button>
+        <button className="comment-action convert" disabled={!!busy} onClick={() => doAction('to_dm')}>
+          → DM
+        </button>
+      </div>
     </div>
   )
 }
@@ -356,7 +368,11 @@ export default function MessageBubble({
   const reaction =
     msg.meta?.reaction?.emoji ??
     msg.meta?.sent_reaction ??
+    msg.meta?.reaction_emoji ??
     null
+
+  // Story Reply title indicator
+  const storyTitle = msg.meta?.is_story_reply ? 'Replied to your story' : null
 
   // FIX 1: cast to string before '=== deleted' to avoid ts(2367)
   // MessageStatus union doesn't include 'deleted' but Meta sends it as a webhook status
@@ -382,8 +398,7 @@ export default function MessageBubble({
 
   /* ── Reaction sent (small status row, not a full bubble) ── */
   if (msg.content_type === 'reaction') {
-    const emoji = msg.meta?.reaction_emoji
-    if (!emoji) return null
+    const emoji = msg.meta?.reaction_emoji || msg.meta?.reaction?.emoji || '❤️'
     return (
       <div
         className={`wa-msg-row ${isOut ? 'out' : 'in'}`}
@@ -407,6 +422,60 @@ export default function MessageBubble({
     )
   }
 
+  /* ── Instagram Story Mention / Share ── */
+  if (
+    msg.content_type === 'story_mention' ||
+    msg.content_type === 'share' ||
+    msg.meta?.is_story_mention ||
+    msg.meta?.is_story_share
+  ) {
+    const title = msg.meta?.is_story_mention || msg.content_type === 'story_mention'
+      ? 'Mentioned you in their Story'
+      : 'Shared an Instagram Story'
+    const thumbUrl = mediaUrl || msg.meta?.story_url || msg.meta?.url
+
+    return (
+      <div
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{ position: 'relative' }}
+      >
+        {lightbox && thumbUrl && (
+          <Lightbox
+            url={thumbUrl}
+            mime={mime || 'image/jpeg'}
+            filename="Instagram Story"
+            onClose={() => setLightbox(false)}
+          />
+        )}
+        <WaBubble
+          isOut={isOut} isFirst={isFirstInGroup} isLast={isLastInGroup}
+          time={time} status={isDeleted ? 'deleted' : msg.status}
+          contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction}
+          storyTitle={title}
+        >
+          {thumbUrl ? (
+            <div
+              onClick={() => setLightbox(true)}
+              style={{ cursor: 'zoom-in', position: 'relative', marginTop: 2 }}
+            >
+              <img
+                src={thumbUrl}
+                alt="Instagram Story"
+                style={{ maxWidth: 220, maxHeight: 380, borderRadius: 8, objectFit: 'cover', display: 'block', border: '1px solid var(--border)' }}
+              />
+            </div>
+          ) : (
+            <div style={{ padding: '8px 12px', background: 'var(--bg-panel)', borderRadius: 8, fontSize: 13, fontStyle: 'italic', color: 'var(--text-muted)' }}>
+              Story content no longer available or expired
+            </div>
+          )}
+          {msg.body && <div style={{ marginTop: 6, fontSize: 14 }}>{msg.body}</div>}
+        </WaBubble>
+        {hovered && !isDeleted && <HoverBar msg={msg} isOut={isOut} />}
+      </div>
+    )
+  }
 
   /* ── Call events ── */
   if (msg.content_type === 'call') {
@@ -537,7 +606,7 @@ export default function MessageBubble({
         <WaBubble
           isOut={isOut} isFirst={isFirstInGroup} isLast={isLastInGroup}
           time={time} status={isDeleted ? 'deleted' : msg.status}
-          contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction}
+          contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction} storyTitle={storyTitle}
         >
           {mediaUrl
             ? <AudioPlayer url={mediaUrl} isOut={isOut} />
@@ -568,7 +637,7 @@ export default function MessageBubble({
         <WaBubble
           isOut={isOut} isFirst={isFirstInGroup} isLast={isLastInGroup}
           time={time} status={isDeleted ? 'deleted' : msg.status}
-          mediaPad contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction}
+          mediaPad contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction} storyTitle={storyTitle}
         >
           {mediaUrl && (
             <img
@@ -604,7 +673,7 @@ export default function MessageBubble({
         <WaBubble
           isOut={isOut} isFirst={isFirstInGroup} isLast={isLastInGroup}
           time={time} status={isDeleted ? 'deleted' : msg.status}
-          mediaPad contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction}
+          mediaPad contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction} storyTitle={storyTitle}
         >
           <div
             onClick={() => setLightbox(true)}
@@ -667,7 +736,7 @@ export default function MessageBubble({
         <WaBubble
           isOut={isOut} isFirst={isFirstInGroup} isLast={isLastInGroup}
           time={time} status={isDeleted ? 'deleted' : msg.status}
-          contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction}
+          contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction} storyTitle={storyTitle}
         >
           <div
             onClick={() => mediaUrl && setLightbox(true)}
@@ -723,7 +792,7 @@ export default function MessageBubble({
         <WaBubble
           isOut={isOut} isFirst={isFirstInGroup} isLast={isLastInGroup}
           time={time} status={msg.status}
-          contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction}
+          contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction} storyTitle={storyTitle}
         >
           <div style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4 }}>
             Template: {msg.meta?.template_name || 'unknown'}
@@ -746,7 +815,7 @@ export default function MessageBubble({
         <WaBubble
           isOut={isOut} isFirst={isFirstInGroup} isLast={isLastInGroup}
           time={time} status={msg.status}
-          contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction}
+          contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction} storyTitle={storyTitle}
         >
           <div style={{ fontSize: 10, color: 'var(--accent2)', fontWeight: 600, marginBottom: 5 }}>
             <i className="fa-solid fa-diagram-project" style={{ marginRight: 5 }} />
@@ -793,7 +862,7 @@ export default function MessageBubble({
         <WaBubble
           isOut={isOut} isFirst={isFirstInGroup} isLast={isLastInGroup}
           time={time} status={msg.status}
-          contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction}
+          contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction} storyTitle={storyTitle}
         >
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginBottom: 3 }}>
             {label}
@@ -835,7 +904,7 @@ export default function MessageBubble({
         <WaBubble
           isOut={isOut} isFirst={isFirstInGroup} isLast={isLastInGroup}
           time={time} status={msg.status}
-          contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction}
+          contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction} storyTitle={storyTitle}
         >
           <a
             href={`https://maps.google.com/?q=${lat},${lng}`}
@@ -891,7 +960,7 @@ export default function MessageBubble({
       <WaBubble
         isOut={isOut} isFirst={isFirstInGroup} isLast={isLastInGroup}
         time={time} status={isDeleted ? 'deleted' : msg.status}
-        contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction}
+        contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction} storyTitle={storyTitle}
       >
         {isDeleted ? (
           <span style={{ fontStyle: 'italic', opacity: 0.5, fontSize: 12 }}>
