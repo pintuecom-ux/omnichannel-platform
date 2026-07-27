@@ -54,19 +54,12 @@ export async function POST(req: NextRequest) {
     if (action === 'like') {
       if (!externalId) return NextResponse.json({ error: 'Message has no external_id' }, { status: 400 })
       
-      try {
-        if (isInstagram) {
-          try {
-            await axios.post(`${GRAPH_BASE}/${externalId}/likes`, null, { params: { access_token: accessToken } })
-          } catch (err: any) {
-            console.warn('[Instagram Like] /likes failed, trying user_likes parameter:', err?.response?.data || err.message)
-            await axios.post(`${GRAPH_BASE}/${externalId}`, null, { params: { user_likes: true, access_token: accessToken } })
-          }
-        } else {
+      if (!isInstagram) {
+        try {
           await axios.post(`${GRAPH_BASE}/${externalId}/likes`, null, { params: { access_token: accessToken } })
+        } catch (err: any) {
+          console.warn('[Facebook Like Warning]', err?.response?.data || err?.message)
         }
-      } catch (err: any) {
-        console.warn('[Comments Action Like Warning]', err?.response?.data || err?.message)
       }
 
       const updatedMeta = { ...(message.meta || {}), is_liked: true }
@@ -77,19 +70,12 @@ export async function POST(req: NextRequest) {
     if (action === 'unlike') {
       if (!externalId) return NextResponse.json({ error: 'Message has no external_id' }, { status: 400 })
       
-      try {
-        if (isInstagram) {
-          try {
-            await axios.delete(`${GRAPH_BASE}/${externalId}/likes`, { params: { access_token: accessToken } })
-          } catch (err: any) {
-            console.warn('[Instagram Unlike] /likes delete failed, trying user_likes=false parameter:', err?.response?.data || err.message)
-            await axios.post(`${GRAPH_BASE}/${externalId}`, null, { params: { user_likes: false, access_token: accessToken } })
-          }
-        } else {
+      if (!isInstagram) {
+        try {
           await axios.delete(`${GRAPH_BASE}/${externalId}/likes`, { params: { access_token: accessToken } })
+        } catch (err: any) {
+          console.warn('[Facebook Unlike Warning]', err?.response?.data || err?.message)
         }
-      } catch (err: any) {
-        console.warn('[Comments Action Unlike Warning]', err?.response?.data || err?.message)
       }
 
       const updatedMeta = { ...(message.meta || {}), is_liked: false }
@@ -100,7 +86,7 @@ export async function POST(req: NextRequest) {
     if (action === 'hide') {
       if (!externalId) return NextResponse.json({ error: 'Message has no external_id' }, { status: 400 })
       try {
-        await axios.post(`${GRAPH_BASE}/${externalId}`, null, { params: { is_hidden: true, access_token: accessToken } })
+        await axios.post(`${GRAPH_BASE}/${externalId}`, null, { params: { hide: true, access_token: accessToken } })
       } catch (err: any) {
         console.warn('[Comments Action Hide Warning]', err?.response?.data || err?.message)
       }
@@ -113,7 +99,7 @@ export async function POST(req: NextRequest) {
     if (action === 'unhide') {
       if (!externalId) return NextResponse.json({ error: 'Message has no external_id' }, { status: 400 })
       try {
-        await axios.post(`${GRAPH_BASE}/${externalId}`, null, { params: { is_hidden: false, access_token: accessToken } })
+        await axios.post(`${GRAPH_BASE}/${externalId}`, null, { params: { hide: false, access_token: accessToken } })
       } catch (err: any) {
         console.warn('[Comments Action Unhide Warning]', err?.response?.data || err?.message)
       }
