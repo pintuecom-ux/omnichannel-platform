@@ -141,38 +141,50 @@ export default function CommentsWindow() {
   }
 
   if (!conversation) return null
-  const title = conversation.title || `Post #${String(conversation.meta?.post_id || conversation.external_id || '').slice(-6)}`
+  const rawTitle = conversation.title ? conversation.title.replace(/^Comments:\s*/i, '') : ''
+  const title = rawTitle || `Post #${String(conversation.meta?.post_id || conversation.external_id || '').slice(-6)}`
 
   return (
-    <div id="main-workspace" onClick={() => setOpenMenuId(null)}>
-      {/* Header */}
-      <div className="chat-header">
-        <div className="ch-left">
-          <div className="ch-avatar" style={{ background: platform === 'instagram' ? 'linear-gradient(45deg, #f09433, #e1306c, #bc1888)' : '#1877f2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', borderRadius: '8px', width: 38, height: 38 }}>
-            <i className="fa-solid fa-photo-film" style={{ fontSize: 18 }} />
+    <div id="main-workspace" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }} onClick={() => setOpenMenuId(null)}>
+      {/* Header — aligned strictly with globals.css */}
+      <div className="chat-header" style={{ flexShrink: 0, padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="chat-contact" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="avatar-wrap">
+            <div
+              className="avatar"
+              style={{
+                background: platform === 'instagram' ? 'linear-gradient(45deg, #f09433, #e1306c, #bc1888)' : '#1877f2',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+                borderRadius: '8px', width: 36, height: 36
+              }}
+            >
+              <i className="fa-solid fa-photo-film" style={{ fontSize: 16 }} />
+            </div>
           </div>
-          <div className="ch-info">
-            <span className="ch-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {title}
-              <span style={{ fontSize: 11, background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: 4, color: 'var(--text-muted)' }}>
+          <div className="chat-contact-info">
+            <div className="name" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+              <span>{title}</span>
+              <span className={`platform-pill-sm ${platform === 'instagram' ? 'pp-ig' : 'pp-fb'}`} style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4 }}>
                 {platform === 'instagram' ? 'IG Post' : 'FB Post'}
               </span>
-            </span>
-            <span className="ch-status" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span className="status-dot online" /> Active Public Comment Thread
-            </span>
+            </div>
+            <div className="sub" style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+              <span>Active Public Comment Thread</span>
+            </div>
           </div>
         </div>
-        <div className="ch-right">
-          <button className={`ch-status-btn ${status}`} onClick={handleStatusChange} title="Click to cycle status">
-            <span className="dot" />
+
+        {/* Status Pill — matches exact status-pill CSS */}
+        <div className="chat-header-actions">
+          <div className={`status-pill ${status}`} onClick={handleStatusChange} title="Click to cycle status">
+            <i className="fa-solid fa-circle" style={{ fontSize: '7px' }} />
             <span>{STATUS_LABEL[status]}</span>
-          </button>
+          </div>
         </div>
       </div>
 
-      {/* Messages / Comments Feed */}
-      <div className="chat-body" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 16, overflowY: 'auto' }}>
+      {/* Messages / Comments Feed — flex: 1 so composer stays pinned at the bottom! */}
+      <div className="workspace-content" style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {messages.length === 0 ? (
           <div style={{ margin: 'auto', textAlign: 'center', opacity: 0.6, padding: 32 }}>
             <i className="fa-regular fa-comments" style={{ fontSize: 36, marginBottom: 8 }} />
@@ -292,8 +304,8 @@ export default function CommentsWindow() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Composer Area */}
-      <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', background: 'var(--card-bg, #16181b)', padding: 12 }}>
+      {/* Composer Area — rigidly pinned at the bottom of the screen */}
+      <div style={{ flexShrink: 0, borderTop: '1px solid rgba(255, 255, 255, 0.08)', background: 'var(--card-bg, #16181b)', padding: 12 }}>
         {replyTarget && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(59, 130, 246, 0.15)', borderLeft: '3px solid var(--accent, #3b82f6)', padding: '6px 12px', borderRadius: '0 6px 6px 0', marginBottom: 8, fontSize: 12 }}>
             <span style={{ color: '#93c5fd', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '85%' }}>

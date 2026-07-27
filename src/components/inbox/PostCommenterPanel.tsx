@@ -104,8 +104,17 @@ export default function PostCommenterPanel() {
 
   const userHistory = filteredHistory.length > 0 ? filteredHistory : (selectedComment ? [selectedComment] : [])
 
+  // Construct valid post permalink URL
+  const targetUrl = post?.permalink || (
+    isIG 
+      ? `https://instagram.com` 
+      : (post?.id ? `https://facebook.com/${post.id}` : `https://facebook.com`)
+  )
+
+  const hasMedia = Boolean(post?.media_url || post?.thumbnail_url)
+
   return (
-    <div id="info-panel" style={{ width: '320px', minWidth: '320px' }}>
+    <div id="info-panel" style={{ width: '320px', minWidth: '320px', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       
       {/* ── TOP HALF: EXACT POST VIEW (50%) ─────────────────────────────────── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 16, borderBottom: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -114,11 +123,27 @@ export default function PostCommenterPanel() {
             <i className={isIG ? "fa-brands fa-instagram" : "fa-brands fa-facebook"} style={{ color: isIG ? '#e1306c' : '#1877f2', fontSize: 15 }} />
             {isIG ? 'Instagram Post' : 'Facebook Page Post'}
           </span>
-          {post?.permalink && (
-            <a href={post.permalink} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--accent, #3b82f6)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-              Open <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: 10 }} />
-            </a>
-          )}
+          <a
+            href={targetUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: '#fff',
+              background: isIG ? 'linear-gradient(45deg, #e1306c, #bc1888)' : '#1877f2',
+              padding: '4px 10px',
+              borderRadius: 6,
+              textDecoration: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              transition: 'opacity 0.2s',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+            }}
+          >
+            Open <i className="fa-solid fa-arrow-up-right-from-square" style={{ fontSize: 10 }} />
+          </a>
         </div>
 
         {/* Post native card container */}
@@ -134,19 +159,14 @@ export default function PostCommenterPanel() {
             </div>
           </div>
 
-          {/* Media preview */}
-          {post?.media_url || post?.thumbnail_url ? (
-            <div style={{ background: '#000', maxHeight: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          {/* Adaptive Media preview — only renders when media exists! */}
+          {hasMedia && (
+            <div style={{ background: '#000', maxHeight: 340, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
               <img
-                src={(post.thumbnail_url || post.media_url)!}
+                src={(post!.thumbnail_url || post!.media_url)!}
                 alt="Post Media"
-                style={{ width: '100%', maxHeight: 220, objectFit: 'cover' }}
+                style={{ width: '100%', maxHeight: 340, objectFit: 'contain' }}
               />
-            </div>
-          ) : (
-            <div style={{ height: 120, background: 'linear-gradient(135deg, #1e2024, #2d3139)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#737373', flexDirection: 'column', gap: 6 }}>
-              <i className="fa-solid fa-file-lines" style={{ fontSize: 28 }} />
-              <span style={{ fontSize: 11 }}>Text Post</span>
             </div>
           )}
 
@@ -164,7 +184,7 @@ export default function PostCommenterPanel() {
           </div>
 
           {/* Caption & Hashtags */}
-          <div style={{ padding: '10px 12px', fontSize: 13, color: '#e5e7eb', lineHeight: 1.5, maxHeight: 110, overflowY: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+          <div style={{ padding: '12px', fontSize: 13, color: '#e5e7eb', lineHeight: 1.5, maxHeight: 180, overflowY: 'auto', wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
             {renderCaptionWithHashtags(post?.caption)}
           </div>
         </div>
