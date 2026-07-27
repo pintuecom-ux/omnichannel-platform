@@ -74,9 +74,27 @@ export class InstagramClient {
     return res.data
   }
 
+  /** Helper to dispatch messages and read receipts with fallback routing between me/messages and {id}/messages against Error #3 */
+  private async sendInstagramMessage(payload: Record<string, any>) {
+    try {
+      // In Development Mode / Standard Access, calling me/messages circumvents API capability restriction #3
+      return await this.post('me/messages', payload)
+    } catch (err: any) {
+      const code = err?.response?.data?.error?.code
+      const msg = err?.response?.data?.error?.message || ''
+      console.warn(`[IG sendInstagramMessage] me/messages attempt threw (${code || 'error'}): ${msg}. Retrying with direct account endpoint...`)
+      // Fallback to explicit IG account ID endpoint
+      try {
+        return await this.post(`${this.igAccountId}/messages`, payload)
+      } catch (fallbackErr: any) {
+        throw fallbackErr || err
+      }
+    }
+  }
+
   /** Send an Instagram DM text message to a user (Instagram-scoped ID) */
   async sendDM(recipientId: string, text: string) {
-    return this.post(`${this.igAccountId}/messages`, {
+    return this.sendInstagramMessage({
       recipient: { id: recipientId },
       message: { text },
     })
@@ -84,7 +102,7 @@ export class InstagramClient {
 
   /** Send a media attachment (image, video, audio, file) via Instagram DM */
   async sendMediaDM(recipientId: string, mediaType: 'image' | 'video' | 'audio' | 'file', mediaUrl: string) {
-    return this.post(`${this.igAccountId}/messages`, {
+    return this.sendInstagramMessage({
       recipient: { id: recipientId },
       message: {
         attachment: {
@@ -100,7 +118,7 @@ export class InstagramClient {
 
   /** Send an emoji reaction to an Instagram DM message */
   async sendReactionDM(recipientId: string, messageId: string, emoji: string) {
-    return this.post(`${this.igAccountId}/messages`, {
+    return this.sendInstagramMessage({
       recipient: { id: recipientId },
       message: {
         reaction: {
@@ -114,7 +132,7 @@ export class InstagramClient {
 
   /** Send a reply to a user's Instagram Story */
   async sendStoryReply(recipientId: string, storyId: string, text: string) {
-    return this.post(`${this.igAccountId}/messages`, {
+    return this.sendInstagramMessage({
       recipient: { id: recipientId },
       message: {
         text,
@@ -129,7 +147,7 @@ export class InstagramClient {
   /** Mark messages as read ("seen") on Instagram DM */
   async markSeen(recipientId: string) {
     try {
-      await this.post(`${this.igAccountId}/messages`, {
+      await this.sendInstagramMessage({
         recipient: { id: recipientId },
         sender_action: 'mark_seen',
       })
