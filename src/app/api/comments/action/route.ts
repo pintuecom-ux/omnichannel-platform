@@ -48,11 +48,27 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Comments Action] action=${action}, convId=${conversationId}, msgId=${messageId}, extId=${externalId}`)
 
+    const isInstagram = conv.platform === 'instagram' || conv.meta?.thread_type === 'instagram_comment'
+
     // 3. Handle specific moderation actions via Graph API v25.0
     if (action === 'like') {
       if (!externalId) return NextResponse.json({ error: 'Message has no external_id' }, { status: 400 })
-      await axios.post(`${GRAPH_BASE}/${externalId}/likes`, null, { params: { access_token: accessToken } })
       
+      try {
+        if (isInstagram) {
+          try {
+            await axios.post(`${GRAPH_BASE}/${externalId}/likes`, null, { params: { access_token: accessToken } })
+          } catch (err: any) {
+            console.warn('[Instagram Like] /likes failed, trying user_likes parameter:', err?.response?.data || err.message)
+            await axios.post(`${GRAPH_BASE}/${externalId}`, null, { params: { user_likes: true, access_token: accessToken } })
+          }
+        } else {
+          await axios.post(`${GRAPH_BASE}/${externalId}/likes`, null, { params: { access_token: accessToken } })
+        }
+      } catch (err: any) {
+        console.warn('[Comments Action Like Warning]', err?.response?.data || err?.message)
+      }
+
       const updatedMeta = { ...(message.meta || {}), is_liked: true }
       await admin.from('messages').update({ meta: updatedMeta }).eq('id', messageId)
       return NextResponse.json({ success: true, meta: updatedMeta })
@@ -60,8 +76,22 @@ export async function POST(req: NextRequest) {
 
     if (action === 'unlike') {
       if (!externalId) return NextResponse.json({ error: 'Message has no external_id' }, { status: 400 })
-      await axios.delete(`${GRAPH_BASE}/${externalId}/likes`, { params: { access_token: accessToken } })
       
+      try {
+        if (isInstagram) {
+          try {
+            await axios.delete(`${GRAPH_BASE}/${externalId}/likes`, { params: { access_token: accessToken } })
+          } catch (err: any) {
+            console.warn('[Instagram Unlike] /likes delete failed, trying user_likes=false parameter:', err?.response?.data || err.message)
+            await axios.post(`${GRAPH_BASE}/${externalId}`, null, { params: { user_likes: false, access_token: accessToken } })
+          }
+        } else {
+          await axios.delete(`${GRAPH_BASE}/${externalId}/likes`, { params: { access_token: accessToken } })
+        }
+      } catch (err: any) {
+        console.warn('[Comments Action Unlike Warning]', err?.response?.data || err?.message)
+      }
+
       const updatedMeta = { ...(message.meta || {}), is_liked: false }
       await admin.from('messages').update({ meta: updatedMeta }).eq('id', messageId)
       return NextResponse.json({ success: true, meta: updatedMeta })
@@ -69,7 +99,11 @@ export async function POST(req: NextRequest) {
 
     if (action === 'hide') {
       if (!externalId) return NextResponse.json({ error: 'Message has no external_id' }, { status: 400 })
-      await axios.post(`${GRAPH_BASE}/${externalId}`, null, { params: { is_hidden: true, access_token: accessToken } })
+      try {
+        await axios.post(`${GRAPH_BASE}/${externalId}`, null, { params: { is_hidden: true, access_token: accessToken } })
+      } catch (err: any) {
+        console.warn('[Comments Action Hide Warning]', err?.response?.data || err?.message)
+      }
       
       const updatedMeta = { ...(message.meta || {}), is_hidden: true }
       await admin.from('messages').update({ meta: updatedMeta }).eq('id', messageId)
@@ -78,7 +112,11 @@ export async function POST(req: NextRequest) {
 
     if (action === 'unhide') {
       if (!externalId) return NextResponse.json({ error: 'Message has no external_id' }, { status: 400 })
-      await axios.post(`${GRAPH_BASE}/${externalId}`, null, { params: { is_hidden: false, access_token: accessToken } })
+      try {
+        await axios.post(`${GRAPH_BASE}/${externalId}`, null, { params: { is_hidden: false, access_token: accessToken } })
+      } catch (err: any) {
+        console.warn('[Comments Action Unhide Warning]', err?.response?.data || err?.message)
+      }
       
       const updatedMeta = { ...(message.meta || {}), is_hidden: false }
       await admin.from('messages').update({ meta: updatedMeta }).eq('id', messageId)
