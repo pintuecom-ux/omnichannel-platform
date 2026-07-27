@@ -233,6 +233,9 @@ async function processIGDM(ev: any) {
     .maybeSingle()
 
   const conversationMeta = { ...(conv?.meta ?? {}), thread_type: 'dm' }
+  const lastMsgSnippet = data.is_reaction
+    ? (data.reaction_action === 'unreact' ? 'Removed reaction' : `[Reaction: ${data.reaction_emoji || '❤️'}]`)
+    : (data.text || (data.attachments?.length ? '[media]' : 'New message'))
 
   if (!conv) {
     const { data: c, error: convErr } = await admin
@@ -243,7 +246,7 @@ async function processIGDM(ev: any) {
         channel_id: channel.id,
         platform: 'instagram',
         status: 'open',
-        last_message: data.text || '[media]',
+        last_message: lastMsgSnippet,
         last_message_at: data.timestamp,
         unread_count: 1,
         meta: conversationMeta,
@@ -256,7 +259,7 @@ async function processIGDM(ev: any) {
     await admin
       .from('conversations')
       .update({
-        last_message: data.text || '[media]',
+        last_message: lastMsgSnippet,
         last_message_at: data.timestamp,
         unread_count: (conv.unread_count || 0) + 1,
         updated_at: data.timestamp,

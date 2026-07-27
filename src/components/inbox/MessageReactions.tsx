@@ -5,62 +5,90 @@ import type { Message } from '@/types'
 
 const QUICK_EMOJIS = ['❤️', '👍', '😂', '🔥', '😮', '😢', '😡', '🙏']
 
-export function HoverBar({ msg, isOut }: { msg: Message; isOut: boolean }) {
+export function HoverBar({
+  msg,
+  isOut,
+  currentReaction,
+  onKeepOpen,
+}: {
+  msg: Message
+  isOut: boolean
+  currentReaction?: string | null
+  onKeepOpen?: (open: boolean) => void
+}) {
   const { setReplyTo } = useInboxStore()
   const [showEmojis, setShowEmojis] = useState(false)
 
   async function sendReaction(emoji: string) {
-    if (!msg.external_id) return
+    if (!msg.external_id && !msg.id) return
+    const isToggleOff = currentReaction && currentReaction === emoji
+    const targetEmoji = isToggleOff ? '' : emoji
+
     setShowEmojis(false)
+    if (onKeepOpen) onKeepOpen(false)
+
     fetch('/api/messages/send', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         conversation_id:     msg.conversation_id,
         type:                'reaction',
-        reaction_emoji:      emoji,
-        reaction_message_id: msg.external_id,
+        reaction_emoji:      targetEmoji,
+        reaction_message_id: msg.external_id || msg.id,
       }),
     }).catch(console.error)
   }
 
+  const handlePickerToggle = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const nextState = !showEmojis
+    setShowEmojis(nextState)
+    if (onKeepOpen) onKeepOpen(nextState)
+  }
+
   return (
     <div
+      onMouseEnter={() => onKeepOpen && onKeepOpen(true)}
+      onMouseLeave={() => !showEmojis && onKeepOpen && onKeepOpen(false)}
       style={{
         position: 'absolute',
-        top: -16,
-        ...(isOut ? { left: 12 } : { right: 12 }),
+        top: '50%',
+        transform: 'translateY(-50%)',
+        ...(isOut
+          ? { right: 'calc(100% + 8px)' }
+          : { left: 'calc(100% + 8px)' }),
         display: 'flex',
-        gap: 6,
+        gap: 4,
         alignItems: 'center',
-        padding: '3px 8px',
+        padding: '3px 7px',
         borderRadius: 24,
-        background: 'var(--bg-panel, rgba(28, 30, 38, 0.90))',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
+        background: 'var(--bg-panel, rgba(24, 26, 34, 0.95))',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
         border: '1px solid var(--border, rgba(255,255,255,0.15))',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.35)',
-        zIndex: 50,
-        transition: 'all 0.2s ease',
+        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.45)',
+        zIndex: 90,
+        whiteSpace: 'nowrap',
       }}
     >
       {showEmojis && (
         <div
+          onMouseEnter={() => onKeepOpen && onKeepOpen(true)}
           style={{
             position: 'absolute',
             bottom: 'calc(100% + 8px)',
-            ...(isOut ? { left: 0 } : { right: 0 }),
-            background: 'var(--bg-panel, rgba(28, 30, 38, 0.95))',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
+            ...(isOut ? { right: 0 } : { left: 0 }),
+            background: 'var(--bg-panel, rgba(24, 26, 34, 0.98))',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
             border: '1px solid var(--border, rgba(255,255,255,0.18))',
             borderRadius: 24,
             padding: '6px 10px',
             display: 'flex',
             gap: 6,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.55)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
             whiteSpace: 'nowrap',
-            zIndex: 60,
+            zIndex: 100,
           }}
         >
           {QUICK_EMOJIS.map((e) => (
@@ -68,8 +96,13 @@ export function HoverBar({ msg, isOut }: { msg: Message; isOut: boolean }) {
               key={e}
               onClick={() => sendReaction(e)}
               style={{
-                background: 'none', border: 'none', cursor: 'pointer', fontSize: 20,
-                padding: '2px 4px', lineHeight: 1, fontFamily: 'inherit',
+                background: currentReaction === e ? 'rgba(255,255,255,0.2)' : 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 20,
+                padding: '2px 4px',
+                lineHeight: 1,
+                borderRadius: 6,
                 transition: 'transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1)',
               }}
               onMouseEnter={(ev) => { (ev.currentTarget as HTMLElement).style.transform = 'scale(1.35)' }}
@@ -81,14 +114,21 @@ export function HoverBar({ msg, isOut }: { msg: Message; isOut: boolean }) {
         </div>
       )}
 
-      {/* Instant 1-Click Heart Reaction */}
+      {/* Instant 1-Click Heart Reaction / Un-react */}
       <button
         onClick={() => sendReaction('❤️')}
-        title="Quick React ❤️"
+        title={currentReaction === '❤️' ? 'Remove Heart Reaction' : 'Quick React ❤️'}
         style={{
-          background: 'none', border: 'none', cursor: 'pointer', fontSize: 15,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '2px', lineHeight: 1,
+          background: currentReaction === '❤️' ? 'rgba(255, 59, 48, 0.25)' : 'none',
+          border: 'none',
+          cursor: 'pointer',
+          fontSize: 15,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '2px 4px',
+          borderRadius: '50%',
+          lineHeight: 1,
           transition: 'transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1)',
         }}
         onMouseEnter={(ev) => { (ev.currentTarget as HTMLElement).style.transform = 'scale(1.25)' }}
@@ -99,14 +139,20 @@ export function HoverBar({ msg, isOut }: { msg: Message; isOut: boolean }) {
 
       {/* Expandable Emoji Picker Tray */}
       <button
-        onClick={() => setShowEmojis((v) => !v)}
+        onClick={handlePickerToggle}
         title="More Reactions"
         style={{
           background: showEmojis ? 'rgba(255,255,255,0.15)' : 'transparent',
-          border: 'none', cursor: 'pointer',
-          width: 22, height: 22, borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: showEmojis ? '#ff3b30' : 'var(--text-muted, #a0a0b0)', fontSize: 13,
+          border: 'none',
+          cursor: 'pointer',
+          width: 22,
+          height: 22,
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: showEmojis ? '#ff3b30' : 'var(--text-muted, #a0a0b0)',
+          fontSize: 13,
           transition: 'all 0.15s ease',
         }}
         onMouseEnter={(ev) => { (ev.currentTarget as HTMLElement).style.color = 'var(--text-primary, #fff)' }}
@@ -120,10 +166,17 @@ export function HoverBar({ msg, isOut }: { msg: Message; isOut: boolean }) {
         onClick={() => setReplyTo(msg)}
         title="Reply to message"
         style={{
-          background: 'transparent', border: 'none', cursor: 'pointer',
-          width: 22, height: 22, borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--text-muted, #a0a0b0)', fontSize: 12,
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          width: 22,
+          height: 22,
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--text-muted, #a0a0b0)',
+          fontSize: 12,
           transition: 'all 0.15s ease',
         }}
         onMouseEnter={(ev) => { (ev.currentTarget as HTMLElement).style.color = 'var(--text-primary, #fff)' }}

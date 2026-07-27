@@ -18,8 +18,11 @@ function getLastMessageDisplay(msg: string | null): { text: string; icon?: strin
   if (lower === '[audio]' || lower === 'audio')     return { text: 'Voice message', icon: 'fa-solid fa-microphone', iconColor: '#f472b6' }
   if (lower === '[document]' || lower === 'document') return { text: 'Document', icon: 'fa-solid fa-file', iconColor: '#fb923c' }
   if (lower === '[sticker]' || lower === 'sticker') return { text: 'Sticker', icon: 'fa-solid fa-face-smile', iconColor: '#facc15' }
-  if (lower === '[location]' || lower === 'location') return { text: 'Location', icon: 'fa-solid fa-location-dot', iconColor: '#a78bfa' }
-  if (lower === '[reaction]' || lower === 'reaction') return { text: 'Reaction', icon: 'fa-solid fa-heart', iconColor: '#f87171' }
+  if (lower.startsWith('[reaction') || lower === 'reaction') {
+    const match = msg.match(/^\[Reaction:\s*(.+)\]$/i)
+    const emoji = match ? match[1] : '❤️'
+    return { text: `${emoji} Reaction`, icon: 'fa-solid fa-heart', iconColor: '#f87171' }
+  }
   if (lower.startsWith('[template:')) return { text: 'Template message', icon: 'fa-solid fa-bolt', iconColor: 'var(--accent)' }
   if (lower.includes('.jpg') || lower.includes('.jpeg') || lower.includes('.png') || lower.includes('.gif') || lower.includes('.webp'))
     return { text: 'Photo', icon: 'fa-solid fa-image', iconColor: '#4ade80' }

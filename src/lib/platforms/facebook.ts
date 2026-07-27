@@ -104,6 +104,30 @@ export class FacebookClient {
     }
   }
 
+  /** Send an emoji reaction to a Facebook Messenger DM message */
+  async sendReaction(recipientId: string, messageId: string, emoji: string) {
+    try {
+      const isUnreact = !emoji || emoji === 'unreact' || emoji === ''
+      const res = await axios.post(
+        `${BASE}/${this.pageId}/messages`,
+        {
+          recipient: { id: recipientId },
+          sender_action: isUnreact ? 'unreact' : 'react',
+          payload: {
+            message_id: messageId,
+            ...(isUnreact ? {} : { reaction: emoji }),
+          },
+        },
+        { params: { access_token: this.accessToken } }
+      )
+      return res.data
+    } catch (err: any) {
+      const fbError = err?.response?.data?.error?.message || err?.response?.data || err.message
+      console.error(`[FB sendReaction Error] To ${recipientId}:`, fbError)
+      throw new Error(`Meta API Error: ${typeof fbError === 'string' ? fbError : JSON.stringify(fbError)}`)
+    }
+  }
+
   /** Reply to a Facebook Page post comment */
   async replyToComment(commentId: string, text: string) {
     try {

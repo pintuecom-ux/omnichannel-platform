@@ -158,6 +158,10 @@ function WaBubble({
   allMessages,
   reaction,
   storyTitle,
+  hovered,
+  isDeleted,
+  msg,
+  onKeepOpen,
 }: {
   isOut: boolean
   isFirst: boolean
@@ -170,6 +174,10 @@ function WaBubble({
   allMessages?: Message[]
   reaction?: string | null
   storyTitle?: string | null
+  hovered?: boolean
+  isDeleted?: boolean
+  msg?: Message
+  onKeepOpen?: (open: boolean) => void
 }) {
   const br = getBorderRadius(isOut, isFirst, isLast)
 
@@ -207,25 +215,37 @@ function WaBubble({
           {isOut && <TickIcon status={status} />}
         </div>
 
-        {/* Reaction bubble — shown below the bubble */}
+        {/* Reaction badge — pinned to bottom corner */}
         {reaction && (
           <div
             style={{
               position: 'absolute',
-              bottom: -12,
-              ...(isOut ? { left: -4 } : { right: -4 }),
-              background: 'var(--bg-panel)',
-              border: '1px solid var(--border)',
+              bottom: -10,
+              ...(isOut ? { left: 4 } : { right: 4 }),
+              background: 'var(--bg-panel, rgba(28, 30, 38, 0.95))',
+              border: '1px solid var(--border, rgba(255, 255, 255, 0.18))',
               borderRadius: 12,
-              padding: '1px 5px',
-              fontSize: 14,
-              lineHeight: 1.5,
-              boxShadow: '0 1px 6px rgba(0,0,0,0.3)',
-              zIndex: 2,
+              padding: '1px 6px',
+              fontSize: 13,
+              lineHeight: 1.2,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+              zIndex: 10,
+              color: 'initial',
+              fontFamily: '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif',
             }}
           >
             {reaction}
           </div>
+        )}
+
+        {/* Hover Action Bar — Instagram adjacent position */}
+        {hovered && !isDeleted && msg && (
+          <HoverBar
+            msg={msg}
+            isOut={isOut}
+            currentReaction={reaction}
+            onKeepOpen={onKeepOpen}
+          />
         )}
       </div>
     </div>
@@ -957,6 +977,7 @@ export default function MessageBubble({
         isOut={isOut} isFirst={isFirstInGroup} isLast={isLastInGroup}
         time={time} status={isDeleted ? 'deleted' : msg.status}
         contextMsgId={contextMsgId} allMessages={msgList} reaction={reaction} storyTitle={storyTitle}
+        hovered={hovered} isDeleted={isDeleted} msg={msg} onKeepOpen={setHovered}
       >
         {isDeleted ? (
           <span style={{ fontStyle: 'italic', opacity: 0.5, fontSize: 12 }}>
@@ -969,7 +990,6 @@ export default function MessageBubble({
           </span>
         )}
       </WaBubble>
-      {hovered && !isDeleted && <HoverBar msg={msg} isOut={isOut} />}
     </div>
   )
 }
