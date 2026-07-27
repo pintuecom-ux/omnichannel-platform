@@ -110,10 +110,10 @@ export default function InboxPage() {
     await loadData()
   }, [workspaceId, loadData])
 
-  // eslint-disable-next-line
+  // Initial load
   useEffect(() => { loadData() }, [loadData])
 
-  // Realtime subscription for new conversations / updates
+  // 1. Supabase Realtime Subscription — auto-syncs conversations & inbound messages live
   useEffect(() => {
     if (!workspaceId) return
     const ch = supabase
@@ -122,8 +122,37 @@ export default function InboxPage() {
         event: '*', schema: 'public', table: 'conversations',
         filter: `workspace_id=eq.${workspaceId}`,
       }, () => loadData())
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'messages',
+        filter: `workspace_id=eq.${workspaceId}`,
+      }, () => loadData())
       .subscribe()
     return () => { supabase.removeChannel(ch) }
+  }, [workspaceId, loadData, supabase])
+
+  // 2. Automated Background Polling — silently polls Graph API v25.0 every 25s for new social posts & comments
+  useEffect(() => {
+    if (!workspaceId) return
+
+    const runSilentSync = async () => {
+      try {
+        await fetch('/api/comments/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspaceId }),
+        })
+        await loadData()
+      } catch (err) {
+        console.warn('[Auto-sync background poll warning]', err)
+      }
+    }
+
+    // Run silent sync once on mount
+    runSilentSync()
+
+    // Poll every 25 seconds in background
+    const interval = setInterval(runSilentSync, 25000)
+    return () => clearInterval(interval)
   }, [workspaceId, loadData])
 
   if (loadError) {
