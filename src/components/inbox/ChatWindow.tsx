@@ -7,6 +7,7 @@ import MessageBubble from './MessageBubble'
 import InputArea from './InputArea'
 import type { Conversation, Message } from '@/types'
 import CallModal from '@/components/inbox/CallModal'
+import CommentsWindow from './CommentsWindow'
 
 const STATUS_CYCLE = ['open', 'pending', 'closed'] as const
 const STATUS_LABEL = { open: 'Open', pending: 'Pending', closed: 'Closed' }
@@ -33,8 +34,11 @@ export default function ChatWindow() {
   const conversation = useActiveConversation()
   const platform = conversation?.platform ?? 'whatsapp'
   const isWA     = platform === 'whatsapp'
-  const isCommentThread = (conversation?.meta?.thread_type ?? 'dm') === 'instagram_comment'
-  const defaultTab: 'messages' | 'notes' | 'comments' = isCommentThread ? 'comments' : 'messages'
+  const isCommentThread = (conversation?.meta?.thread_type ?? 'dm') === 'instagram_comment' || (conversation?.meta?.thread_type ?? 'dm') === 'comment'
+  if (isCommentThread) {
+    return <CommentsWindow />
+  }
+  const defaultTab: 'messages' | 'notes' | 'comments' = 'messages'
 
   const [status,      setStatus]      = useState<'open' | 'pending' | 'closed'>('open')
   const [commentUi, setCommentUi] = useState<{

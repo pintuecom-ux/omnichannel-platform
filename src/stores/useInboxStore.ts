@@ -15,6 +15,7 @@ interface InboxState {
   isBulkMode: boolean
   selectedIds: Set<string>
   replyToMessage: Message | null
+  selectedComment: Message | null
 
   setConversations: (convs: Conversation[]) => void
   addConversation: (conv: Conversation) => void
@@ -32,6 +33,7 @@ interface InboxState {
   clearSelection: () => void
   setLoading: (v: boolean) => void
   setReplyTo: (msg: Message | null) => void
+  setSelectedComment: (msg: Message | null) => void
 }
 
 export const useInboxStore = create<InboxState>((set) => ({
@@ -46,6 +48,7 @@ export const useInboxStore = create<InboxState>((set) => ({
   isBulkMode: false,
   selectedIds: new Set(),
   replyToMessage: null,
+  selectedComment: null,
 
   setConversations: (conversations) => set({ conversations }),
 
@@ -59,7 +62,7 @@ export const useInboxStore = create<InboxState>((set) => ({
     ),
   })),
 
-  setActiveConversation: (id) => set({ activeConversationId: id, messages: [], replyToMessage: null }),
+  setActiveConversation: (id) => set({ activeConversationId: id, messages: [], replyToMessage: null, selectedComment: null }),
   setMessages: (messages) => set({ messages }),
 
   addMessage: (msg) => set(state => ({
@@ -73,7 +76,7 @@ export const useInboxStore = create<InboxState>((set) => ({
   })),
 
   setPlatformFilter: (platformFilter) => set({ platformFilter }),
-  setViewFilter: (viewFilter) => set({ viewFilter, activeConversationId: null }),
+  setViewFilter: (viewFilter) => set({ viewFilter, activeConversationId: null, selectedComment: null }),
   setTabFilter: (tabFilter) => set({ tabFilter }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
 
@@ -91,6 +94,7 @@ export const useInboxStore = create<InboxState>((set) => ({
   clearSelection: () => set({ selectedIds: new Set() }),
   setLoading: (isLoading) => set({ isLoading }),
   setReplyTo: (replyToMessage) => set({ replyToMessage }),
+  setSelectedComment: (selectedComment) => set({ selectedComment }),
 }))
 
 // ── SAFE SELECTORS (no infinite loops) ──────────────────────────────────────
@@ -108,13 +112,19 @@ export function useFilteredConversations() {
     let list = conversations
 
     // ── Chats vs Comments panel tabs ─────────────────────────────────────────
-    // Comments tab: only IG comment threads (meta.thread_type === 'instagram_comment')
+    // Comments tab: IG & FB comment threads (meta.thread_type === 'instagram_comment' | 'comment')
     // Chats tab:    everything else — WA, IG DMs, FB DMs
     if (viewFilter === 'comments') {
-      list = list.filter(c => (c.meta?.thread_type ?? 'dm') === 'instagram_comment')
+      list = list.filter(c => {
+        const type = c.meta?.thread_type ?? 'dm'
+        return type === 'instagram_comment' || type === 'comment'
+      })
     } else {
       // 'chats' — exclude comment threads
-      list = list.filter(c => (c.meta?.thread_type ?? 'dm') !== 'instagram_comment')
+      list = list.filter(c => {
+        const type = c.meta?.thread_type ?? 'dm'
+        return type !== 'instagram_comment' && type !== 'comment'
+      })
     }
 
     // ── Platform filter ───────────────────────────────────────────────────────

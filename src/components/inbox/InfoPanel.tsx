@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useInboxStore, useActiveConversation } from '@/stores/useInboxStore'
 import { getInitials, getAvatarColor } from '@/lib/utils'
+import PostCommenterPanel from './PostCommenterPanel'
 
 const QUICK_TAGS = ['VIP', 'Lead', 'Hot Lead', 'B2B', 'Repeat Buyer', 'Wholesale', 'Delhi NCR']
 
@@ -16,6 +17,11 @@ export default function InfoPanel() {
   const [editTags, setEditTags] = useState<string[]>([])
 
   if (!conversation) return null
+  const isCommentThread = (conversation?.meta?.thread_type ?? 'dm') === 'instagram_comment' || (conversation?.meta?.thread_type ?? 'dm') === 'comment'
+  if (isCommentThread) {
+    return <PostCommenterPanel />
+  }
+
   const contact = conversation.contact
   if (!contact) return null
   const safeConversation = conversation

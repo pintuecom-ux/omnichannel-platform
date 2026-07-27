@@ -40,8 +40,16 @@ export default function ConversationItem({ conversation: c }: Props) {
   const [imgErr, setImgErr] = useState(false)
   const isActive = c.id === activeConversationId
   const isSelected = selectedIds.has(c.id)
-  const name = c.contact?.name || c.contact?.phone || c.contact?.instagram_username || 'Unknown'
-  const avatarUrl = c.contact?.avatar_url?.replace(/&amp;/g, '&')
+  const isCommentThread = (c.meta?.thread_type ?? 'dm') === 'instagram_comment' || (c.meta?.thread_type ?? 'dm') === 'comment'
+  
+  const name = isCommentThread
+    ? (c.title || `Post #${String(c.meta?.post_id || c.external_id || '').slice(-6)}`)
+    : (c.contact?.name || c.contact?.phone || c.contact?.instagram_username || 'Unknown')
+  
+  const avatarUrl = isCommentThread
+    ? (c.meta?.media_url || c.meta?.post_thumbnail || c.meta?.full_picture)
+    : c.contact?.avatar_url?.replace(/&amp;/g, '&')
+    
   const { text: lastText, icon: lastIcon, iconColor: lastIconColor } = getLastMessageDisplay(c.last_message)
 
   function handleClick() {
@@ -60,9 +68,13 @@ export default function ConversationItem({ conversation: c }: Props) {
             src={avatarUrl}
             alt={name}
             className="avatar"
-            style={{ objectFit: 'cover', width: 36, height: 36, borderRadius: '50%' }}
+            style={{ objectFit: 'cover', width: 36, height: 36, borderRadius: isCommentThread ? '8px' : '50%' }}
             onError={() => setImgErr(true)}
           />
+        ) : isCommentThread ? (
+          <div className="avatar" style={{ background: c.platform === 'instagram' ? 'linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)' : '#1877f2', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <i className="fa-solid fa-photo-film" style={{ color: '#fff', fontSize: 16 }} />
+          </div>
         ) : (
           <div className="avatar" style={{ background: getAvatarColor(c.contact_id || c.id) }}>
             {getInitials(name)}

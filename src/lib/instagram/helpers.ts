@@ -73,7 +73,8 @@ export function getInstagramIdentity(contact: Partial<Contact> | null | undefine
 }
 
 export function getInstagramCommentThreadKey(postId: string | null | undefined, commenterId: string | null | undefined) {
-  return postId && commenterId ? `${postId}:${commenterId}` : null
+  // Group comment threads strictly by the Post ID (parent post architecture)
+  return postId ? `${postId}` : (commenterId ?? null)
 }
 
 export function normalizeScopes(value: unknown): string[] {

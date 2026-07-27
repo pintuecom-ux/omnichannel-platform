@@ -93,40 +93,35 @@ export default function ConversationPanel({ onRefresh }: Props) {
         </div>
       </div>
 
-      {/* Platform filters — hidden on Comments view (comments are always IG) */}
-      {viewFilter === 'chats' && (
-        <div className="platform-filter-row">
-          {(['all', 'whatsapp', 'instagram', 'facebook'] as const).map(p => (
-            <button
-              key={p}
-              className={`pf-btn ${platformFilter === p ? 'active' : ''}`}
-              onClick={() => setPlatformFilter(p)}
-            >
-              {p === 'all' && 'All'}
-              {p === 'whatsapp' && <><i className="fa-brands fa-whatsapp" style={{ color: '#25d366' }} /> WA</>}
-              {p === 'instagram' && <><i className="fa-brands fa-instagram" style={{ color: '#e1306c' }} /> IG</>}
-              {p === 'facebook' && <><i className="fa-brands fa-facebook" style={{ color: '#1877f2' }} /> FB</>}
-            </button>
-          ))}
-        </div>
-      )}
-      {/* Comments-view label */}
-      {viewFilter === 'comments' && (
-        <div className="platform-filter-row">
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 4px' }}>
-            <i className="fa-brands fa-instagram" style={{ color: '#e1306c', marginRight: 4 }} />
-            Instagram Comments
-          </span>
-        </div>
-      )}
+      {/* Platform filters */}
+      <div className="platform-filter-row">
+        {(viewFilter === 'comments'
+          ? (['all', 'instagram', 'facebook'] as const)
+          : (['all', 'whatsapp', 'instagram', 'facebook'] as const)
+        ).map(p => (
+          <button
+            key={p}
+            className={`pf-btn ${platformFilter === p ? 'active' : ''}`}
+            onClick={() => setPlatformFilter(p)}
+          >
+            {p === 'all' && 'All'}
+            {p === 'whatsapp' && <><i className="fa-brands fa-whatsapp" style={{ color: '#25d366' }} /> WA</>}
+            {p === 'instagram' && <><i className="fa-brands fa-instagram" style={{ color: '#e1306c' }} /> IG</>}
+            {p === 'facebook' && <><i className="fa-brands fa-facebook" style={{ color: '#1877f2' }} /> FB</>}
+          </button>
+        ))}
+      </div>
 
       {/* Tabs */}
       <div className="conv-tabs">
-        {(['all', 'unread', 'pinned', 'groups'] as const).map(t => (
+        {(viewFilter === 'comments'
+          ? (['all', 'unread', 'pinned'] as const)
+          : (['all', 'unread', 'pinned', 'groups'] as const)
+        ).map(t => (
           <div
             key={t}
             className={`conv-tab ${tabFilter === t ? 'active' : ''}`}
-            onClick={() => setTabFilter(t)}
+            onClick={() => setTabFilter(t as any)}
           >
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </div>
