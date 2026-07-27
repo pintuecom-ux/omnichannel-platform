@@ -418,12 +418,29 @@ export async function POST(req: NextRequest) {
       const ig = new InstagramClient(conv.channel.access_token, conv.channel.external_id)
       const identity = getInstagramIdentity(conv.contact)
 
+      if (!identity?.instagram_scoped_id && type !== 'comment_reply') {
+        return NextResponse.json({ error: 'Contact has no Instagram recipient ID' }, { status: 400 })
+      }
+
+      const recipientId = identity?.instagram_scoped_id || ''
+
       if (type === 'text') {
-        if (!identity?.instagram_scoped_id) {
-          return NextResponse.json({ error: 'Contact has no Instagram recipient ID' }, { status: 400 })
-        }
-        externalId   = (await ig.sendDM(identity.instagram_scoped_id, body))?.message_id
+        externalId   = (await ig.sendDM(recipientId, body))?.message_id
         contentType2 = 'text'
+      } else if (type === 'image' || type === 'video' || type === 'audio' || type === 'document') {
+        if (!savedMediaUrl) {
+          return NextResponse.json({ error: 'Media URL required' }, { status: 400 })
+        }
+        const mediaType = type === 'document' ? 'file' : type
+        externalId   = (await ig.sendMediaDM(recipientId, mediaType, savedMediaUrl))?.message_id
+        contentType2 = type
+      } else if (type === 'reaction') {
+        if (!reaction_message_id) {
+          return NextResponse.json({ error: 'reaction_message_id required' }, { status: 400 })
+        }
+        externalId   = (await ig.sendReactionDM(recipientId, reaction_message_id, reaction_emoji ?? ''))?.message_id
+        messageBody  = `[Reaction: ${reaction_emoji || 'removed'}]`
+        contentType2 = 'reaction'
       } else if (type === 'comment_reply') {
         externalId   = (await ig.replyToComment(comment_id, body))?.id
         contentType2 = 'comment'
@@ -431,11 +448,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `Unsupported Instagram type: ${type}` }, { status: 400 })
       }
     }
-
-    /* ---------------------------------------------------------------------- */
-    /* Save message to DB                                                     */
-    /* ---------------------------------------------------------------------- */
-
     const meta: any = {}
 
     if (reply_to_external_id) {

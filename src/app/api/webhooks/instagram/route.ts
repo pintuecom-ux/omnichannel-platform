@@ -196,18 +196,41 @@ async function processIGDM(ev: any) {
     .maybeSingle()
   if (exists) { console.log(`[IG DM] Duplicate message ${data.external_id} — skipping`); return }
 
+  let contentType = 'text'
+  let mediaUrl: string | null = null
+  let mediaMime: string | null = null
+
+  if (data.attachments && data.attachments.length > 0) {
+    const att = data.attachments[0]
+    const attType = att.type
+    if (attType === 'image') contentType = 'image'
+    else if (attType === 'video') contentType = 'video'
+    else if (attType === 'audio') contentType = 'audio'
+    else if (attType === 'file') contentType = 'document'
+    else if (attType === 'story_mention') contentType = 'story_mention'
+    else if (attType === 'share' || attType === 'ig_reel') contentType = 'share'
+    else contentType = 'image'
+
+    mediaUrl = att.payload?.url ?? att.payload?.media?.image_url ?? null
+  } else if (!data.text) {
+    contentType = 'image'
+  }
+
   const { error: msgErr } = await admin.from('messages').insert({
     conversation_id: conv.id,
     workspace_id: channel.workspace_id,
     external_id: data.external_id,
     direction: 'inbound',
-    content_type: data.text ? 'text' : 'image',
-    body: data.text,
+    content_type: contentType,
+    body: data.text || (contentType !== 'text' ? `[${contentType}]` : null),
+    media_url: mediaUrl,
+    media_mime: mediaMime,
     status: 'delivered',
     is_note: false,
     meta: {
       sender_id: data.sender_id,
       attachments: data.attachments,
+      reply_to: data.reply_to,
       identity: {
         instagram_scoped_id: data.sender_id,
         username: contact.instagram_username ?? null,
@@ -216,7 +239,7 @@ async function processIGDM(ev: any) {
     },
   })
   if (msgErr) console.error('[IG DM] ❌ Message insert error:', msgErr.message)
-  else console.log(`[IG DM] ✅ DM saved → conv ${conv.id}`)
+  else console.log(`[IG DM] ✅ DM saved (${contentType}) → conv ${conv.id}`)
 }
 
 async function processIGComment(ev: any) {

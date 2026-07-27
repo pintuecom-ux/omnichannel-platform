@@ -74,11 +74,55 @@ export class InstagramClient {
     return res.data
   }
 
-  /** Send an Instagram DM to a user (Instagram-scoped ID) */
+  /** Send an Instagram DM text message to a user (Instagram-scoped ID) */
   async sendDM(recipientId: string, text: string) {
     return this.post(`${this.igAccountId}/messages`, {
       recipient: { id: recipientId },
       message: { text },
+    })
+  }
+
+  /** Send a media attachment (image, video, audio, file) via Instagram DM */
+  async sendMediaDM(recipientId: string, mediaType: 'image' | 'video' | 'audio' | 'file', mediaUrl: string) {
+    return this.post(`${this.igAccountId}/messages`, {
+      recipient: { id: recipientId },
+      message: {
+        attachment: {
+          type: mediaType,
+          payload: {
+            url: mediaUrl,
+            is_reusable: true,
+          },
+        },
+      },
+    })
+  }
+
+  /** Send an emoji reaction to an Instagram DM message */
+  async sendReactionDM(recipientId: string, messageId: string, emoji: string) {
+    return this.post(`${this.igAccountId}/messages`, {
+      recipient: { id: recipientId },
+      message: {
+        reaction: {
+          action: emoji ? 'react' : 'unreact',
+          emoji: emoji || undefined,
+          message_id: messageId,
+        },
+      },
+    })
+  }
+
+  /** Send a reply to a user's Instagram Story */
+  async sendStoryReply(recipientId: string, storyId: string, text: string) {
+    return this.post(`${this.igAccountId}/messages`, {
+      recipient: { id: recipientId },
+      message: {
+        text,
+        attachment: {
+          type: 'media_share',
+          payload: { id: storyId },
+        },
+      },
     })
   }
 

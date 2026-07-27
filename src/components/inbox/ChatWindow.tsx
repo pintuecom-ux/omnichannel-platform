@@ -62,6 +62,16 @@ export default function ChatWindow() {
   const activeTab = isCurrentConversationUi ? commentUi.activeTab : defaultTab
   const replyingTo = isCurrentConversationUi ? commentUi.replyingTo : null
 
+  // Send read receipt ("seen") to Meta when an Instagram DM conversation is opened
+  useEffect(() => {
+    if (!activeConversationId || conversation?.platform !== 'instagram' || isCommentThread) return
+    fetch('/api/instagram/mark-seen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conversationId: activeConversationId }),
+    }).catch(err => console.warn('[mark-seen error]', err))
+  }, [activeConversationId, conversation?.platform, isCommentThread])
+
   useEffect(() => {
     let cancelled = false
 
