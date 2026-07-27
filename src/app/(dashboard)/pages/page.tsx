@@ -87,7 +87,7 @@ export default function MediaLibraryPage() {
   })
 
   return (
-    <div style={{ padding: 28, display: 'grid', gap: 24, maxWidth: 1400, margin: '0 auto' }}>
+    <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 24, width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
       {/* ── Header ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
         <div>
