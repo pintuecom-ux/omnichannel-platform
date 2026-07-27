@@ -42,8 +42,9 @@ export default function ConversationItem({ conversation: c }: Props) {
   const isSelected = selectedIds.has(c.id)
   const isCommentThread = (c.meta?.thread_type ?? 'dm') === 'instagram_comment' || (c.meta?.thread_type ?? 'dm') === 'comment'
   
+  const rawTitle = c.title ? c.title.replace(/^Comments:\s*/i, '') : ''
   const name = isCommentThread
-    ? (c.title || `Post #${String(c.meta?.post_id || c.external_id || '').slice(-6)}`)
+    ? (rawTitle || `Post #${String(c.meta?.post_id || c.external_id || '').slice(-6)}`)
     : (c.contact?.name || c.contact?.phone || c.contact?.instagram_username || 'Unknown')
   
   const avatarUrl = isCommentThread

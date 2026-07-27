@@ -32,7 +32,6 @@ export default function InboxPage() {
       const msg = profileErr?.message ?? 'unknown error'
       console.error('[Inbox] Profile error:', code, msg)
 
-      // PGRST116 = "no rows returned" by .single() — genuine missing profile
       if (code === 'PGRST116') {
         setLoadError(`Profile row missing for user ${session.user.id}.\nCheck the profiles table in Supabase.`)
       } else {
@@ -44,7 +43,7 @@ export default function InboxPage() {
     setProfile(profile)
     setWorkspaceId(profile.workspace_id)
 
-    // Load conversations WITHOUT the problematic FK hint
+    // Load conversations
     const { data: convs, error: convErr } = await supabase
       .from('conversations')
       .select(`
@@ -72,7 +71,6 @@ export default function InboxPage() {
       return
     }
 
-    // Load assignees separately to avoid FK ambiguity
     const assigneeIds = [...new Set(
       (convs ?? []).map(c => c.assigned_to).filter(Boolean) as string[]
     )]
@@ -88,7 +86,6 @@ export default function InboxPage() {
 
     const merged = (convs ?? []).map(c => ({
       ...c,
-      // Supabase returns joined relations as arrays; unwrap to single objects
       contact: Array.isArray(c.contact) ? (c.contact[0] ?? null) : c.contact,
       channel: Array.isArray(c.channel) ? (c.channel[0] ?? null) : c.channel,
       assignee: c.assigned_to ? (assigneeMap[c.assigned_to] ?? null) : null,
@@ -97,6 +94,21 @@ export default function InboxPage() {
     console.log(`[Inbox] Loaded ${merged.length} conversations`)
     setConversations(merged as Conversation[])
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleRefresh = useCallback(async () => {
+    if (workspaceId) {
+      try {
+        await fetch('/api/comments/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspaceId }),
+        })
+      } catch (err) {
+        console.warn('[Inbox Refresh Sync Error]', err)
+      }
+    }
+    await loadData()
+  }, [workspaceId, loadData])
 
   // eslint-disable-next-line
   useEffect(() => { loadData() }, [loadData])
@@ -121,7 +133,7 @@ export default function InboxPage() {
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center', maxWidth: 440, lineHeight: 1.7, whiteSpace: 'pre-line' }}>
           {loadError}
         </p>
-        <button className="btn btn-secondary" onClick={loadData}>
+        <button className="btn btn-secondary" onClick={handleRefresh}>
           <i className="fa-solid fa-rotate" /> Retry
         </button>
       </div>
@@ -130,7 +142,7 @@ export default function InboxPage() {
 
   return (
     <div className="page-inbox">
-      <ConversationPanel onRefresh={loadData} />
+      <ConversationPanel onRefresh={handleRefresh} />
       {activeConversationId ? (
         <>
           <ChatWindow />

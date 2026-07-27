@@ -144,7 +144,7 @@ export default function CommentsWindow() {
   const title = conversation.title || `Post #${String(conversation.meta?.post_id || conversation.external_id || '').slice(-6)}`
 
   return (
-    <div className="chat-window" onClick={() => setOpenMenuId(null)}>
+    <div id="main-workspace" onClick={() => setOpenMenuId(null)}>
       {/* Header */}
       <div className="chat-header">
         <div className="ch-left">

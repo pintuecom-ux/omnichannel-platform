@@ -91,19 +91,21 @@ export default function PostCommenterPanel() {
   const commenterName = selectedComment ? (
     selectedComment.direction === 'outbound' || selectedComment.meta?.brand_comment || selectedComment.meta?.brand_reply
       ? 'Official Brand Page'
-      : (selectedComment.meta?.from?.name || selectedComment.meta?.commenter_username || conversation.contact?.name || 'Customer User')
+      : (selectedComment.meta?.from?.name || selectedComment.meta?.commenter_username || selectedComment.meta?.author_name || (selectedComment.sender as any)?.full_name || conversation.contact?.name || 'Customer User')
   ) : null
 
-  const commenterId = selectedComment?.meta?.from?.id || selectedComment?.meta?.commenter_username
+  const commenterId = selectedComment?.meta?.from?.id || selectedComment?.meta?.commenter_username || selectedComment?.sender_id
 
   // Find all comments by this specific commenter in this thread
-  const userHistory = selectedComment && commenterId ? messages.filter(m => {
-    const id = m.meta?.from?.id || m.meta?.commenter_username
+  const filteredHistory = selectedComment && commenterId ? messages.filter(m => {
+    const id = m.meta?.from?.id || m.meta?.commenter_username || m.sender_id
     return id === commenterId
-  }) : selectedComment ? [selectedComment] : []
+  }) : []
+
+  const userHistory = filteredHistory.length > 0 ? filteredHistory : (selectedComment ? [selectedComment] : [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '340px', borderLeft: '1px solid rgba(255, 255, 255, 0.08)', background: 'var(--sidebar-bg, #16181b)' }}>
+    <div id="info-panel" style={{ width: '320px', minWidth: '320px' }}>
       
       {/* ── TOP HALF: EXACT POST VIEW (50%) ─────────────────────────────────── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 16, borderBottom: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', flexDirection: 'column', gap: 12 }}>
