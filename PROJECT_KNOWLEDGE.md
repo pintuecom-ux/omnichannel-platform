@@ -49,6 +49,11 @@ The platform is a CRM/helpdesk application that aggregates messages from various
 
 > **Note to AI Agents:** Upon any modification, feature addition, or significant update to the codebase, append the details below in reverse chronological order.
 
+### [2026-07-25] Standardized All Meta Graph API Endpoints to v25.0
+- **Changes:** Updated `src/lib/platforms/meta.ts`, `src/lib/platforms/facebook.ts`, `src/lib/instagram/service.ts`, `src/app/api/media/route.ts`, `src/app/api/planner/posts/route.ts`, `src/app/api/test/pages-read-user-content/route.ts`, and `src/app/api/debug/facebook-profile/route.ts`.
+- **Details:** 
+  1. Standardized all Graph API endpoints across Instagram, Facebook Pages, Messenger, WhatsApp, Media Library, Content Planner, and OAuth dialogs to version `v25.0`.
+
 ### [2026-07-25] Media Library, Content Planner & Dual-Platform Simultaneous Publishing
 - **Changes:** Updated `src/components/sidebar/Sidebar.tsx`, `src/app/(dashboard)/pages/page.tsx`, `src/app/(dashboard)/planner/page.tsx`, `src/components/planner/CalendarView.tsx`, `CreatePostModal.tsx`, `src/app/api/media/route.ts`, `src/app/api/planner/posts/route.ts`, and `src/lib/instagram/service.ts`.
 - **Details:**
