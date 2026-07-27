@@ -180,13 +180,26 @@ export class InstagramClient {
     await this.del(`${commentId}`)
   }
 
-  /** Fetch an IG user's public details via their scoped ID */
+  /** Fetch an IG user's public details (including profile picture / DP) via their scoped ID */
   async getUserProfile(igsid: string) {
     try {
-      return await this.get<{ name?: string; username?: string; profile_pic?: string }>(igsid, {
-        fields: 'name,username,profile_pic',
+      const res = await this.get<{
+        name?: string
+        username?: string
+        profile_pic?: string
+        profile_picture_url?: string
+        picture?: { data?: { url?: string } }
+      }>(igsid, {
+        fields: 'name,username,profile_pic,profile_picture_url,picture',
       })
-    } catch {
+      const avatarUrl = res.profile_pic || res.profile_picture_url || res.picture?.data?.url || null
+      return {
+        name: res.name,
+        username: res.username,
+        profile_pic: avatarUrl,
+      }
+    } catch (err: any) {
+      console.warn(`[IG getUserProfile] Could not fetch profile for ${igsid}:`, err?.message || err)
       return null
     }
   }

@@ -202,7 +202,8 @@ async function processIGDM(ev: any) {
     let username: string | null = null
     if (channel.access_token) {
       try {
-        const ig = new InstagramClient(channel.access_token, channel.external_id)
+        const igToken = channel.meta?.page_access_token || channel.access_token
+        const ig = new InstagramClient(igToken, channel.external_id)
         const profile = await ig.getUserProfile(data.sender_id)
         if (profile) {
           name = profile.name || profile.username || name
@@ -227,9 +228,38 @@ async function processIGDM(ev: any) {
       .single()
     if (insertErr) console.error('[IG DM] ❌ Contact insert error:', insertErr.message)
     contact = c
+  } else if (contact && (!contact.avatar_url || !contact.instagram_username || contact.name === data.sender_id)) {
+    // Backfill DP profile picture or username if missing for existing contact
+    if (channel.access_token) {
+      try {
+        const igToken = channel.meta?.page_access_token || channel.access_token
+        const ig = new InstagramClient(igToken, channel.external_id)
+        const profile = await ig.getUserProfile(data.sender_id)
+        if (profile?.profile_pic || profile?.name || profile?.username) {
+          const updates: any = {}
+          if (profile.profile_pic) updates.avatar_url = profile.profile_pic
+          if (profile.name && contact.name === data.sender_id) updates.name = profile.name
+          if (profile.username) updates.instagram_username = profile.username
+          
+          if (Object.keys(updates).length > 0) {
+            const { data: updatedC } = await admin
+              .from('contacts')
+              .update(updates)
+              .eq('id', contact.id)
+              .select()
+              .single()
+            if (updatedC) contact = updatedC
+            console.log(`[IG DM] ✅ Backfilled avatar DP / profile for contact ${contact.id}`)
+          }
+        }
+      } catch (err: any) {
+        console.warn('[IG DM] Contact DP backfill non-critical error:', err?.message)
+      }
+    }
   }
+
   if (!contact) { console.error('[IG DM] ❌ No contact — aborting'); return }
-  console.log(`[IG DM] Contact: ${contact.id} (${contact.name})`)
+  console.log(`[IG DM] Contact: ${contact.id} (${contact.name}, avatar: ${contact.avatar_url ? 'yes' : 'no'})`)
 
   let { data: conv } = await admin
     .from('conversations')
