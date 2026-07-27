@@ -118,14 +118,13 @@ export class InstagramClient {
 
   /** Send an emoji reaction to an Instagram DM message */
   async sendReactionDM(recipientId: string, messageId: string, emoji: string) {
+    const isUnreact = !emoji || emoji === 'unreact' || emoji === ''
     return this.sendInstagramMessage({
       recipient: { id: recipientId },
-      message: {
-        reaction: {
-          action: emoji ? 'react' : 'unreact',
-          emoji: emoji || undefined,
-          message_id: messageId,
-        },
+      sender_action: isUnreact ? 'unreact' : 'react',
+      payload: {
+        message_id: messageId,
+        ...(isUnreact ? {} : { reaction: emoji }),
       },
     })
   }
@@ -399,7 +398,7 @@ export function verifyIGSignature(rawBody: string, signature: string, appSecret:
 }
 
 export interface ParsedIGEvent {
-  type: 'dm' | 'comment'
+  type: 'dm' | 'comment' | 'status'
   igAccountId: string
   /** True when the webhook object was 'page' (Messenger Platform / page subscription).
    *  In this case igAccountId is the Facebook Page ID, not the IG account ID.
@@ -417,6 +416,40 @@ export function parseInstagramWebhook(body: any): ParsedIGEvent[] {
 
     for (const messaging of entry.messaging ?? []) {
       if (messaging.message?.is_echo) continue
+
+      if (messaging.read) {
+        events.push({
+          type: 'status',
+          igAccountId,
+          isPageObject,
+          data: {
+            status: 'read',
+            sender_id: messaging.sender?.id,
+            recipient_id: messaging.recipient?.id,
+            watermark: messaging.read.watermark ?? null,
+            mids: messaging.read.mids ?? [],
+            timestamp: new Date(messaging.timestamp || messaging.read.watermark || Date.now()).toISOString(),
+          },
+        })
+        continue
+      }
+
+      if (messaging.delivery) {
+        events.push({
+          type: 'status',
+          igAccountId,
+          isPageObject,
+          data: {
+            status: 'delivered',
+            sender_id: messaging.sender?.id,
+            recipient_id: messaging.recipient?.id,
+            watermark: messaging.delivery.watermark ?? null,
+            mids: messaging.delivery.mids ?? [],
+            timestamp: new Date(messaging.timestamp || messaging.delivery.watermark || Date.now()).toISOString(),
+          },
+        })
+        continue
+      }
       
       if (messaging.reaction) {
         events.push({

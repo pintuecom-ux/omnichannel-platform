@@ -364,8 +364,25 @@ export default function MessageBubble({
     msg.meta?.reply_to_external_id ??
     null
 
-  // Reaction emoji on this bubble
+  // Find latest standalone reaction record targeting this message in the timeline
+  const separateReactionMsg = msgList
+    ? [...msgList].reverse().find(
+        (m) =>
+          m.content_type === 'reaction' &&
+          ((m.meta?.reaction_message_id && (m.meta.reaction_message_id === msg.external_id || m.meta.reaction_message_id === msg.id)) ||
+           (m.meta?.target_message_id && (m.meta.target_message_id === msg.external_id || m.meta.target_message_id === msg.id)) ||
+           (m.meta?.reaction?.message_id && (m.meta.reaction.message_id === msg.external_id || m.meta.reaction.message_id === msg.id)))
+      )
+    : null
+
+  const activeSeparateEmoji =
+    separateReactionMsg?.meta?.reaction_action === 'unreact' || separateReactionMsg?.body?.includes('removed')
+      ? null
+      : separateReactionMsg?.meta?.reaction_emoji ?? separateReactionMsg?.meta?.reaction?.emoji ?? null
+
+  // Reaction emoji on this bubble (either attached inline or discovered via separate reaction message)
   const reaction =
+    activeSeparateEmoji ??
     msg.meta?.reaction?.emoji ??
     msg.meta?.sent_reaction ??
     msg.meta?.reaction_emoji ??
@@ -396,30 +413,9 @@ export default function MessageBubble({
     return <CommentBubble msg={msg} time={time} onSetReply={onSetReply} allMessages={msgList} />
   }
 
-  /* ── Reaction sent (small status row, not a full bubble) ── */
+  /* ── Reaction sent (hide standalone reaction row as icon is pinned to target bubble) ── */
   if (msg.content_type === 'reaction') {
-    const emoji = msg.meta?.reaction_emoji || msg.meta?.reaction?.emoji || '❤️'
-    return (
-      <div
-        className={`wa-msg-row ${isOut ? 'out' : 'in'}`}
-        style={{ marginTop: 2 }}
-      >
-        <div
-          style={{
-            fontSize: 11,
-            color: 'var(--text-muted)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            padding: '0 4px',
-          }}
-        >
-          <span style={{ fontSize: 18 }}>{emoji}</span>
-          <span>{isOut ? 'You' : 'Contact'} reacted to a message</span>
-          <span style={{ fontSize: 10 }}>{time}</span>
-        </div>
-      </div>
-    )
+    return null
   }
 
   /* ── Instagram Story Mention / Share ── */

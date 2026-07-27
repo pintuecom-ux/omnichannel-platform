@@ -58,9 +58,85 @@ async function handleIGEvents(body: any) {
         await processIGDM(ev)
       } else if (ev.type === 'comment') {
         await processIGComment(ev)
+      } else if (ev.type === 'status') {
+        await processIGStatus(ev)
       }
     } catch (err: any) {
       console.error(`[IG webhook] ❌ Error processing ${ev.type}:`, err?.message ?? err)
+    }
+  }
+}
+
+async function processIGStatus(ev: any) {
+  const { igAccountId, data, isPageObject } = ev
+  console.log(`[IG Status] Processing ${data.status}: sender=${data.sender_id}, recipient=${data.recipient_id}, mids=${data.mids?.length ?? 0}, watermark=${data.watermark}`)
+
+  // 1. Update explicit message IDs if present
+  if (data.mids && data.mids.length > 0) {
+    for (const mid of data.mids) {
+      const { error } = await admin
+        .from('messages')
+        .update({ status: data.status })
+        .eq('external_id', mid)
+      if (error) {
+        console.warn(`[IG Status] Failed to update message ${mid}:`, error.message)
+      } else {
+        console.log(`[IG Status] ✅ Updated message ${mid} -> ${data.status}`)
+      }
+    }
+  }
+
+  // 2. If watermark is provided, update all outbound messages up to watermark timestamp
+  if (data.watermark) {
+    let channel: any = null
+    if (isPageObject) {
+      const { data: ch } = await admin.from('channels').select('id, workspace_id').eq('platform', 'instagram').contains('meta', { page_id: igAccountId }).maybeSingle()
+      channel = ch
+    } else {
+      const { data: ch } = await admin.from('channels').select('id, workspace_id').eq('platform', 'instagram').eq('external_id', igAccountId).maybeSingle()
+      channel = ch
+    }
+
+    if (!channel) return
+
+    const contactIdToSearch = data.sender_id === igAccountId ? data.recipient_id : data.sender_id
+    const { data: contact } = await admin
+      .from('contacts')
+      .select('id')
+      .eq('workspace_id', channel.workspace_id)
+      .or(`instagram_scoped_id.eq.${contactIdToSearch},facebook_id.eq.${contactIdToSearch}`)
+      .maybeSingle()
+
+    if (!contact) return
+
+    const { data: conv } = await admin
+      .from('conversations')
+      .select('id')
+      .eq('channel_id', channel.id)
+      .eq('contact_id', contact.id)
+      .maybeSingle()
+
+    if (!conv) return
+
+    const watermarkMs = Number(data.watermark) > 1e11 ? Number(data.watermark) : Number(data.watermark) * 1000
+    const watermarkDate = new Date(watermarkMs).toISOString()
+
+    const query = admin
+      .from('messages')
+      .update({ status: data.status })
+      .eq('conversation_id', conv.id)
+      .eq('direction', 'outbound')
+      .lte('created_at', watermarkDate)
+
+    if (data.status === 'delivered') {
+      query.eq('status', 'sent')
+    }
+
+    const { error } = await query
+    if (error) {
+      console.warn(`[IG Status] Watermark update failed for conv ${conv.id}:`, error.message)
+    } else {
+      console.log(`[IG Status] ✅ Updated outbound messages in conv ${conv.id} <= ${watermarkDate} to ${data.status}`)
     }
   }
 }
