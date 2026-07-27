@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text()
     const signature = req.headers.get('x-hub-signature-256') ?? ''
+    console.log(`[IG Webhook] 📩 Incoming POST request at ${new Date().toISOString()}, length: ${rawBody.length}, signature: ${signature ? 'present' : 'missing'}`)
 
     if (process.env.META_APP_SECRET && !verifyIGSignature(rawBody, signature, process.env.META_APP_SECRET)) {
       console.error('[IG webhook] ❌ Invalid signature')
