@@ -187,19 +187,17 @@ export class InstagramClient {
         name?: string
         username?: string
         profile_pic?: string
-        profile_picture_url?: string
-        picture?: { data?: { url?: string } }
       }>(igsid, {
-        fields: 'name,username,profile_pic,profile_picture_url,picture',
+        fields: 'name,username,profile_pic',
       })
-      const avatarUrl = res.profile_pic || res.profile_picture_url || res.picture?.data?.url || null
       return {
         name: res.name,
         username: res.username,
-        profile_pic: avatarUrl,
+        profile_pic: res.profile_pic ?? null,
       }
     } catch (err: any) {
-      console.warn(`[IG getUserProfile] Could not fetch profile for ${igsid}:`, err?.message || err)
+      const fbMsg = err?.response?.data?.error?.message || err?.message || err
+      console.warn(`[IG getUserProfile] Could not fetch profile for ${igsid}:`, fbMsg)
       return null
     }
   }
