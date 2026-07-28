@@ -23,12 +23,14 @@ export interface ProductItem {
   brand?: string
   category?: string
   url?: string
+  catalog_id: string
+  catalog_name: string
 }
 
 export default function MetaCatalogPage() {
   const [catalogs, setCatalogs] = useState<CatalogItem[]>([])
   const [products, setProducts] = useState<ProductItem[]>([])
-  const [selectedCatalogId, setSelectedCatalogId] = useState<string>('')
+  const [selectedCatalogId, setSelectedCatalogId] = useState<string>('all')
   const [isMetaConnected, setIsMetaConnected] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(true)
   const [search, setSearch] = useState<string>('')
@@ -39,6 +41,7 @@ export default function MetaCatalogPage() {
   const [showCreateCatalog, setShowCreateCatalog] = useState<boolean>(false)
 
   // Add Product Form State
+  const [targetCatalogId, setTargetCatalogId] = useState('')
   const [sku, setSku] = useState('')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -56,18 +59,18 @@ export default function MetaCatalogPage() {
   const [newCatalogName, setNewCatalogName] = useState('')
   const [creatingCat, setCreatingCat] = useState(false)
 
-  const fetchCatalogData = async (catId?: string) => {
+  const fetchCatalogData = async (catId = 'all') => {
     setLoading(true)
     try {
-      const url = catId ? `/api/catalog?catalog_id=${catId}` : '/api/catalog'
+      const url = catId && catId !== 'all' ? `/api/catalog?catalog_id=${catId}` : '/api/catalog'
       const res = await fetch(url)
       const data = await res.json()
       if (data.success) {
         setCatalogs(data.catalogs || [])
         setProducts(data.products || [])
         setIsMetaConnected(!!data.is_meta_connected)
-        if (!selectedCatalogId && data.active_catalog_id) {
-          setSelectedCatalogId(data.active_catalog_id)
+        if (data.catalogs?.length > 0 && !targetCatalogId) {
+          setTargetCatalogId(data.catalogs[0].id)
         }
       }
     } catch (err) {
@@ -78,10 +81,10 @@ export default function MetaCatalogPage() {
   }
 
   useEffect(() => {
-    fetchCatalogData()
+    fetchCatalogData('all')
   }, [])
 
-  const handleCatalogSwitch = (catId: string) => {
+  const handleCatalogFilterChange = (catId: string) => {
     setSelectedCatalogId(catId)
     fetchCatalogData(catId)
   }
@@ -96,13 +99,16 @@ export default function MetaCatalogPage() {
     setFormError(null)
     setFormSuccess(null)
 
+    const activeCatObj = catalogs.find(c => c.id === targetCatalogId) || catalogs[0]
+
     try {
       const res = await fetch('/api/catalog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'add_product',
-          catalog_id: selectedCatalogId,
+          target_catalog_id: targetCatalogId || activeCatObj?.id,
+          target_catalog_name: activeCatObj?.name || 'Main E-Commerce Catalog',
           retailer_id: sku,
           name: title,
           description,
@@ -159,6 +165,7 @@ export default function MetaCatalogPage() {
       if (data.success) {
         setCatalogs(prev => [...prev, data.catalog])
         setSelectedCatalogId(data.catalog.id)
+        setTargetCatalogId(data.catalog.id)
         setShowCreateCatalog(false)
         setNewCatalogName('')
       }
@@ -169,32 +176,31 @@ export default function MetaCatalogPage() {
     }
   }
 
-  const handleDeleteProduct = async (prodId: string) => {
-    if (!confirm('Are you sure you want to remove this product from the catalog?')) return
+  const handleDeleteProduct = async (prod: ProductItem) => {
+    if (!confirm(`Are you sure you want to remove "${prod.name}" from ${prod.catalog_name}?`)) return
     try {
       await fetch('/api/catalog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete_product', product_id: prodId, catalog_id: selectedCatalogId }),
+        body: JSON.stringify({ action: 'delete_product', product_id: prod.id, target_catalog_id: prod.catalog_id }),
       })
-      setProducts(prev => prev.filter(p => p.id !== prodId))
+      setProducts(prev => prev.filter(p => p.id !== prod.id))
     } catch (err) {
       console.error('Failed to delete product:', err)
     }
   }
 
-  // Filter products
+  // Filter products by search and category
   const filteredProducts = products.filter(p => {
     const matchesSearch = !search ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.retailer_id.toLowerCase().includes(search.toLowerCase())
+      p.retailer_id.toLowerCase().includes(search.toLowerCase()) ||
+      (p.catalog_name ?? '').toLowerCase().includes(search.toLowerCase())
     const matchesCat = categoryFilter === 'all' || (p.category ?? 'General') === categoryFilter
     return matchesSearch && matchesCat
   })
 
   const categoriesList = Array.from(new Set(products.map(p => p.category || 'General')))
-
-  const selectedCatalog = catalogs.find(c => c.id === selectedCatalogId) || catalogs[0]
 
   return (
     <div className="generic-page">
@@ -219,12 +225,12 @@ export default function MetaCatalogPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <i className="fa-brands fa-meta" style={{ color: '#0084FF', fontSize: 16 }} />
           <span>
-            Connected to <strong>Meta Commerce Manager v25.0</strong>. SKUs added here are automatically taggable in <strong>Instagram Posts/Reels</strong>, <strong>Facebook Shop DMs</strong>, and <strong>Content Planner</strong>.
+            Real-Time <strong>Meta Commerce Manager v25.0 API</strong>. Each product below lists its assigned <strong>Catalog Name & Catalog ID</strong> and is immediately taggable across Facebook Shops, Instagram Reels/Feed, and Content Planner.
           </span>
         </div>
         <span style={{ fontSize: 11, fontWeight: 600, color: isMetaConnected ? '#25D366' : 'var(--accent3)', display: 'flex', alignItems: 'center', gap: 5 }}>
           <i className={`fa-solid ${isMetaConnected ? 'fa-circle-check' : 'fa-triangle-exclamation'}`} />
-          {isMetaConnected ? 'Meta Live Catalog Active' : 'Storefront Standalone Mode'}
+          {isMetaConnected ? 'Meta Live API Connected' : 'Storefront Direct Catalog Mode'}
         </span>
       </div>
 
@@ -236,7 +242,7 @@ export default function MetaCatalogPage() {
               <i className="fa-solid fa-boxes-stacked" />
             </div>
             <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>Active Catalog SKUs</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>Total Products</div>
               <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>{products.length}</div>
             </div>
           </div>
@@ -253,7 +259,7 @@ export default function MetaCatalogPage() {
 
           <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
             <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(37, 211, 102, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#25D366' }}>
-              <i className="fa-solid fa-[#25D366] fa-circle-check" />
+              <i className="fa-solid fa-circle-check" />
             </div>
             <div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>In Stock Ratio</div>
@@ -268,26 +274,29 @@ export default function MetaCatalogPage() {
               <i className="fa-solid fa-tags" />
             </div>
             <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>IG / FB Shoppable Posts</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#c084fc', marginTop: 2 }}>Ready</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>Shoppable Tagging</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#c084fc', marginTop: 2 }}>Active</div>
             </div>
           </div>
         </div>
 
-        {/* ── Catalog Switcher & Search Bar ── */}
+        {/* ── Catalog Filter & Search Toolbar ── */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* Catalog Selector Dropdown */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 10, padding: '4px 12px' }}>
-            <i className="fa-solid fa-layer-group" style={{ color: '#00A884', fontSize: 13 }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Catalog:</span>
+          {/* Catalog Filter Dropdown */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 10, padding: '6px 12px' }}>
+            <i className="fa-solid fa-filter" style={{ color: '#00A884', fontSize: 12 }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Filter by Catalog:</span>
             <select
               value={selectedCatalogId}
-              onChange={e => handleCatalogSwitch(e.target.value)}
+              onChange={e => handleCatalogFilterChange(e.target.value)}
               style={{ background: 'none', border: 'none', color: 'var(--text-primary)', fontSize: 12, fontWeight: 700, outline: 'none', cursor: 'pointer' }}
             >
+              <option value="all" style={{ background: 'var(--bg-panel)', color: 'var(--text-primary)' }}>
+                🌐 All Meta Catalogs ({products.length} products)
+              </option>
               {catalogs.map(c => (
                 <option key={c.id} value={c.id} style={{ background: 'var(--bg-panel)', color: 'var(--text-primary)' }}>
-                  {c.name} ({c.product_count} items)
+                  📁 {c.name} (ID: {c.id})
                 </option>
               ))}
             </select>
@@ -298,7 +307,7 @@ export default function MetaCatalogPage() {
             <i className="fa-solid fa-magnifying-glass" />
             <input
               type="text"
-              placeholder="Search products by SKU, name, or description…"
+              placeholder="Search by product name, SKU, or catalog name..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -320,10 +329,10 @@ export default function MetaCatalogPage() {
         {/* ── Product Catalog Grid ── */}
         {loading ? (
           <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-            <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 8 }} />Loading Meta Commerce Catalog products…
+            <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 8 }} />Fetching Meta Commerce Catalog products...
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
             {filteredProducts.map(p => {
               const formattedPrice = typeof p.price === 'number' ? `$${p.price.toFixed(2)}` : `$${p.price}`
               const isInStock = p.availability !== 'out of stock'
@@ -359,10 +368,10 @@ export default function MetaCatalogPage() {
                         ;(e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop'
                       }}
                     />
-                    <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', padding: '2px 8px', borderRadius: 6, fontSize: 10, fontWeight: 700, color: '#25D366' }}>
+                    <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, color: '#25D366' }}>
                       {formattedPrice} {p.currency || 'USD'}
                     </div>
-                    <div style={{ position: 'absolute', bottom: 8, left: 8, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 600, color: 'var(--text-muted)' }}>
+                    <div style={{ position: 'absolute', bottom: 8, left: 8, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 600, color: 'var(--text-muted)' }}>
                       SKU: {p.retailer_id}
                     </div>
                   </div>
@@ -378,13 +387,21 @@ export default function MetaCatalogPage() {
                       </div>
                     )}
 
+                    {/* ── Catalog Name & Catalog ID Badge ── */}
+                    <div style={{ background: 'rgba(0, 132, 255, 0.08)', border: '1px solid rgba(0, 132, 255, 0.2)', borderRadius: 8, padding: '5px 8px', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <i className="fa-solid fa-folder-tree" style={{ color: '#0084FF', fontSize: 10, flexShrink: 0 }} />
+                      <div style={{ fontSize: 10, color: '#0084FF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                        {p.catalog_name} <span style={{ opacity: 0.7, fontWeight: 400 }}>(ID: {p.catalog_id})</span>
+                      </div>
+                    </div>
+
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
                       <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: isInStock ? 'rgba(37,211,102,0.1)' : 'rgba(232,64,64,0.1)', color: isInStock ? '#25D366' : '#e84040', fontWeight: 600 }}>
                         ● {isInStock ? 'In Stock' : 'Out of Stock'}
                       </span>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button
-                          onClick={() => handleDeleteProduct(p.id)}
+                          onClick={() => handleDeleteProduct(p)}
                           style={{ background: 'none', border: 'none', color: '#e84040', cursor: 'pointer', fontSize: 12, padding: '4px 6px' }}
                           title="Delete SKU"
                         >
@@ -400,7 +417,7 @@ export default function MetaCatalogPage() {
             {filteredProducts.length === 0 && (
               <div style={{ gridColumn: '1 / -1', padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
                 <i className="fa-solid fa-store" style={{ fontSize: 36, opacity: 0.3, display: 'block', marginBottom: 12 }} />
-                No products found in this catalog. Click <strong>Add Product SKU</strong> to populate your catalog.
+                No products found. Click <strong>Add Product SKU</strong> to publish your first SKU to Meta Catalog.
               </div>
             )}
           </div>
@@ -431,6 +448,23 @@ export default function MetaCatalogPage() {
                     <i className="fa-solid fa-circle-check" style={{ marginRight: 6 }} />{formSuccess}
                   </div>
                 )}
+
+                {/* Target Catalog Selector */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <div className="form-label">Target Meta Catalog *</div>
+                  <select
+                    className="form-input"
+                    value={targetCatalogId}
+                    onChange={e => setTargetCatalogId(e.target.value)}
+                    required
+                  >
+                    {catalogs.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} (Catalog ID: {c.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
                 <div>
                   <div className="form-label">Product Name *</div>
