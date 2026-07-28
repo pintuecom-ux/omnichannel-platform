@@ -71,6 +71,7 @@ export async function publishScheduledPublication(params: {
             ? 'VIDEO'
             : 'IMAGE'
 
+        const productTags = params.publication.meta?.product_tags
         const container = await client.createMediaContainer({
           ...(item.media_type === 'video'
             ? { video_url: item.public_url ?? undefined }
@@ -79,6 +80,7 @@ export async function publishScheduledPublication(params: {
           is_carousel_item: payload.length > 1,
           caption: payload.length > 1 ? undefined : (params.publication.caption ?? undefined),
           alt_text: item.alt_text ?? undefined,
+          ...(productTags && Array.isArray(productTags) && productTags.length > 0 ? { product_tags: productTags } : {}),
         })
         creationIds.push(container.id)
       }

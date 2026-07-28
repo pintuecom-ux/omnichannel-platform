@@ -67,6 +67,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const location = String(form.get('location') ?? '').trim() || null
+  const rawProductTags = String(form.get('product_tags') ?? '')
+  let productTags: any[] = []
+  if (rawProductTags) {
+    try { productTags = JSON.parse(rawProductTags) } catch {}
+  }
+
   const status = action === 'publish_now'
     ? 'publishing'
     : action === 'schedule'
@@ -87,6 +94,8 @@ export async function POST(req: NextRequest) {
     meta: {
       source: 'planner',
       target_platforms: targetPlatforms,
+      location,
+      product_tags: productTags,
     },
     created_by: user.id,
   }
