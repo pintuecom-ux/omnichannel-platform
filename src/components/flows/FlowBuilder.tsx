@@ -27,14 +27,23 @@ interface Screen {
 }
 
 // ── WhatsApp Flow JSON Generator ───────────────────────────────────────────────
+import { sanitizeId } from '@/lib/flowConverter'
+
+// ── WhatsApp Flow JSON Generator ───────────────────────────────────────────────
 // Maps Screen[] → Meta WhatsApp Flow JSON v6.1
 // Usage: POST /api/flows { action: 'update_json', flow_json: generateFlowJSON(screens) }
 export function generateFlowJSON(screens: Screen[]): object {
   const waScreens = screens.map((s, idx) => {
-    const nextSc = s.nextScreen ?? screens[idx + 1]?.id ?? null
+    const isTerminal = idx === screens.length - 1
+    const screenId = sanitizeId(s.id, idx === 0 ? 'WELCOME' : `SCREEN_${idx + 1}`)
+
+    const nextRawId = s.nextScreen ?? screens[idx + 1]?.id ?? null
+    const nextSc = nextRawId ? sanitizeId(nextRawId, `SCREEN_${idx + 2}`) : null
     const formChildren: any[] = []
 
-    s.blocks.forEach(b => {
+    s.blocks.forEach((b, bIdx) => {
+      const fieldName = b.id ? b.id.replace(/[^a-zA-Z0-9_]/g, '_') : `field_${bIdx}`
+
       switch (b.type) {
         case 'heading':
           formChildren.push({ type: 'TextHeading', text: b.label ?? '' })
@@ -48,7 +57,7 @@ export function generateFlowJSON(screens: Screen[]): object {
           formChildren.push({
             type: 'TextInput',
             label: b.label ?? '',
-            name: b.id,
+            name: fieldName,
             required: b.required ?? false,
             'input-type': b.type === 'email' ? 'email' : b.type === 'phone' ? 'phone' : 'text',
             ...(b.placeholder ? { 'helper-text': b.placeholder } : {}),
@@ -58,24 +67,27 @@ export function generateFlowJSON(screens: Screen[]): object {
           formChildren.push({
             type: 'Dropdown',
             label: b.label ?? '',
-            name: b.id,
+            name: fieldName,
             required: b.required ?? false,
-            'data-source': (b.options ?? []).map(o => ({ id: o.id, title: o.title })),
+            'data-source': (b.options ?? []).map((o, oIdx) => ({
+              id: o.id ? String(o.id).replace(/[^a-zA-Z0-9_]/g, '_') : `opt_${oIdx}`,
+              title: o.title
+            })),
           })
           break
         case 'date':
           formChildren.push({
             type: 'DatePicker',
             label: b.label ?? '',
-            name: b.id,
+            name: fieldName,
             required: b.required ?? false,
           })
           break
         case 'button':
           formChildren.push({
             type: 'Footer',
-            label: b.label ?? (nextSc ? 'Next' : 'Submit'),
-            'on-click-action': nextSc
+            label: b.label ?? (!isTerminal ? 'Next' : 'Submit'),
+            'on-click-action': !isTerminal && nextSc
               ? { name: 'navigate', next: { type: 'screen', name: nextSc }, payload: {} }
               : { name: 'complete', payload: {} },
           })
@@ -87,16 +99,16 @@ export function generateFlowJSON(screens: Screen[]): object {
     if (!s.blocks.some(b => b.type === 'button')) {
       formChildren.push({
         type: 'Footer',
-        label: nextSc ? 'Next' : 'Submit',
-        'on-click-action': nextSc
+        label: !isTerminal ? 'Next' : 'Submit',
+        'on-click-action': !isTerminal && nextSc
           ? { name: 'navigate', next: { type: 'screen', name: nextSc }, payload: {} }
           : { name: 'complete', payload: {} },
       })
     }
 
-    return {
-      id: s.id,
-      title: s.title,
+    const screenObj: any = {
+      id: screenId,
+      title: s.title || screenId,
       data: {},
       layout: {
         type: 'SingleColumnLayout',
@@ -107,6 +119,16 @@ export function generateFlowJSON(screens: Screen[]): object {
         }],
       },
     }
+
+    if (isTerminal) {
+      screenObj.terminal = true
+      screenObj.success = true
+    } else {
+      screenObj.terminal = false
+      // CRITICAL FIX: Omit 'success' property on non-terminal screens!
+    }
+
+    return screenObj
   })
 
   return { version: '6.1', screens: waScreens }
@@ -354,7 +376,9 @@ export default function FlowBuilder({
           ))}
           <button
             onClick={() => {
-              const ns: Screen = { id: `screen_${Date.now()}`, title: `Screen ${value.length + 1}`, blocks: [] }
+              const count = value.length + 1
+              const rawTitle = `Screen ${count}`
+              const ns: Screen = { id: sanitizeId(rawTitle, `SCREEN_${count}`), title: rawTitle, blocks: [] }
               onChange([...value, ns])
               setSelectedScreen(value.length)
               setSelectedBlockId(null)
