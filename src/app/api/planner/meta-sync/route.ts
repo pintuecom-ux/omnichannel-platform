@@ -6,10 +6,32 @@ import { MetaCatalogClient } from '@/lib/platforms/catalog'
 
 const BASE = 'https://graph.facebook.com/v25.0'
 
+const DEFAULT_HASHTAGS = [
+  '#reactcommerce',
+  '#ecommerce',
+  '#newcollection',
+  '#shop',
+  '#sale',
+  '#trending',
+  '#fashion',
+  '#style',
+  '#deals',
+  '#onlineboutique'
+]
+
+const DEFAULT_LOCATIONS = [
+  'Online Store',
+  'United States',
+  'New York, NY',
+  'London, UK',
+  'Worldwide Shipping',
+  'Los Angeles, CA'
+]
+
 /**
  * Real-time synchronization endpoint for Meta Products, Locations, and Hashtags.
  * Ensures bidirectional consistency between React Commerce platform history and Meta Graph API v25.0.
- * Zero hardcoded lists — all items are dynamically fetched and validated.
+ * Includes dynamic search matching and instant custom fallback.
  */
 export async function GET(req: NextRequest) {
   const user = await getAuthenticatedUser()
@@ -35,7 +57,6 @@ export async function GET(req: NextRequest) {
 
   const accessToken = igChannel?.access_token || fbChannel?.access_token || process.env.WHATSAPP_TOKEN
   const igAccountId = igChannel?.external_id
-  const pageId = fbChannel?.external_id
 
   try {
     // ── 1. PRODUCTS SYNC (Meta Commerce Catalogs & Historical Tags) ──
@@ -94,11 +115,20 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // If user typed a search query, filter the synced catalog
       let results = Array.from(syncedProducts.values())
       if (q) {
         const lower = q.toLowerCase()
         results = results.filter(p => p.name?.toLowerCase().includes(lower) || p.retailer_id?.toLowerCase().includes(lower))
+        // If search returned nothing, offer a dynamic item matching search
+        if (results.length === 0) {
+          results.push({
+            id: `custom_${Date.now()}`,
+            retailer_id: `SKU-${q.toUpperCase().replace(/\s+/g, '')}`,
+            name: q,
+            price: 49.99,
+            source: 'custom'
+          })
+        }
       }
 
       return NextResponse.json({ success: true, count: results.length, products: results })
@@ -107,6 +137,11 @@ export async function GET(req: NextRequest) {
     // ── 2. LOCATIONS SYNC (Meta Places Search & Platform History) ──
     if (type === 'locations') {
       const locationsSet: Set<string> = new Set()
+
+      // If user typed a query, add it directly as an available choice
+      if (q) {
+        locationsSet.add(q)
+      }
 
       // A. Query Meta Graph API Pages / Places search if access token available
       if (accessToken && q) {
@@ -152,12 +187,27 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      // Default suggestions if set is empty or short
+      for (const def of DEFAULT_LOCATIONS) {
+        if (!q || def.toLowerCase().includes(q.toLowerCase())) {
+          locationsSet.add(def)
+        }
+      }
+
       return NextResponse.json({ success: true, count: locationsSet.size, locations: Array.from(locationsSet) })
     }
 
     // ── 3. HASHTAGS SYNC (Instagram Graph API Search & Usage Analytics) ──
     if (type === 'hashtags') {
       const tagCounts: Map<string, number> = new Map()
+
+      // If user typed a search term, guarantee it is present as a usable tag!
+      if (q) {
+        const cleanTag = `#${q.replace(/^#/, '').trim().toLowerCase()}`
+        if (cleanTag.length > 1) {
+          tagCounts.set(cleanTag, 100) // Top priority
+        }
+      }
 
       // A. Scan platform historical captions to find real brand-synced trending hashtags
       const { data: recentPubs } = await admin
@@ -209,10 +259,19 @@ export async function GET(req: NextRequest) {
             const foundTags = res.data?.data ?? []
             for (const t of foundTags) {
               const formatted = `#${cleanQuery.toLowerCase()}`
-              tagCounts.set(formatted, (tagCounts.get(formatted) || 0) + 10) // Boost weight for Meta verified tags
+              tagCounts.set(formatted, (tagCounts.get(formatted) || 0) + 10)
             }
           } catch (err: any) {
             console.warn('[MetaSync] IG Hashtag Search API Error:', err?.response?.data?.error?.message || err.message)
+          }
+        }
+      }
+
+      // Default suggestions if list is empty
+      for (const def of DEFAULT_HASHTAGS) {
+        if (!q || def.toLowerCase().includes(q.toLowerCase().replace(/^#/, ''))) {
+          if (!tagCounts.has(def)) {
+            tagCounts.set(def, 1)
           }
         }
       }

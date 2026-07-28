@@ -121,14 +121,14 @@ export default function CreatePostModal({
 
   // Trigger sync when popovers open
   useEffect(() => {
-    if (activePopover === 'hashtags' && syncedHashtags.length === 0) {
-      fetchHashtags()
+    if (activePopover === 'hashtags') {
+      fetchHashtags(hashtagQuery)
     }
-    if (activePopover === 'location' && syncedLocations.length === 0) {
-      fetchLocations()
+    if (activePopover === 'location') {
+      fetchLocations(locationQuery)
     }
-    if (activePopover === 'products' && syncedProducts.length === 0) {
-      fetchProducts()
+    if (activePopover === 'products') {
+      fetchProducts(productQuery)
     }
   }, [activePopover])
 
@@ -146,16 +146,26 @@ export default function CreatePostModal({
     setMediaPreviews(prev => prev.filter((_, i) => i !== index))
   }
 
-  const toggleHashtag = (tag: string) => {
-    if (caption.includes(tag)) {
-      setCaption(prev => prev.replace(tag, '').replace(/\s+/g, ' ').trim())
+  const toggleHashtag = (rawTag: string) => {
+    const formattedTag = rawTag.startsWith('#') ? rawTag : `#${rawTag.trim()}`
+    if (caption.includes(formattedTag)) {
+      setCaption(prev => prev.replace(formattedTag, '').replace(/\s+/g, ' ').trim())
     } else {
-      setCaption(prev => (prev ? `${prev.trim()} ${tag}` : tag))
+      setCaption(prev => (prev ? `${prev.trim()} ${formattedTag}` : formattedTag))
     }
   }
 
+  const addDirectHashtag = (rawText: string) => {
+    if (!rawText.trim()) return
+    const clean = rawText.trim().replace(/^#/, '')
+    const formatted = `#${clean}`
+    toggleHashtag(formatted)
+    setHashtagQuery('')
+  }
+
   const selectLocation = (loc: string) => {
-    setLocation(loc)
+    if (!loc.trim()) return
+    setLocation(loc.trim())
     setActivePopover(null)
   }
 
@@ -405,19 +415,32 @@ export default function CreatePostModal({
                       <Search size={14} style={{ position: 'absolute', left: '8px', color: 'var(--text-muted)' }} />
                       <input
                         type="text"
-                        placeholder="Search Meta hashtag trends..."
+                        placeholder="Type any hashtag (e.g. #summer or fashion)..."
                         value={hashtagQuery}
                         onChange={e => {
                           setHashtagQuery(e.target.value)
                           fetchHashtags(e.target.value)
                         }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            addDirectHashtag(hashtagQuery)
+                          }
+                        }}
                         className="form-textarea"
                         style={{ minHeight: 'unset', padding: '6px 10px 6px 28px', fontSize: '12px', width: '100%' }}
                       />
                     </div>
-                    <button type="button" className="planner-btn" onClick={() => fetchHashtags(hashtagQuery)} style={{ padding: '6px 10px', fontSize: '11px' }}>
-                      Sync
-                    </button>
+                    {hashtagQuery.trim() && (
+                      <button
+                        type="button"
+                        className="planner-btn primary"
+                        onClick={() => addDirectHashtag(hashtagQuery)}
+                        style={{ padding: '6px 10px', fontSize: '11px', flexShrink: 0 }}
+                      >
+                        + Add #{hashtagQuery.replace(/^#/, '')}
+                      </button>
+                    )}
                   </div>
 
                   {isLoadingHashtags && syncedHashtags.length === 0 ? (
@@ -448,7 +471,7 @@ export default function CreatePostModal({
                     </div>
                   ) : (
                     <div style={{ padding: '8px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
-                      No tags found. Type above to search Meta Hashtag index or start publishing to generate trend analytics!
+                      Press Enter or click &quot;+ Add&quot; above to append your hashtag to caption!
                     </div>
                   )}
                 </div>
@@ -474,29 +497,35 @@ export default function CreatePostModal({
                       <Search size={14} style={{ position: 'absolute', left: '8px', color: 'var(--text-muted)' }} />
                       <input
                         type="text"
-                        placeholder="Search physical store or Meta Place name..."
+                        placeholder="Type any location or store name..."
                         value={locationQuery}
                         onChange={e => {
                           setLocationQuery(e.target.value)
                           fetchLocations(e.target.value)
                         }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            selectLocation(locationQuery)
+                          }
+                        }}
                         className="form-textarea"
                         style={{ minHeight: 'unset', padding: '6px 10px 6px 28px', fontSize: '12px', width: '100%' }}
                       />
                     </div>
-                    <button
-                      type="button"
-                      className="planner-btn primary"
-                      style={{ padding: '6px 12px', fontSize: '12px' }}
-                      onClick={() => {
-                        if (locationQuery.trim()) selectLocation(locationQuery.trim())
-                      }}
-                    >
-                      Set Custom
-                    </button>
+                    {locationQuery.trim() && (
+                      <button
+                        type="button"
+                        className="planner-btn primary"
+                        style={{ padding: '6px 12px', fontSize: '12px', flexShrink: 0 }}
+                        onClick={() => selectLocation(locationQuery)}
+                      >
+                        Set Location
+                      </button>
+                    )}
                   </div>
 
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>Synced Suggestions from Meta & Platform History:</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>Synced Places & Popular Suggestions:</div>
                   {isLoadingLocations && syncedLocations.length === 0 ? (
                     <div style={{ padding: '12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                       <Loader2 size={16} className="animate-spin" /> Querying Meta Places Graph...
@@ -519,7 +548,7 @@ export default function CreatePostModal({
                     </div>
                   ) : (
                     <div style={{ padding: '8px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
-                      No synced places found yet. Enter any location name above and click &quot;Set Custom&quot; to initialize synchronization!
+                      Press Enter or click &quot;Set Location&quot; above to set your custom location!
                     </div>
                   )}
                 </div>
@@ -604,6 +633,12 @@ export default function CreatePostModal({
                       placeholder="Quick tag new SKU / Product Title..."
                       value={customProductInput}
                       onChange={e => setCustomProductInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addCustomProduct()
+                        }
+                      }}
                       className="form-textarea"
                       style={{ minHeight: 'unset', padding: '6px 10px', fontSize: '11px', width: '100%' }}
                     />
