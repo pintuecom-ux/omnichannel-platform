@@ -30,6 +30,12 @@ export interface InstagramMediaContainerPayload {
   caption?: string
   alt_text?: string
   thumb_offset?: number
+  product_tags?: Array<{
+    product_id?: string
+    retailer_id?: string
+    x?: number
+    y?: number
+  }>
 }
 
 export interface InstagramMediaListItem {
@@ -93,15 +99,16 @@ export class InstagramClient {
   }
 
   /** Send an Instagram DM text message to a user (Instagram-scoped ID) */
-  async sendDM(recipientId: string, text: string) {
+  async sendDM(recipientId: string, text: string, opts?: { useHumanAgentTag?: boolean }) {
     return this.sendInstagramMessage({
       recipient: { id: recipientId },
       message: { text },
+      ...(opts?.useHumanAgentTag ? { messaging_type: 'MESSAGE_TAG', tag: 'HUMAN_AGENT' } : { messaging_type: 'RESPONSE' }),
     })
   }
 
   /** Send a media attachment (image, video, audio, file) via Instagram DM */
-  async sendMediaDM(recipientId: string, mediaType: 'image' | 'video' | 'audio' | 'file', mediaUrl: string) {
+  async sendMediaDM(recipientId: string, mediaType: 'image' | 'video' | 'audio' | 'file', mediaUrl: string, opts?: { useHumanAgentTag?: boolean }) {
     return this.sendInstagramMessage({
       recipient: { id: recipientId },
       message: {
@@ -113,6 +120,7 @@ export class InstagramClient {
           },
         },
       },
+      ...(opts?.useHumanAgentTag ? { messaging_type: 'MESSAGE_TAG', tag: 'HUMAN_AGENT' } : { messaging_type: 'RESPONSE' }),
     })
   }
 
@@ -231,13 +239,23 @@ export class InstagramClient {
   }
 
   async createMediaContainer(payload: InstagramMediaContainerPayload) {
-    return this.post<{ id: string }>(`${this.igAccountId}/media`, payload)
+    const formattedPayload: Record<string, any> = { ...payload }
+    if (payload.product_tags?.length) {
+      formattedPayload.product_tags = JSON.stringify(payload.product_tags)
+    }
+    return this.post<{ id: string }>(`${this.igAccountId}/media`, formattedPayload)
   }
 
   async publishMediaContainer(creationId: string) {
     return this.post<{ id: string }>(`${this.igAccountId}/media_publish`, {
       creation_id: creationId,
     })
+  }
+
+  /** Delete a published post from Instagram account (powered by instagram_manage_contents) */
+  async deleteMedia(mediaId: string): Promise<void> {
+    await this.del(mediaId)
+    console.log(`[IG deleteMedia] Deleted post ${mediaId}`)
   }
 
   async getContainerStatus(creationId: string) {

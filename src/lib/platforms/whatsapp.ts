@@ -414,6 +414,48 @@ export class WhatsAppClient {
     return res.data?.conversation_analytics ?? {}
   }
 
+  // ── Conversion Events Logging (whatsapp_business_manage_events) ──────────
+  /**
+   * Transmit e-commerce conversion milestones directly to Meta WABA Conversion Servers
+   * Event Types: 'Purchase' | 'AddToCart' | 'Lead' | 'InitiateCheckout' | 'ViewContent'
+   */
+  async logCommerceEvent(
+    wabaId: string,
+    eventName: 'Purchase' | 'AddToCart' | 'Lead' | 'InitiateCheckout' | 'ViewContent',
+    eventTime = Math.floor(Date.now() / 1000),
+    userPhone?: string,
+    customData?: { currency?: string; value?: number; content_ids?: string[] }
+  ): Promise<any> {
+    try {
+      const eventPayload: Record<string, any> = {
+        event_name: eventName,
+        event_time: eventTime,
+        action_source: 'business_messaging',
+      }
+
+      if (userPhone) {
+        eventPayload.user_data = {
+          phone: [normalizePhone(userPhone)],
+        }
+      }
+      if (customData) {
+        eventPayload.custom_data = customData
+      }
+
+      const res = await axios.post(
+        `${BASE}/${wabaId}/events`,
+        { data: [eventPayload] },
+        { headers: this.h }
+      )
+      console.log(`[WA logCommerceEvent] ✅ Logged event ${eventName} to WABA ${wabaId}`)
+      return res.data
+    } catch (err: any) {
+      const msg = err?.response?.data?.error?.message || err.message
+      console.warn(`[WA logCommerceEvent Error]:`, msg)
+      throw new Error(`WhatsApp Event Logging Failed: ${msg}`)
+    }
+  }
+
   // ── ─────────────────────────────────────────────────────────────────────── ──
   // ── CALLING METHODS (v23 API additions)                                    ──
   // ── ─────────────────────────────────────────────────────────────────────── ──
