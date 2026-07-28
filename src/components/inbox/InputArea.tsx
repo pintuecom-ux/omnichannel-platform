@@ -9,8 +9,8 @@ import { InputFlowSelector, type FlowItem } from './InputFlowSelector'
 import { InputFlowModal } from './InputFlowModal'
 import { InputTemplateSelector } from './InputTemplateSelector'
 import { InputTemplateModal } from './InputTemplateModal'
-
-
+import { InputProductModal, type SyncedProduct } from './InputProductModal'
+import { ShoppingBag, ShieldCheck } from 'lucide-react'
 
 const QUICK_REPLIES = [
   'Sending details now',
@@ -22,13 +22,14 @@ const QUICK_REPLIES = [
 
 interface Props { onMessageSent: () => void }
 
-
 export default function InputArea({ onMessageSent }: Props) {
   const [text,           setText]           = useState('')
   const [sending,        setSending]        = useState(false)
   const [showTemplates,  setShowTemplates]  = useState(false)
   const [showEmoji,      setShowEmoji]      = useState(false)
   const [showFlowPicker, setShowFlowPicker] = useState(false)
+  const [showProductModal, setShowProductModal] = useState(false)
+  const [useHumanAgentTag, setUseHumanAgentTag] = useState(false)
   const [emojiGroup,     setEmojiGroup]     = useState('😀')
   const [templates,      setTemplates]      = useState<Template[]>([])
   const [templateSearch, setTemplateSearch] = useState('')
@@ -212,10 +213,34 @@ export default function InputArea({ onMessageSent }: Props) {
           body,
           type: 'text',
           reply_to_external_id: replyId,
+          use_human_agent_tag: useHumanAgentTag,
         }),
       })
       const json = await res.json()
       if (!res.ok) setText(`[FAILED: ${json.error}]`)
+      else onMessageSent()
+    } finally { isSendingRef.current = false; setSending(false) }
+  }
+
+  // ── Send Product Card ────────────────────────────────────────────────────────
+  async function handleSendProductCard(product: SyncedProduct, note?: string) {
+    if (!activeConversationId || isSendingRef.current) return
+    isSendingRef.current = true; setSending(true)
+    const cardText = `🛍️ *${product.name}*\nSKU: ${product.retailer_id}${product.price ? ` · $${product.price} ${product.currency || 'USD'}` : ''}${note ? `\n\n💬 ${note}` : ''}`
+    addOptimistic('text', cardText)
+    try {
+      const res = await fetch('/api/messages/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversation_id: activeConversationId,
+          body: cardText,
+          type: 'text',
+          use_human_agent_tag: useHumanAgentTag,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) alert(`Product send failed: ${json.error}`)
       else onMessageSent()
     } finally { isSendingRef.current = false; setSending(false) }
   }
@@ -467,6 +492,13 @@ const preview: string = isOTP
         sendTemplate={sendTemplate}
       />
 
+      {/* ── Meta Catalog Product Card Selector Modal ── */}
+      <InputProductModal
+        open={showProductModal}
+        onClose={() => setShowProductModal(false)}
+        onSendProduct={handleSendProductCard}
+      />
+
       {/* ── Quick Replies ── */}
       <div className="quick-replies">
         {QUICK_REPLIES.map(r => (
@@ -521,6 +553,33 @@ const preview: string = isOTP
           onClick={() => { if (isWA) setShowFlowPicker(v => !v) }}>
           <i className="fa-solid fa-diagram-project" />
         </button>
+
+        {/* Product Catalog Card button */}
+        <button className="tool-btn" title="Send Meta Commerce Product Card" style={{ color: '#f59e0b' }} onClick={() => setShowProductModal(true)}>
+          <ShoppingBag size={15} />
+        </button>
+
+        {/* Meta Human Agent 7-Day Extension Tag Button */}
+        {!isWA && (
+          <button
+            className="tool-btn"
+            title={useHumanAgentTag ? 'Meta Human Agent Tag ACTIVE (Extends DM window up to 7 days)' : 'Enable Meta Human Agent Tag (Extends DM response window to 7 days)'}
+            style={{
+              color: useHumanAgentTag ? '#c084fc' : 'var(--text-muted)',
+              background: useHumanAgentTag ? 'rgba(168, 85, 247, 0.2)' : undefined,
+              borderRadius: '6px',
+              padding: '2px 6px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+            onClick={() => setUseHumanAgentTag(v => !v)}
+          >
+            <ShieldCheck size={15} />
+            <span style={{ fontSize: '10px', fontWeight: 600 }}>{useHumanAgentTag ? 'Human Agent (7d)' : 'Standard DM'}</span>
+          </button>
+        )}
+
         <button className="tool-btn" style={{ color: 'var(--accent)' }} title="AI Compose">
           <i className="fa-solid fa-wand-magic-sparkles" />
         </button>

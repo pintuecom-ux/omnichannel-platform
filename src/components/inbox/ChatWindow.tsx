@@ -223,6 +223,17 @@ export default function ChatWindow() {
         ? ['messages', 'notes']
         : ['messages', 'notes', 'comments']
 
+  // Calculate Meta 24-Hour & 7-Day Human Agent Response Window
+  const lastInboundMsg = [...messages].reverse().find(m => m.direction === 'inbound')
+  const lastInboundTime = lastInboundMsg
+    ? new Date(lastInboundMsg.created_at).getTime()
+    : conversation.updated_at
+      ? new Date(conversation.updated_at).getTime()
+      : Date.now()
+  const hoursSinceLast = Math.max(0, (Date.now() - lastInboundTime) / (1000 * 60 * 60))
+  const is24hActive = hoursSinceLast <= 24
+  const is7dHumanAgentActive = hoursSinceLast <= 168
+
   return (
     <div id="main-workspace">
       {/* ── Header ── */}
@@ -249,10 +260,24 @@ export default function ChatWindow() {
           </div>
           <div className="chat-contact-info">
             <div className="name">{contactName}</div>
-            <div className="sub">
+            <div className="sub" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span className={`platform-pill-sm ${platformCls}`}><i className={platformIcon} /> {platformLabel}</span>
               {isCommentThread && <span style={{ color: '#e1306c', fontSize: 11 }}>Comment thread</span>}
-              {conversation.status === 'open' && <span style={{ color: 'var(--accent)', fontSize: 11 }}>● Online</span>}
+
+              {/* ── Meta Response Window Countdown Indicator ── */}
+              {is24hActive ? (
+                <span style={{ fontSize: '11px', background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e', padding: '2px 8px', borderRadius: '10px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  🟢 24h Window Active ({Math.max(0, 24 - Math.floor(hoursSinceLast))}h left)
+                </span>
+              ) : is7dHumanAgentActive && (platform === 'instagram' || platform === 'facebook') ? (
+                <span style={{ fontSize: '11px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', padding: '2px 8px', borderRadius: '10px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }} title="Meta Human Agent Tag allows sending DMs up to 7 days after customer's last message">
+                  🛡️ Human Agent Tag Active ({Math.max(1, Math.ceil((168 - hoursSinceLast) / 24))}d left)
+                </span>
+              ) : (
+                <span style={{ fontSize: '11px', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', padding: '2px 8px', borderRadius: '10px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  🔴 Window Expired (Use Template / Tag)
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -267,13 +292,12 @@ export default function ChatWindow() {
             <button
               className="icon-btn"
               title="WhatsApp Voice Call"
-onClick={() => setShowCallModal(true)}
+              onClick={() => setShowCallModal(true)}
               style={{
                 position:   'relative',
                 color:       'var(--text-muted)',
               }}
             >
-              {/* Inline SVG phone icon — no extra dep needed */}
               <svg
                 width="15"
                 height="15"
