@@ -167,4 +167,37 @@ export class MetaCatalogClient {
       throw new Error(`Meta Catalog Bulk Sync failed: ${msg}`)
     }
   }
+
+  /** Fetch all owned Meta Commerce Catalogs for a Business Manager or user account */
+  static async listCatalogs(accessToken: string, businessId?: string): Promise<any[]> {
+    try {
+      const target = businessId ? `${businessId}/owned_product_catalogs` : 'me/product_catalogs'
+      const res = await axios.get(buildMetaGraphUrl(target), {
+        params: {
+          fields: 'id,name,product_count,vertical,business',
+          access_token: accessToken,
+        },
+      })
+      return res.data?.data ?? []
+    } catch (err: any) {
+      console.warn(`[MetaCatalog listCatalogs warning]:`, err?.response?.data?.error?.message || err.message)
+      return []
+    }
+  }
+
+  /** Create a new Meta Product Catalog under a Business Manager */
+  static async createCatalog(accessToken: string, businessId: string, name: string): Promise<{ id: string }> {
+    try {
+      const res = await axios.post(
+        buildMetaGraphUrl(`${businessId}/owned_product_catalogs`),
+        { name, vertical: 'commerce' },
+        { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+      )
+      return { id: res.data.id }
+    } catch (err: any) {
+      const msg = err?.response?.data?.error?.message || err.message
+      throw new Error(`Failed to create Meta Catalog: ${msg}`)
+    }
+  }
 }
+

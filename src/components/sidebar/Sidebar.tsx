@@ -26,6 +26,7 @@ const NAV = [
   { id: 'templates', icon: 'fa-solid fa-file-code',       label: 'Templates',        href: '/templates',section: 'Publishing' },
   { id: 'pages',     icon: 'fa-solid fa-photo-film',      label: 'Media Library',    href: '/pages',    section: 'Publishing' },
   { id: 'ads',       icon: 'fa-solid fa-rectangle-ad',    label: 'Ad Manager',       soon: true,        section: 'Ads & Analytics' },
+  { id: 'catalog',   icon: 'fa-solid fa-store',           label: 'Meta Catalogs',    href: '/catalog',  section: 'Ads & Analytics' },
   { id: 'analytics', icon: 'fa-solid fa-chart-column',    label: 'Analytics',        href: '/analytics',section: 'Ads & Analytics' },
   { id: 'numbers',   icon: 'fa-solid fa-sim-card',        label: 'Buy Numbers',      soon: true,        section: 'Numbers & Calling' },
   { id: 'voip',      icon: 'fa-solid fa-headset',         label: 'VoIP / Dialer',    soon: true,        section: 'Numbers & Calling' },
