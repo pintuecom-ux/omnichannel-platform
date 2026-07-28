@@ -550,50 +550,46 @@ export default function FlowBuilder({
                 />
               </div>
 
+              {/* Button → next screen selector */}
               {selectedBlock.type === 'button' && (
-  <div style={{ marginTop: 10 }}>
-    <div style={fieldLabel}>Button Action</div>
+                <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+                  <div style={fieldLabel}>Button Action</div>
+                  <select
+                    value={selectedBlock.action ?? (screen.nextScreen ? 'next' : 'submit')}
+                    onChange={e => {
+                      const act = e.target.value as 'next' | 'submit'
+                      updateBlock(selectedBlock.id, { action: act })
+                      if (act === 'submit') {
+                        updateScreen({ ...screen, nextScreen: undefined })
+                      }
+                    }}
+                    style={fieldInput}
+                  >
+                    <option value="submit">Submit Flow (Complete)</option>
+                    <option value="next">Go To Next Screen</option>
+                  </select>
 
-    <select
-      value={selectedBlock.action ?? 'submit'}
-      onChange={e =>
-        updateBlock(selectedBlock.id, {
-          action: e.target.value as 'next' | 'submit'
-        })
-      }
-      style={fieldInput}
-    >
-      <option value="submit">Submit Flow</option>
-      <option value="next">Go To Next Screen</option>
-    </select>
-
-    {(selectedBlock.action ?? 'submit') === 'next' && (
-      <>
-        <div style={{ ...fieldLabel, marginTop: 8 }}>
-          Target Screen
-        </div>
-
-        <select
-          value={selectedBlock.targetScreen ?? ''}
-          onChange={e =>
-            updateBlock(selectedBlock.id, {
-              targetScreen: e.target.value
-            })
-          }
-          style={fieldInput}
-        >
-          <option value="">Select Screen</option>
-
-          {value.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.title}
-            </option>
-          ))}
-        </select>
-      </>
-    )}
-  </div>
-)}
+                  {(selectedBlock.action ?? (screen.nextScreen ? 'next' : 'submit')) === 'next' && (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={fieldLabel}>Target Screen</div>
+                      <select
+                        value={selectedBlock.targetScreen ?? screen.nextScreen ?? ''}
+                        onChange={e => {
+                          const targetId = e.target.value
+                          updateBlock(selectedBlock.id, { targetScreen: targetId })
+                          updateScreen({ ...screen, nextScreen: targetId || undefined })
+                        }}
+                        style={fieldInput}
+                      >
+                        <option value="">Select Target Screen</option>
+                        {value.filter((_, i) => i !== selectedScreen).map(s => (
+                          <option key={s.id} value={s.id}>{s.title} ({s.id})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Placeholder */}
               {['input', 'email', 'phone'].includes(selectedBlock.type) && (
@@ -652,23 +648,6 @@ export default function FlowBuilder({
                     cursor: 'pointer', fontSize: 10, marginTop: 2,
                   }}
                 >+ Add Option</button>
-              </div>
-            )}
-
-            {/* Button → next screen selector */}
-            {selectedBlock.type === 'button' && value.length > 1 && (
-              <div style={{ marginTop: 10 }}>
-                <div style={fieldLabel}>Navigate to Screen</div>
-                <select
-                  value={screen.nextScreen ?? ''}
-                  onChange={e => updateScreen({ ...screen, nextScreen: e.target.value || undefined })}
-                  style={{ ...fieldInput, cursor: 'pointer' } as any}
-                >
-                  <option value="">— Complete Flow —</option>
-                  {value.filter((_, i) => i !== selectedScreen).map(s => (
-                    <option key={s.id} value={s.id}>{s.title}</option>
-                  ))}
-                </select>
               </div>
             )}
           </div>

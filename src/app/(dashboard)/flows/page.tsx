@@ -422,10 +422,11 @@ const [builderState, setBuilderState] = useState<any[]>([
   const [creating,    setCreating]    = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
-  // JSON editor
-  const [jsonText,    setJsonText]    = useState('')
-  const [jsonError,   setJsonError]   = useState<string | null>(null)
-  const [saving,      setSaving]      = useState(false)
+  // JSON editor & state
+  const [jsonText,        setJsonText]        = useState('')
+  const [jsonError,       setJsonError]       = useState<string | null>(null)
+  const [saveSuccessMsg,  setSaveSuccessMsg]  = useState<string | null>(null)
+  const [saving,          setSaving]          = useState(false)
 
   // Action states
   const [actionState, setActionState] = useState<Record<string, string>>({})
@@ -473,87 +474,144 @@ const [builderState, setBuilderState] = useState<any[]>([
       await load(false)
       // Auto-open JSON editor to let user customize
       if (json.flow) {
-  const starterJson = FLOW_STARTERS[starterTpl] ?? FLOW_STARTERS.blank
-
-  setBuilderState(metaToBuilder(starterJson))
-  setEditFlow(json.flow)
-}
+        const starterJson = FLOW_STARTERS[starterTpl] ?? FLOW_STARTERS.blank
+        setBuilderState(metaToBuilder(starterJson))
+        setEditFlow(json.flow)
+      }
     } finally { setCreating(false) }
   }
 
   // ── Open JSON editor ──────────────────────────────────────────────────────
-function openEditor(flow: any) {
-  const json = flow.flow_json ?? FLOW_STARTERS.blank
+  function openEditor(flow: any) {
+    const json = flow.flow_json ?? FLOW_STARTERS.blank
 
-  setJsonText(JSON.stringify(json, null, 2))
-  setJsonError(null)
-  setEditFlow(flow)
+    setJsonText(JSON.stringify(json, null, 2))
+    setJsonError(null)
+    setSaveSuccessMsg(null)
+    setEditFlow(flow)
 
-  setBuilderState(metaToBuilder(json))
-}
+    setBuilderState(metaToBuilder(json))
+  }
+
+  // ── Auto-Save Draft & Close Editor ───────────────────────────────────────
+  async function closeEditor() {
+    if (editFlow && editFlow.status === 'DRAFT') {
+      try {
+        const parsed = convertToMetaJSON(builderState)
+        await fetch('/api/flows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update_json',
+            flow_id: editFlow.id,
+            meta_flow_id: editFlow.meta_flow_id,
+            flow_json: parsed,
+          }),
+        })
+        await load(false)
+      } catch {
+        /* auto-save fallback */
+      }
+    }
+    setEditFlow(null)
+    setSaveSuccessMsg(null)
+    setJsonError(null)
+  }
 
   // ── Save JSON ─────────────────────────────────────────────────────────────
- async function saveJson() {
-  if (!editFlow) return
+  async function saveJson() {
+    if (!editFlow) return
 
-  const parsed = convertToMetaJSON(builderState)
+    const parsed = convertToMetaJSON(builderState)
 
-  setSaving(true)
-  setJsonError(null)
+    setSaving(true)
+    setJsonError(null)
+    setSaveSuccessMsg(null)
 
-  try {
-    const res = await fetch('/api/flows', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'update_json',
-        flow_id: editFlow.id,
-        meta_flow_id: editFlow.meta_flow_id,
-        flow_json: parsed,
-      }),
-    })
+    try {
+      const res = await fetch('/api/flows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_json',
+          flow_id: editFlow.id,
+          meta_flow_id: editFlow.meta_flow_id,
+          flow_json: parsed,
+        }),
+      })
 
-    const json = await res.json()
+      const json = await res.json()
 
-    if (!res.ok) {
-      setJsonError(json.error || 'Save failed')
-      return
-    }
+      if (!res.ok) {
+        setJsonError(json.error || 'Save failed')
+        return
+      }
 
-    if (json.flow?.validation_errors?.length > 0) {
-      setJsonError(
-        `Meta validation: ${JSON.stringify(json.flow.validation_errors)}`
-      )
-    } else {
-      setEditFlow(json.flow)
-      setFlows((prev:any) =>
-        prev.map((f:any) =>
-          f.id === json.flow.id ? json.flow : f
+      if (json.flow?.validation_errors?.length > 0) {
+        setJsonError(
+          `Meta validation: ${JSON.stringify(json.flow.validation_errors)}`
         )
-      )
-      if (!json.meta_error) setJsonError(null)
+      } else {
+        setEditFlow(json.flow)
+        setSaveSuccessMsg('✅ Flow saved & validated with Meta Graph API!')
+        setFlows((prev: any) =>
+          prev.map((f: any) =>
+            f.id === json.flow.id ? json.flow : f
+          )
+        )
+      }
+    } finally {
+      setSaving(false)
     }
-
-  } finally {
-    setSaving(false)
   }
-}
 
   // ── Publish ───────────────────────────────────────────────────────────────
   async function publishFlow(flow: any) {
     if (!confirm(`Publish "${flow.name}"? Published flows cannot be edited. You can still deprecate them.`)) return
     setAction(flow.id, 'publishing…')
+    setSaveSuccessMsg(null)
     try {
+      // Auto-save latest builder state first
+      const parsed = convertToMetaJSON(builderState)
+      await fetch('/api/flows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_json',
+          flow_id: flow.id,
+          meta_flow_id: flow.meta_flow_id,
+          flow_json: parsed,
+        }),
+      })
+
       const res = await fetch('/api/flows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'publish', flow_id: flow.id, meta_flow_id: flow.meta_flow_id }),
       })
       const json = await res.json()
-      if (!res.ok) { alert(json.error); setAction(flow.id, ''); return }
+      if (!res.ok) {
+        const err = json.error ?? 'Publish failed'
+        if (editFlow) setJsonError(err)
+        else alert(err)
+        setAction(flow.id, '')
+        return
+      }
+
       setFlows(prev => prev.map(f => f.id === flow.id ? json.flow : f))
       setAction(flow.id, '✅ Published!')
-    } finally { setTimeout(() => setAction(flow.id, ''), 3000) }
+
+      if (editFlow && editFlow.id === flow.id) {
+        setEditFlow(json.flow)
+        setSaveSuccessMsg('🚀 Flow published to Meta successfully!')
+        setTimeout(() => {
+          setEditFlow(null)
+          setSaveSuccessMsg(null)
+        }, 1500)
+      }
+    } finally {
+      setTimeout(() => setAction(flow.id, ''), 3000)
+    }
   }
 
   // ── Deprecate ─────────────────────────────────────────────────────────────
@@ -751,11 +809,18 @@ function openEditor(flow: any) {
 
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'auto', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-                    {/* Edit JSON */}
-                    <button className="btn btn-secondary" style={{ padding: '3px 10px', fontSize: 11, height: 28, display: 'flex', alignItems: 'center', gap: 5 }}
-                      onClick={() => openEditor(flow)} title="Edit Flow JSON">
-                      <i className="fa-solid fa-code" />JSON
-                    </button>
+                    {/* Edit Draft & Continue */}
+                    {flow.status === 'DRAFT' ? (
+                      <button className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 11, height: 28, display: 'flex', alignItems: 'center', gap: 5 }}
+                        onClick={() => openEditor(flow)} title="Edit draft flow">
+                        <i className="fa-solid fa-pen-to-square" /> Edit Draft & Continue
+                      </button>
+                    ) : (
+                      <button className="btn btn-secondary" style={{ padding: '3px 10px', fontSize: 11, height: 28, display: 'flex', alignItems: 'center', gap: 5 }}
+                        onClick={() => openEditor(flow)} title="View Flow Builder">
+                        <i className="fa-solid fa-code" />JSON
+                      </button>
+                    )}
 
                     {/* Preview */}
                     {flow.meta_flow_id && (
@@ -881,7 +946,7 @@ function openEditor(flow: any) {
 
       {/* ── JSON Editor Modal ── */}
       {editFlow && (
-        <div className="tpl-modal-overlay open" onClick={() => setEditFlow(null)}>
+        <div className="tpl-modal-overlay open" onClick={closeEditor}>
           <div className="tpl-modal" style={{ width: '90vw', maxWidth: 860, maxHeight: '94vh' }} onClick={e => e.stopPropagation()}>
             <div className="tpl-modal-header">
               <div className="tpl-modal-title">
@@ -892,15 +957,22 @@ function openEditor(flow: any) {
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {editFlow.meta_flow_id && editFlow.status === 'DRAFT' && (
-                  <button className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => publishFlow(editFlow)} title="Publish after saving">
+                  <button className="btn btn-primary" style={{ padding: '4px 12px', fontSize: 12 }} onClick={() => publishFlow(editFlow)} title="Publish to Meta">
                     <i className="fa-solid fa-rocket" /> Publish
                   </button>
                 )}
-                <button className="icon-btn" onClick={() => setEditFlow(null)}><i className="fa-solid fa-xmark" /></button>
+                <button className="icon-btn" onClick={closeEditor}><i className="fa-solid fa-xmark" /></button>
               </div>
             </div>
 
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              {/* Success bar */}
+              {saveSuccessMsg && (
+                <div style={{ padding: '8px 16px', background: 'rgba(37,211,102,0.1)', borderBottom: '1px solid rgba(37,211,102,0.3)', fontSize: 11, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="fa-solid fa-circle-check" />{saveSuccessMsg}
+                </div>
+              )}
+
               {/* Error bar */}
               {jsonError && (
                 <div style={{ padding: '8px 16px', background: 'rgba(232,64,64,0.1)', borderBottom: '1px solid rgba(232,64,64,0.25)', fontSize: 11, color: '#e84040', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
@@ -929,10 +1001,10 @@ function openEditor(flow: any) {
             </div>
 
             <div className="tpl-modal-footer">
-              <button className="btn btn-secondary" onClick={() => { setJsonText(JSON.stringify(FLOW_STARTERS[starterTpl] ?? FLOW_STARTERS.blank, null, 2)); setJsonError(null) }} title="Reset to starter template">
+              <button className="btn btn-secondary" onClick={() => { setJsonText(JSON.stringify(FLOW_STARTERS[starterTpl] ?? FLOW_STARTERS.blank, null, 2)); setJsonError(null); setSaveSuccessMsg(null) }} title="Reset to starter template">
                 <i className="fa-solid fa-rotate-left" /> Reset
               </button>
-              <button className="btn btn-secondary" onClick={() => setEditFlow(null)}>Close</button>
+              <button className="btn btn-secondary" onClick={closeEditor}>Close</button>
               <button className="btn btn-primary" onClick={saveJson} disabled={saving}>
                 {saving
                   ? <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 6 }} />Saving…</>
