@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
+import { LogoIcon } from '@/components/common/Logo'
 
 const SECTIONS = [
   { id: 'overview',      label: 'Overview',                   icon: 'fa-solid fa-eye' },
@@ -121,7 +122,9 @@ export default function PrivacyPolicyPage() {
         <nav className="pp-nav">
           <div className="pp-nav-logo">
             <Link href="/" className="pp-nav-logo-mark">
-              <div className="pp-nav-logo-icon">RC</div>
+              <div className="pp-nav-logo-icon">
+                <LogoIcon size={20} />
+              </div>
               <span className="pp-nav-logo-name">React Commerce</span>
             </Link>
           </div>

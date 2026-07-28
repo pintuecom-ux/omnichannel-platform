@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { LogoIcon } from '@/components/common/Logo'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -31,8 +32,10 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-logo">
-          <div className="logo-icon" style={{ fontSize: '10px' }}>RC</div>
-          <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+          <div className="logo-icon">
+            <LogoIcon size={22} />
+          </div>
+          <span style={{ fontFamily: "var(--font-display)", fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>
             React Commerce
           </span>
         </div>

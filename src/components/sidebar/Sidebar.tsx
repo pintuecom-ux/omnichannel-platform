@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { LogoIcon } from '@/components/common/Logo'
 
 const NAV = [
   { id: 'inbox',     icon: 'fa-solid fa-comments',       label: 'Inbox',            href: '/inbox',    section: 'Messaging' },
@@ -76,7 +77,9 @@ export default function Sidebar() {
 
       <div className="sidebar-logo">
         <div className="logo-left">
-          <div className="logo-icon">RC</div>
+          <div className="logo-icon">
+            <LogoIcon size={22} />
+          </div>
           <span className="logo-text">React Commerce</span>
         </div>
         {expanded && (
