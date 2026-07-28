@@ -567,16 +567,10 @@ const preview: string = isOTP
             style={{
               color: useHumanAgentTag ? '#c084fc' : 'var(--text-muted)',
               background: useHumanAgentTag ? 'rgba(168, 85, 247, 0.2)' : undefined,
-              borderRadius: '6px',
-              padding: '2px 6px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
             }}
             onClick={() => setUseHumanAgentTag(v => !v)}
           >
             <ShieldCheck size={15} />
-            <span style={{ fontSize: '10px', fontWeight: 600 }}>{useHumanAgentTag ? 'Human Agent (7d)' : 'Standard DM'}</span>
           </button>
         )}
 
