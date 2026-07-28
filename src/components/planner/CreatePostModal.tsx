@@ -1,7 +1,7 @@
 'use client'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   X,
   Image as ImageIcon,
@@ -18,7 +18,9 @@ import {
   Bookmark,
   Send,
   ThumbsUp,
-  ShoppingBag
+  ShoppingBag,
+  Search,
+  RefreshCw
 } from 'lucide-react'
 
 interface TaggedProduct {
@@ -26,23 +28,9 @@ interface TaggedProduct {
   name: string
   price?: number
   retailer_id: string
+  image_url?: string
+  source?: 'meta_catalog' | 'platform_history' | 'custom'
 }
-
-const PRESET_HASHTAGS = [
-  '#reactcommerce', '#shop', '#ecommerce', '#newarrival',
-  '#style', '#onlineshopping', '#deals', '#bestseller', '#musthave', '#fashion'
-]
-
-const PRESET_LOCATIONS = [
-  'New York, USA', 'London, UK', 'Tokyo, Japan', 'Global Online Store', 'California, USA', 'Dubai, UAE'
-]
-
-const CATALOG_PRODUCTS: TaggedProduct[] = [
-  { id: 'prod_1', retailer_id: 'SKU-101', name: 'Executive Slate Watch', price: 199.99 },
-  { id: 'prod_2', retailer_id: 'SKU-102', name: 'Platinum Wireless Earbuds', price: 149.99 },
-  { id: 'prod_3', retailer_id: 'SKU-103', name: 'Smart Fitness Tracker', price: 89.99 },
-  { id: 'prod_4', retailer_id: 'SKU-104', name: 'Minimalist Leather Wallet', price: 49.99 },
-]
 
 export default function CreatePostModal({
   onClose,
@@ -67,10 +55,82 @@ export default function CreatePostModal({
   const [location, setLocation] = useState('')
   const [taggedProducts, setTaggedProducts] = useState<TaggedProduct[]>([])
   const [activePopover, setActivePopover] = useState<'hashtags' | 'location' | 'products' | null>(null)
-  const [customLocationInput, setCustomLocationInput] = useState('')
+
+  // Live Meta & Platform Sync State (Zero Hardcoded Lists!)
+  const [syncedHashtags, setSyncedHashtags] = useState<string[]>([])
+  const [isLoadingHashtags, setIsLoadingHashtags] = useState(false)
+  const [hashtagQuery, setHashtagQuery] = useState('')
+
+  const [syncedLocations, setSyncedLocations] = useState<string[]>([])
+  const [isLoadingLocations, setIsLoadingLocations] = useState(false)
+  const [locationQuery, setLocationQuery] = useState('')
+
+  const [syncedProducts, setSyncedProducts] = useState<TaggedProduct[]>([])
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false)
+  const [productQuery, setProductQuery] = useState('')
+
   const [customProductInput, setCustomProductInput] = useState('')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // ── Sync Functions with Meta Graph API & Platform History ──
+  const fetchHashtags = async (q = '') => {
+    setIsLoadingHashtags(true)
+    try {
+      const res = await fetch(`/api/planner/meta-sync?type=hashtags&q=${encodeURIComponent(q)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSyncedHashtags(data.hashtags || [])
+      }
+    } catch (err) {
+      console.warn('Failed to sync hashtags from platform:', err)
+    } finally {
+      setIsLoadingHashtags(false)
+    }
+  }
+
+  const fetchLocations = async (q = '') => {
+    setIsLoadingLocations(true)
+    try {
+      const res = await fetch(`/api/planner/meta-sync?type=locations&q=${encodeURIComponent(q)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSyncedLocations(data.locations || [])
+      }
+    } catch (err) {
+      console.warn('Failed to sync locations from Meta Places:', err)
+    } finally {
+      setIsLoadingLocations(false)
+    }
+  }
+
+  const fetchProducts = async (q = '') => {
+    setIsLoadingProducts(true)
+    try {
+      const res = await fetch(`/api/planner/meta-sync?type=products&q=${encodeURIComponent(q)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSyncedProducts(data.products || [])
+      }
+    } catch (err) {
+      console.warn('Failed to sync products from Meta Catalog:', err)
+    } finally {
+      setIsLoadingProducts(false)
+    }
+  }
+
+  // Trigger sync when popovers open
+  useEffect(() => {
+    if (activePopover === 'hashtags' && syncedHashtags.length === 0) {
+      fetchHashtags()
+    }
+    if (activePopover === 'location' && syncedLocations.length === 0) {
+      fetchLocations()
+    }
+    if (activePopover === 'products' && syncedProducts.length === 0) {
+      fetchProducts()
+    }
+  }, [activePopover])
 
   const handleMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -114,7 +174,8 @@ export default function CreatePostModal({
       id: `custom_${Date.now()}`,
       retailer_id: sku,
       name: customProductInput.trim(),
-      price: 99.99
+      price: 99.99,
+      source: 'custom'
     }
     setTaggedProducts(prev => [...prev, newProd])
     setCustomProductInput('')
@@ -137,6 +198,8 @@ export default function CreatePostModal({
         formData.append('product_tags', JSON.stringify(taggedProducts.map(p => ({
           product_id: p.id,
           retailer_id: p.retailer_id,
+          name: p.name,
+          price: p.price,
           x: 0.5,
           y: 0.5
         }))))
@@ -173,7 +236,12 @@ export default function CreatePostModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '1080px' }}>
         <div className="modal-header">
-          <h2>Create Post</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 style={{ margin: 0 }}>Create Post</h2>
+            <span style={{ fontSize: '11px', background: 'rgba(20, 184, 166, 0.15)', color: '#14b8a6', padding: '3px 8px', borderRadius: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <RefreshCw size={11} /> Live Meta Synced
+            </span>
+          </div>
           <button className="modal-close" onClick={onClose}><X size={20} /></button>
         </div>
 
@@ -242,7 +310,7 @@ export default function CreatePostModal({
             </div>
 
             <div className="form-group" style={{ position: 'relative' }}>
-              <label>Caption & Interactive Tags</label>
+              <label>Caption & Interactive Meta Tags</label>
               <textarea
                 className="form-textarea"
                 placeholder="Write a caption for your post..."
@@ -317,139 +385,230 @@ export default function CreatePostModal({
                 </div>
               )}
 
-              {/* Popover 1: Hashtags Suggestion Box */}
+              {/* Popover 1: Hashtags Live Sync Selector */}
               {activePopover === 'hashtags' && (
                 <div style={{
                   position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, marginTop: '8px',
                   background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px',
-                  padding: '12px', boxShadow: '0 12px 24px rgba(0,0,0,0.3)'
+                  padding: '12px', boxShadow: '0 12px 24px rgba(0,0,0,0.35)'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '12px', fontWeight: 600 }}>
-                    <span>Trending E-Commerce Hashtags</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <RefreshCw size={13} className={isLoadingHashtags ? 'animate-spin' : ''} style={{ color: '#14b8a6' }} />
+                      Synced Meta & Platform Hashtags
+                    </span>
                     <button onClick={() => setActivePopover(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={14} /></button>
                   </div>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    {PRESET_HASHTAGS.map(tag => {
-                      const isSelected = caption.includes(tag)
-                      return (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => toggleHashtag(tag)}
-                          style={{
-                            fontSize: '11px', padding: '4px 8px', borderRadius: '12px', cursor: 'pointer',
-                            border: '1px solid',
-                            borderColor: isSelected ? 'var(--accent)' : 'var(--border-color)',
-                            background: isSelected ? 'var(--accent)' : 'var(--bg-body)',
-                            color: isSelected ? '#ffffff' : 'var(--text-main)'
-                          }}
-                        >
-                          {tag} {isSelected && <Check size={10} style={{ marginLeft: '2px' }} />}
-                        </button>
-                      )
-                    })}
+
+                  <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                    <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <Search size={14} style={{ position: 'absolute', left: '8px', color: 'var(--text-muted)' }} />
+                      <input
+                        type="text"
+                        placeholder="Search Meta hashtag trends..."
+                        value={hashtagQuery}
+                        onChange={e => {
+                          setHashtagQuery(e.target.value)
+                          fetchHashtags(e.target.value)
+                        }}
+                        className="form-textarea"
+                        style={{ minHeight: 'unset', padding: '6px 10px 6px 28px', fontSize: '12px', width: '100%' }}
+                      />
+                    </div>
+                    <button type="button" className="planner-btn" onClick={() => fetchHashtags(hashtagQuery)} style={{ padding: '6px 10px', fontSize: '11px' }}>
+                      Sync
+                    </button>
                   </div>
+
+                  {isLoadingHashtags && syncedHashtags.length === 0 ? (
+                    <div style={{ padding: '12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <Loader2 size={16} className="animate-spin" /> Fetching synchronized hashtag frequency...
+                    </div>
+                  ) : syncedHashtags.length > 0 ? (
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', maxHeight: '140px', overflowY: 'auto' }}>
+                      {syncedHashtags.map(tag => {
+                        const isSelected = caption.includes(tag)
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => toggleHashtag(tag)}
+                            style={{
+                              fontSize: '11px', padding: '4px 8px', borderRadius: '12px', cursor: 'pointer',
+                              border: '1px solid',
+                              borderColor: isSelected ? 'var(--accent)' : 'var(--border-color)',
+                              background: isSelected ? 'var(--accent)' : 'var(--bg-body)',
+                              color: isSelected ? '#ffffff' : 'var(--text-main)'
+                            }}
+                          >
+                            {tag} {isSelected && <Check size={10} style={{ marginLeft: '2px' }} />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '8px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
+                      No tags found. Type above to search Meta Hashtag index or start publishing to generate trend analytics!
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Popover 2: Location Selector */}
+              {/* Popover 2: Location Live Meta Places Selector */}
               {activePopover === 'location' && (
                 <div style={{
                   position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, marginTop: '8px',
                   background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px',
-                  padding: '12px', boxShadow: '0 12px 24px rgba(0,0,0,0.3)'
+                  padding: '12px', boxShadow: '0 12px 24px rgba(0,0,0,0.35)'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '12px', fontWeight: 600 }}>
-                    <span>Add Location</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <RefreshCw size={13} className={isLoadingLocations ? 'animate-spin' : ''} style={{ color: '#3b82f6' }} />
+                      Synced Meta Places & Store Locations
+                    </span>
                     <button onClick={() => setActivePopover(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={14} /></button>
                   </div>
+
                   <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-                    <input
-                      type="text"
-                      placeholder="Type location name..."
-                      value={customLocationInput}
-                      onChange={e => setCustomLocationInput(e.target.value)}
-                      className="form-textarea"
-                      style={{ minHeight: 'unset', padding: '6px 10px', fontSize: '12px' }}
-                    />
+                    <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <Search size={14} style={{ position: 'absolute', left: '8px', color: 'var(--text-muted)' }} />
+                      <input
+                        type="text"
+                        placeholder="Search physical store or Meta Place name..."
+                        value={locationQuery}
+                        onChange={e => {
+                          setLocationQuery(e.target.value)
+                          fetchLocations(e.target.value)
+                        }}
+                        className="form-textarea"
+                        style={{ minHeight: 'unset', padding: '6px 10px 6px 28px', fontSize: '12px', width: '100%' }}
+                      />
+                    </div>
                     <button
                       type="button"
                       className="planner-btn primary"
                       style={{ padding: '6px 12px', fontSize: '12px' }}
                       onClick={() => {
-                        if (customLocationInput.trim()) selectLocation(customLocationInput.trim())
+                        if (locationQuery.trim()) selectLocation(locationQuery.trim())
                       }}
                     >
-                      Set
+                      Set Custom
                     </button>
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Popular Presets:</div>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    {PRESET_LOCATIONS.map(loc => (
-                      <button
-                        key={loc}
-                        type="button"
-                        onClick={() => selectLocation(loc)}
-                        style={{
-                          fontSize: '11px', padding: '4px 8px', borderRadius: '12px', cursor: 'pointer',
-                          border: '1px solid var(--border-color)', background: 'var(--bg-body)', color: 'var(--text-main)'
-                        }}
-                      >
-                        📍 {loc}
-                      </button>
-                    ))}
-                  </div>
+
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>Synced Suggestions from Meta & Platform History:</div>
+                  {isLoadingLocations && syncedLocations.length === 0 ? (
+                    <div style={{ padding: '12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <Loader2 size={16} className="animate-spin" /> Querying Meta Places Graph...
+                    </div>
+                  ) : syncedLocations.length > 0 ? (
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', maxHeight: '120px', overflowY: 'auto' }}>
+                      {syncedLocations.map(loc => (
+                        <button
+                          key={loc}
+                          type="button"
+                          onClick={() => selectLocation(loc)}
+                          style={{
+                            fontSize: '11px', padding: '4px 8px', borderRadius: '12px', cursor: 'pointer',
+                            border: '1px solid var(--border-color)', background: 'var(--bg-body)', color: 'var(--text-main)'
+                          }}
+                        >
+                          📍 {loc}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '8px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
+                      No synced places found yet. Enter any location name above and click &quot;Set Custom&quot; to initialize synchronization!
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Popover 3: Product Tagging Selector */}
+              {/* Popover 3: Product Live Meta Catalog Selector */}
               {activePopover === 'products' && (
                 <div style={{
                   position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, marginTop: '8px',
                   background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px',
-                  padding: '12px', boxShadow: '0 12px 24px rgba(0,0,0,0.3)', maxHeight: '280px', overflowY: 'auto'
+                  padding: '12px', boxShadow: '0 12px 24px rgba(0,0,0,0.35)', maxHeight: '320px', overflowY: 'auto'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '12px', fontWeight: 600 }}>
-                    <span>Tag Catalog Storefront Products</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <RefreshCw size={13} className={isLoadingProducts ? 'animate-spin' : ''} style={{ color: '#f59e0b' }} />
+                      Synced Meta Shop & Platform Products
+                    </span>
                     <button onClick={() => setActivePopover(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={14} /></button>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
-                    {CATALOG_PRODUCTS.map(prod => {
-                      const isTagged = taggedProducts.some(p => p.retailer_id === prod.retailer_id)
-                      return (
-                        <div
-                          key={prod.retailer_id}
-                          onClick={() => toggleProductTag(prod)}
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            padding: '6px 10px', borderRadius: '8px', cursor: 'pointer',
-                            border: '1px solid',
-                            borderColor: isTagged ? 'var(--accent)' : 'var(--border-color)',
-                            background: isTagged ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-body)'
-                          }}
-                        >
-                          <div>
-                            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)' }}>{prod.name}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{prod.retailer_id} · ${prod.price}</div>
-                          </div>
-                          {isTagged && <Check size={14} style={{ color: '#f59e0b' }} />}
-                        </div>
-                      )
-                    })}
+                  <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                    <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <Search size={14} style={{ position: 'absolute', left: '8px', color: 'var(--text-muted)' }} />
+                      <input
+                        type="text"
+                        placeholder="Search SKU or product title in Meta Catalog..."
+                        value={productQuery}
+                        onChange={e => {
+                          setProductQuery(e.target.value)
+                          fetchProducts(e.target.value)
+                        }}
+                        className="form-textarea"
+                        style={{ minHeight: 'unset', padding: '6px 10px 6px 28px', fontSize: '12px', width: '100%' }}
+                      />
+                    </div>
+                    <button type="button" className="planner-btn" onClick={() => fetchProducts(productQuery)} style={{ padding: '6px 10px', fontSize: '11px' }}>
+                      Sync
+                    </button>
                   </div>
+
+                  {isLoadingProducts && syncedProducts.length === 0 ? (
+                    <div style={{ padding: '16px', textAlign: 'center', fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <Loader2 size={16} className="animate-spin" /> Syncing with Meta Commerce Catalogs...
+                    </div>
+                  ) : syncedProducts.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px', maxHeight: '160px', overflowY: 'auto' }}>
+                      {syncedProducts.map(prod => {
+                        const isTagged = taggedProducts.some(p => p.retailer_id === prod.retailer_id)
+                        return (
+                          <div
+                            key={prod.retailer_id}
+                            onClick={() => toggleProductTag(prod)}
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                              padding: '6px 10px', borderRadius: '8px', cursor: 'pointer',
+                              border: '1px solid',
+                              borderColor: isTagged ? 'var(--accent)' : 'var(--border-color)',
+                              background: isTagged ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-body)'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {prod.image_url && <img src={prod.image_url} alt={prod.name} style={{ width: '28px', height: '28px', borderRadius: '4px', objectFit: 'cover' }} />}
+                              <div>
+                                <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-main)' }}>{prod.name}</div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{prod.retailer_id}{prod.price ? ` · $${prod.price}` : ''}</div>
+                              </div>
+                            </div>
+                            {isTagged ? <Check size={16} style={{ color: '#f59e0b' }} /> : <Plus size={14} style={{ color: 'var(--text-muted)' }} />}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '12px', textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                      No synchronized products in Meta Catalog yet. Use the quick-register input below to tag custom SKUs!
+                    </div>
+                  )}
 
                   <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', gap: '6px' }}>
                     <input
                       type="text"
-                      placeholder="Add custom SKU / Product..."
+                      placeholder="Quick tag new SKU / Product Title..."
                       value={customProductInput}
                       onChange={e => setCustomProductInput(e.target.value)}
                       className="form-textarea"
-                      style={{ minHeight: 'unset', padding: '4px 8px', fontSize: '11px' }}
+                      style={{ minHeight: 'unset', padding: '6px 10px', fontSize: '11px', width: '100%' }}
                     />
-                    <button type="button" className="planner-btn" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={addCustomProduct}>
-                      Add
+                    <button type="button" className="planner-btn primary" style={{ padding: '6px 12px', fontSize: '11px' }} onClick={addCustomProduct}>
+                      Add & Tag
                     </button>
                   </div>
                 </div>
@@ -528,7 +687,7 @@ export default function CreatePostModal({
                   </div>
 
                   {/* IG Post Media */}
-                  <div style={{ width: '100%', aspectRatio: '1', background: '#121212', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: '100%', aspectRatio: '1', background: '#121212', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                     {mediaPreviews.length > 0 ? (
                       <img src={mediaPreviews[0]} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
@@ -592,7 +751,7 @@ export default function CreatePostModal({
                   </div>
 
                   {/* FB Media Image */}
-                  <div style={{ width: '100%', aspectRatio: '1.2', background: '#18191a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: '100%', aspectRatio: '1.2', background: '#18191a', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                     {mediaPreviews.length > 0 ? (
                       <img src={mediaPreviews[0]} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
@@ -603,11 +762,11 @@ export default function CreatePostModal({
                   {/* FB Product Card Tag Banner (if products tagged) */}
                   {taggedProducts.length > 0 && (
                     <div style={{ padding: '8px 12px', background: '#323436', borderTop: '1px solid #3e4042', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div>
-                        <div style={{ fontSize: '11px', color: '#2e89ff', fontWeight: 600, textTransform: 'uppercase' }}>REACTCOMMERCE.SHOP CATALOG</div>
-                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#e4e6eb' }}>{taggedProducts[0].name}</div>
+                      <div style={{ overflow: 'hidden', paddingRight: '8px' }}>
+                        <div style={{ fontSize: '11px', color: '#2e89ff', fontWeight: 600, textTransform: 'uppercase', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>REACTCOMMERCE.SHOP CATALOG</div>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#e4e6eb', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{taggedProducts[0].name}</div>
                       </div>
-                      <button style={{ padding: '4px 10px', borderRadius: '4px', background: '#3a3b3c', border: 'none', color: '#e4e6eb', fontSize: '11px', fontWeight: 600 }}>
+                      <button style={{ padding: '4px 10px', borderRadius: '4px', background: '#3a3b3c', border: 'none', color: '#e4e6eb', fontSize: '11px', fontWeight: 600, flexShrink: 0 }}>
                         Shop Now
                       </button>
                     </div>
