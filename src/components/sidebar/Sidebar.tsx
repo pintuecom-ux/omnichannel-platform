@@ -19,7 +19,7 @@ const NAV = [
   { id: 'contacts',  icon: 'fa-solid fa-user-group',      label: 'Contacts',         href: '/contacts', section: 'Audience' },
   { id: 'lists',     icon: 'fa-solid fa-list-ul',         label: 'Lists',            soon: true,        section: 'Audience' },
   { id: 'segments',  icon: 'fa-solid fa-filter',          label: 'Segments',         soon: true,        section: 'Audience' },
-  { id: 'broadcast', icon: 'fa-solid fa-satellite-dish',  label: 'Broadcast',        soon: true,        section: 'Automation' },
+  { id: 'broadcast', icon: 'fa-solid fa-satellite-dish',  label: 'Broadcast',        href: '/broadcast',section: 'Automation' },
   { id: 'flows',     icon: 'fa-solid fa-diagram-project', label: 'WA Flows',         href: '/flows',    section: 'Automation' },
   { id: 'aibots',    icon: 'fa-solid fa-robot',           label: 'AI Bots',          soon: true,        section: 'Automation' },
   { id: 'planner',   icon: 'fa-solid fa-calendar-days',   label: 'Content Planner',  href: '/planner',  section: 'Publishing' },
