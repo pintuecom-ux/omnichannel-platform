@@ -33,7 +33,7 @@ export default function LoginPage() {
       <div className="login-card">
         <div className="login-logo">
           <div className="logo-icon">
-            <LogoIcon size={22} />
+            <LogoIcon size={24} />
           </div>
           <span style={{ fontFamily: "var(--font-display)", fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>
             React Commerce

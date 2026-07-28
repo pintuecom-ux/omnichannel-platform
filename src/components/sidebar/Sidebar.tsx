@@ -78,7 +78,7 @@ export default function Sidebar() {
       <div className="sidebar-logo">
         <div className="logo-left">
           <div className="logo-icon">
-            <LogoIcon size={22} />
+            <LogoIcon size={24} />
           </div>
           <span className="logo-text">React Commerce</span>
         </div>
