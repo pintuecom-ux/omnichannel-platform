@@ -20,9 +20,11 @@ export default function InboxPage() {
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (isBackgroundSync = false) => {
     setLoadError(null)
-    setIsLoading(true)
+    if (!isBackgroundSync) {
+      setIsLoading(true)
+    }
 
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { 
@@ -105,7 +107,9 @@ export default function InboxPage() {
 
     console.log(`[Inbox] Loaded ${merged.length} conversations`)
     setConversations(merged as Conversation[])
-    setIsLoading(false)
+    if (!isBackgroundSync) {
+      setIsLoading(false)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRefresh = useCallback(async () => {
@@ -120,11 +124,11 @@ export default function InboxPage() {
         console.warn('[Inbox Refresh Sync Error]', err)
       }
     }
-    await loadData()
+    await loadData(false)
   }, [workspaceId, loadData])
 
   // Initial load
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { loadData(false) }, [loadData])
 
   // 1. Supabase Realtime Subscription — auto-syncs conversations & inbound messages live
   useEffect(() => {
@@ -134,11 +138,11 @@ export default function InboxPage() {
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'conversations',
         filter: `workspace_id=eq.${workspaceId}`,
-      }, () => loadData())
+      }, () => loadData(true))
       .on('postgres_changes', {
         event: 'INSERT', schema: 'public', table: 'messages',
         filter: `workspace_id=eq.${workspaceId}`,
-      }, () => loadData())
+      }, () => loadData(true))
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [workspaceId, loadData, supabase])
