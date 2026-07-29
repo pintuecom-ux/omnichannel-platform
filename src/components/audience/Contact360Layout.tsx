@@ -128,17 +128,15 @@ export function Contact360Layout({ contact, children }: Contact360LayoutProps) {
             <h3 className="font-semibold text-text-primary flex items-center gap-2">
               <span className="text-lg">✨</span> AI Summary
             </h3>
-            <p className="text-sm text-text-secondary leading-relaxed">
-              Customer usually replies within 15 minutes. Prefers WhatsApp communication. Interested in premium tier products based on last browsing session. Likely to convert if offered a 10% discount.
+            <p className="text-sm text-text-secondary leading-relaxed italic">
+              AI Summary is currently unavailable for this contact.
             </p>
           </section>
 
           <section className="bg-surface border border-border rounded-lg p-4 shadow-sm">
             <h3 className="font-semibold text-sm mb-3">Next Best Action</h3>
-            <div className="bg-panel p-3 rounded text-sm border-l-2 border-primary">
-              <div className="font-medium mb-1">Send Engagement Follow-up</div>
-              <div className="text-text-secondary text-xs">It has been 14 days since last contact. AI suggests sending the "Re-engagement" flow.</div>
-              <Button size="sm" className="w-full mt-3">Execute Flow</Button>
+            <div className="text-sm text-text-secondary py-4 text-center">
+              No actions recommended at this time.
             </div>
           </section>
         </aside>

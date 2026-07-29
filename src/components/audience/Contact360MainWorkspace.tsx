@@ -59,28 +59,8 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
                   <Activity className="h-5 w-5 text-primary" />
                   <h3 className="font-semibold">Recent Activity</h3>
                 </div>
-                <div className="space-y-4 relative before:absolute before:inset-0 before:ml-2 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
-                  {/* Mock Activity 1 */}
-                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
-                    <div className="flex items-center justify-center w-5 h-5 rounded-full border-2 border-primary bg-base shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2" />
-                    <div className="w-[calc(100%-3rem)] md:w-[calc(50%-2rem)] p-3 rounded-lg border border-border bg-panel shadow-sm">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-sm text-text-primary">Added to VIP List</span>
-                        <time className="text-xs font-medium text-text-secondary">Just now</time>
-                      </div>
-                      <div className="text-sm text-text-secondary">Automated rule executed by Segments.</div>
-                    </div>
-                  </div>
-                  {/* Mock Activity 2 */}
-                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
-                    <div className="flex items-center justify-center w-5 h-5 rounded-full border-2 border-border bg-base shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2" />
-                    <div className="w-[calc(100%-3rem)] md:w-[calc(50%-2rem)] p-3 rounded-lg border border-border bg-panel shadow-sm">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-sm text-text-primary">WhatsApp Replied</span>
-                        <time className="text-xs font-medium text-text-secondary">2 hrs ago</time>
-                      </div>
-                      <div className="text-sm text-text-secondary">"I am looking for the summer collection."</div>
-                    </div>
+                  <div className="text-center py-6 text-sm text-text-secondary">
+                    No recent activity found.
                   </div>
                 </div>
               </div>
@@ -94,19 +74,21 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-panel p-3 rounded-lg border border-border">
                     <div className="text-xs text-text-secondary mb-1">Total Orders</div>
-                    <div className="text-2xl font-bold">2</div>
+                    <div className="text-xl font-semibold text-text-muted">—</div>
                   </div>
                   <div className="bg-panel p-3 rounded-lg border border-border">
                     <div className="text-xs text-text-secondary mb-1">Total Revenue</div>
-                    <div className="text-2xl font-bold">$125.00</div>
+                    <div className="text-xl font-semibold text-text-muted">—</div>
                   </div>
                   <div className="bg-panel p-3 rounded-lg border border-border">
                     <div className="text-xs text-text-secondary mb-1">Avg Reply Time</div>
-                    <div className="text-2xl font-bold">12m</div>
+                    <div className="text-xl font-semibold text-text-muted">—</div>
                   </div>
                   <div className="bg-panel p-3 rounded-lg border border-border">
                     <div className="text-xs text-text-secondary mb-1">Active Since</div>
-                    <div className="text-2xl font-bold">Nov 2025</div>
+                    <div className="text-xl font-semibold text-text-muted">
+                      {contact.created_at ? new Date(contact.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : '—'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -138,18 +120,8 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
               </p>
               
               <div className="space-y-4">
-                {/* Mock field representation */}
-                <div className="grid grid-cols-3 gap-4 items-center">
-                  <label className="text-sm font-medium">Membership Tier</label>
-                  <div className="col-span-2 text-sm bg-panel px-3 py-2 rounded border border-border">Gold</div>
-                </div>
-                <div className="grid grid-cols-3 gap-4 items-center">
-                  <label className="text-sm font-medium">Date of Birth</label>
-                  <div className="col-span-2 text-sm bg-panel px-3 py-2 rounded border border-border">1990-05-15</div>
-                </div>
-                <div className="grid grid-cols-3 gap-4 items-center">
-                  <label className="text-sm font-medium">Last NPS Score</label>
-                  <div className="col-span-2 text-sm bg-panel px-3 py-2 rounded border border-border">9</div>
+                <div className="text-center py-8 text-sm text-text-secondary italic">
+                  No custom fields found for this contact.
                 </div>
               </div>
             </div>
