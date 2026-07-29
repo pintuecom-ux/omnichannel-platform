@@ -65,8 +65,9 @@ function applyConditionsToQuery(query: any, group: any) {
   return query;
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
+    const params = await props.params
     const segmentId = params.id
     const url = new URL(req.url)
     const wsId = url.searchParams.get('workspace_id')

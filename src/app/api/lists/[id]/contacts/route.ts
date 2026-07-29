@@ -7,8 +7,9 @@ const admin = createClient(supabaseUrl, supabaseKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 })
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
+    const params = await props.params
     const listId = params.id
     const body = await req.json()
     const { contact_ids, status, channel } = body // contact_ids: string[], status: string, channel: string
@@ -36,8 +37,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
+    const params = await props.params
     const listId = params.id
     const body = await req.json()
     const { contact_ids } = body // contact_ids: string[]
