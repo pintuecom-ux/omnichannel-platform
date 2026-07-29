@@ -6,10 +6,11 @@ import { Contact360MainWorkspace } from '@/components/audience/Contact360MainWor
 import { notFound } from 'next/navigation'
 
 interface PageProps {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
-export default async function Contact360Page({ params }: PageProps) {
+export default async function Contact360Page(props: PageProps) {
+  const params = await props.params
   const supabase = await createClient()
 
   // Fetch the specific contact
