@@ -264,52 +264,6 @@ export interface Template {
   created_at: string
 }
 
-export interface ContactList {
-  id: string
-  workspace_id: string
-  name: string
-  list_type: 'standard' | 'signup_form' | 'channel_master' | 'suppression' | 'import' | string
-  platform?: Platform | null
-  description: string | null
-  tags?: string[]
-  double_opt_in_enabled?: boolean
-  is_archived?: boolean
-  contact_count: number
-  created_by?: string | null
-  created_at: string
-  updated_at?: string
-}
-
-export interface ListSubscription {
-  id: string
-  list_id: string
-  contact_id: string
-  status: 'subscribed' | 'unsubscribed' | 'pending' | 'cleaned' | string
-  channel?: string | null
-  source?: string | null
-  unsubscribe_reason?: string | null
-  subscribed_at: string
-  unsubscribed_at?: string | null
-  // Joined fields
-  contact?: Contact
-  list?: ContactList
-}
-
-export interface Segment {
-  id: string
-  workspace_id: string
-  name: string
-  description?: string | null
-  condition_set: Record<string, any>
-  evaluation_model?: 'realtime' | 'lazy' | 'batch' | string
-  contact_count?: number
-  last_computed_at?: string | null
-  is_archived?: boolean
-  tags?: string[]
-  created_by?: string | null
-  created_at: string
-  updated_at?: string
-}
 
 // WhatsApp Flows
 export type FlowStatus = 'DRAFT' | 'PUBLISHED' | 'DEPRECATED' | 'BLOCKED' | 'THROTTLED'
@@ -333,4 +287,337 @@ export interface WhatsAppFlow {
   preview_url: string | null
   created_at: string
   updated_at: string
+}
+
+export interface ContactIdentity {
+  id: string
+  workspace_id: string
+  contact_id: string
+  provider: 'whatsapp' | 'instagram' | 'facebook' | 'email' | 'custom' | 'external_crm' | string
+  identifier: string
+  is_verified: boolean
+  created_at: string
+  updated_at: string
+  contact?: Contact
+}
+
+export interface ContactMergeHistory {
+  id: string
+  workspace_id: string
+  merged_contact_id: string
+  from_contact_id: string
+  reason?: string | null
+  merged_by?: string | null
+  fields_changed?: Record<string, any>
+  created_at: string
+  merged_contact?: Contact
+}
+
+export interface ContactMetadata {
+  personal?: {
+    prefix?: string
+    middle_name?: string
+    full_name?: string
+    preferred_name?: string
+    display_name?: string
+    gender?: string
+    birth_date?: string
+    age?: number
+    language?: string
+    timezone?: string
+    nationality?: string
+  }
+  business?: {
+    job_title?: string
+    department?: string
+    designation?: string
+    industry?: string
+    gst_number?: string
+    website?: string
+    business_type?: string
+  }
+  location?: {
+    address_line_1?: string
+    address_line_2?: string
+    postal_code?: string
+    landmark?: string
+    latitude?: number
+    longitude?: number
+  }
+  communication?: {
+    primary_phone?: string
+    secondary_phone?: string
+    primary_email?: string
+    secondary_email?: string
+    preferred_channel?: string
+    preferred_language?: string
+    preferred_contact_time?: string
+  }
+  consent?: {
+    whatsapp?: { status: string; date: string; source?: string }
+    email?: { status: string; date: string; source?: string }
+    sms?: { status: string; date: string; source?: string }
+  }
+  marketing?: {
+    lead_source?: string
+    utm_source?: string
+    utm_medium?: string
+    utm_campaign?: string
+    utm_content?: string
+    utm_term?: string
+    referral?: string
+  }
+  commerce?: {
+    customer_since?: string
+    orders?: number
+    revenue?: number
+    average_order?: number
+    last_order?: string
+    currency?: string
+    refund_amount?: number
+  }
+  crm?: {
+    owner?: string
+    sales_stage?: string
+    lifecycle_stage?: string
+    lead_score?: number
+    priority?: string
+    account_manager?: string
+    last_contacted?: string
+    next_follow_up?: string
+  }
+  social?: {
+    instagram_followers?: number
+    facebook_name?: string
+    messenger_connected?: boolean
+    whatsapp_business_user?: boolean
+    social_verified?: boolean
+  }
+  ai?: {
+    ai_summary?: string
+    ai_persona?: string
+    ai_intent?: string
+    ai_engagement_score?: number
+    ai_purchase_probability?: number
+    ai_churn_risk?: number
+    ai_suggested_segment?: string
+    ai_tags?: string[]
+  }
+  [key: string]: any
+}
+
+export type EntityType = 'contact' | 'company' | 'deal' | 'conversation' | 'workspace' | string
+export type FieldGroup = 'system' | 'identity' | 'personal' | 'business' | 'location' | 'communication' | 'marketing' | 'commerce' | 'crm' | 'social' | 'ai' | 'custom' | string
+export type FieldType = 'text' | 'long_text' | 'number' | 'decimal' | 'currency' | 'percentage' | 'date' | 'time' | 'datetime' | 'dropdown' | 'multi_select' | 'radio' | 'checkbox' | 'url' | 'color' | 'json' | 'rich_text' | 'image' | 'file' | string
+
+export interface CustomFieldDefinition {
+  id: string
+  workspace_id: string
+  entity_type: EntityType
+  key: string
+  label: string
+  description?: string | null
+  field_group?: FieldGroup | null
+  field_type: FieldType
+  options?: any[] | null
+  validation?: Record<string, any> | null
+  default_value?: any | null
+  is_system: boolean
+  is_searchable: boolean
+  is_filterable: boolean
+  is_segmentable: boolean
+  is_required: boolean
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CustomFieldValue {
+  id: string
+  workspace_id: string
+  field_id: string
+  entity_id: string
+  value: any
+  created_at: string
+  updated_at: string
+  definition?: CustomFieldDefinition
+}
+
+// ─── AUDIENCE CONTAINERS (Phase 3) ───────────────────────────────────────
+
+export interface Tag {
+  id: string
+  workspace_id: string
+  name: string
+  slug: string
+  description?: string
+  color?: string
+  icon?: string
+  category?: string
+  usage_count: number
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface EntityTag {
+  tag_id: string
+  entity_type: string
+  entity_id: string
+  workspace_id: string
+  created_at: string
+}
+
+export interface ListFolder {
+  id: string
+  workspace_id: string
+  name: string
+  created_at: string
+}
+
+export interface List {
+  id: string
+  workspace_id: string
+  folder_id?: string
+  name: string
+  slug: string
+  description?: string
+  color?: string
+  icon?: string
+  type: 'static' | 'smart' | 'system' | 'integration'
+  visibility: 'private' | 'shared'
+  owner_id?: string
+  contact_count: number
+  active_count: number
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ListMembership {
+  list_id: string
+  entity_type: string
+  entity_id: string
+  workspace_id: string
+  status: 'active' | 'pending' | 'unsubscribed' | 'removed' | 'suppressed'
+  source: string
+  joined_at: string
+  joined_by?: string
+}
+
+export interface ConditionSet {
+  operator: 'AND' | 'OR'
+  conditions: Array<{
+    field: string
+    operator: string
+    value: any
+  } | ConditionSet>
+}
+
+export interface Segment {
+  id: string
+  workspace_id: string
+  folder_id?: string
+  name: string
+  slug: string
+  description?: string
+  type: 'live' | 'snapshot' | 'cached' | 'system' | 'ai'
+  visibility: 'private' | 'shared'
+  owner_id?: string
+  condition_set: ConditionSet
+  refresh_policy?: string
+  cached_count: number
+  last_calculated_at?: string
+  version: number
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+// ─── DATA PORTABILITY & GOVERNANCE (Phase 4) ──────────────────────────
+
+export interface ContactConsent {
+  id: string
+  workspace_id: string
+  contact_id: string
+  channel: 'whatsapp' | 'email' | 'sms' | 'push' | string
+  purpose: 'marketing' | 'transactional' | 'promotions' | string
+  status: 'granted' | 'withdrawn' | 'pending'
+  source: string
+  legal_basis: 'consent' | 'contract' | 'legitimate_interest' | string
+  granted_at?: string
+  withdrawn_at?: string
+  expires_at?: string
+  evidence?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ImportJob {
+  id: string
+  workspace_id: string
+  created_by?: string
+  status: 'pending' | 'parsing' | 'mapping' | 'running' | 'completed' | 'failed'
+  source: string
+  file_url?: string
+  file_name?: string
+  mapping_config?: Record<string, any>
+  default_tags?: string[]
+  default_lists?: string[]
+  total_rows: number
+  processed_rows: number
+  error_count: number
+  error_log_url?: string
+  started_at?: string
+  completed_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ExportJob {
+  id: string
+  workspace_id: string
+  created_by?: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  format: 'csv' | 'json' | 'excel' | string
+  dataset: string
+  query_config: Record<string, any>
+  field_selection?: string[]
+  file_url?: string
+  total_records: number
+  expires_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ContactMerge {
+  id: string
+  workspace_id: string
+  primary_contact_id: string
+  secondary_contact_id: string
+  merged_by?: string
+  merge_strategy: 'manual' | 'most_complete' | 'oldest' | 'newest' | string
+  conflict_resolution?: Record<string, any>
+  original_primary_data?: Record<string, any>
+  original_secondary_data?: Record<string, any>
+  status: 'completed' | 'reverted'
+  reverted_at?: string
+  reverted_by?: string
+  created_at: string
+}
+
+// ─── ENGAGEMENT & INTEGRATION (Phase 5) ───────────────────────────────
+
+export interface PlatformEvent {
+  id: string
+  workspace_id: string
+  event_type: string
+  entity_type: string
+  entity_id: string
+  actor_id?: string
+  source: string
+  metadata?: Record<string, any>
+  correlation_id?: string
+  schema_version: number
+  created_at: string
 }

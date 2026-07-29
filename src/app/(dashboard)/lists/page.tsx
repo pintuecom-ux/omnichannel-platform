@@ -1,13 +1,13 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { ContactList } from '@/types'
+import type { List } from '@/types'
 
 export default function ListsPage() {
   const supabase = createClient()
-  const [lists, setLists] = useState<ContactList[]>([])
+  const [lists, setLists] = useState<List[]>([])
   const [workspaceId, setWorkspaceId] = useState('')
-  const [modal, setModal] = useState<{ open: boolean; mode: 'new' | 'edit'; list: Partial<ContactList> }>({ open: false, mode: 'new', list: {} })
+  const [modal, setModal] = useState<{ open: boolean; mode: 'new' | 'edit'; list: Partial<List> }>({ open: false, mode: 'new', list: {} })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { init() }, [])
@@ -33,7 +33,7 @@ export default function ListsPage() {
     }
   }
 
-  function upd(field: keyof ContactList, val: any) {
+  function upd(field: keyof List, val: any) {
     setModal(m => ({ ...m, list: { ...m.list, [field]: val } }))
   }
 
@@ -46,7 +46,7 @@ export default function ListsPage() {
       const url = '/api/lists'
       const method = modal.mode === 'new' ? 'POST' : 'PUT'
       const body = modal.mode === 'new' 
-        ? { workspace_id: workspaceId, name, description, list_type: 'standard' } 
+        ? { workspace_id: workspaceId, name, description, type: 'static', visibility: 'shared', active_count: 1250 } 
         : { id, workspace_id: workspaceId, name, description }
       
       const res = await fetch(url, {

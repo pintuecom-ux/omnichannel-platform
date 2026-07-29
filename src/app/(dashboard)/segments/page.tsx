@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Segment } from '@/types'
+import type { Segment, ConditionSet } from '@/types'
 
 const FIELD_OPTIONS = [
   { value: 'tags', label: 'Tags' },
@@ -12,10 +12,9 @@ const FIELD_OPTIONS = [
 ]
 
 const OPERATOR_OPTIONS = [
-  { value: 'equals', label: 'Equals' },
-  { value: 'not_equals', label: 'Does Not Equal' },
+  { value: 'eq', label: 'Equals' },
+  { value: 'neq', label: 'Does Not Equal' },
   { value: 'contains', label: 'Contains' },
-  { value: 'not_contains', label: 'Does Not Contain' },
 ]
 
 export default function SegmentsPage() {
@@ -28,7 +27,8 @@ export default function SegmentsPage() {
   const [estimatedCount, setEstimatedCount] = useState<number | null>(null)
 
   // Segment Builder State
-  const [rules, setRules] = useState<any[]>([])
+  const [conditions, setConditions] = useState<any[]>([])
+  const [logic, setLogic] = useState<'AND' | 'OR'>('AND')
 
   useEffect(() => { init() }, [])
 
@@ -55,43 +55,38 @@ export default function SegmentsPage() {
 
   function openModal(mode: 'new' | 'edit', seg?: Segment) {
     if (mode === 'new') {
-      setModal({ open: true, mode, segment: { condition_set: { logic: 'AND', rules: [] } } })
-      setRules([])
+      setModal({ open: true, mode, segment: { condition_set: { operator: 'AND', conditions: [] } } })
+      setConditions([])
+      setLogic('AND')
       setEstimatedCount(null)
     } else if (seg) {
       setModal({ open: true, mode, segment: seg })
-      setRules(seg.condition_set?.rules || [])
-      setEstimatedCount(seg.contact_count || null)
+      setConditions(seg.condition_set?.conditions || [])
+      setLogic(seg.condition_set?.operator || 'AND')
+      setEstimatedCount(seg.cached_count || null)
     }
   }
 
   function addRule() {
-    setRules(prev => [...prev, { type: 'rule', field: 'tags', operator: 'contains', value: '' }])
+    setConditions(prev => [...prev, { field: 'tags', operator: 'contains', value: '' }])
   }
 
   function updateRule(index: number, field: string, val: any) {
-    setRules(prev => {
-      const newRules = [...prev]
-      newRules[index] = { ...newRules[index], [field]: val }
-      return newRules
+    setConditions(prev => {
+      const newConds = [...prev]
+      newConds[index] = { ...newConds[index], [field]: val }
+      return newConds
     })
   }
 
   function removeRule(index: number) {
-    setRules(prev => prev.filter((_, i) => i !== index))
+    setConditions(prev => prev.filter((_, i) => i !== index))
   }
 
   async function evaluateSegment() {
     if (!workspaceId) return
     setEvaluating(true)
     try {
-      const condition_set = { logic: 'AND', rules }
-      
-      // We can create a temp evaluate endpoint, but since we need the ID, 
-      // we can do a mock evaluate by calling the API or we can just save it first.
-      // For this demo, let's just show an alert or save it first.
-      
-      // Let's actually just build it into the save function for simplicity since our endpoint needs an ID.
       alert('Estimation requires saving the segment first in this implementation.')
     } catch (e) {
       console.error(e)
@@ -104,13 +99,13 @@ export default function SegmentsPage() {
     if (!workspaceId) return
     setSaving(true)
     const { id, name, description } = modal.segment
-    const condition_set = { logic: 'AND', rules }
+    const condition_set: ConditionSet = { operator: logic, conditions }
     
     try {
       const url = '/api/segments'
       const method = modal.mode === 'new' ? 'POST' : 'PUT'
       const body = modal.mode === 'new' 
-        ? { workspace_id: workspaceId, name, description, condition_set } 
+        ? { workspace_id: workspaceId, name, description, condition_set, type: 'live', visibility: 'shared', cached_count: 0 } 
         : { id, workspace_id: workspaceId, name, description, condition_set }
       
       const res = await fetch(url, {
@@ -184,15 +179,15 @@ export default function SegmentsPage() {
             <tbody>
               {segments.map(seg => (
                 <tr key={seg.id}>
-                  <td><div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{seg.name}</div></td>
+                  <td><div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{seg.name} <span className="pill" style={{ marginLeft: 6 }}>{seg.condition_set?.conditions?.length || 0} conditions</span></div></td>
                   <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{seg.description || '—'}</td>
                   <td>
                     <div className="pill blue" style={{ padding: '4px 10px' }}>
-                      <i className="fa-solid fa-users" style={{ marginRight: 6 }} />{seg.contact_count || 0}
+                      <i className="fa-solid fa-users" style={{ marginRight: 6 }} />{seg.cached_count || 0}
                     </div>
                   </td>
                   <td style={{ fontSize: 12 }}>
-                    {seg.last_computed_at ? new Date(seg.last_computed_at).toLocaleString() : 'Never'}
+                    {seg.last_calculated_at ? new Date(seg.last_calculated_at).toLocaleString() : 'Never'}
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -230,23 +225,29 @@ export default function SegmentsPage() {
               </div>
 
               <div style={{ marginTop: 24, marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Filter Rules (AND Logic)</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  Filter Rules (
+                  <select value={logic} onChange={e => setLogic(e.target.value as 'AND' | 'OR')} className="form-input" style={{ padding: '0 4px', height: 24, fontSize: 11 }}>
+                    <option value="AND">AND</option>
+                    <option value="OR">OR</option>
+                  </select> Logic)
+                </div>
                 <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={addRule}>
                   <i className="fa-solid fa-plus" style={{ marginRight: 4 }}/> Add Rule
                 </button>
               </div>
 
               <div style={{ background: 'var(--bg-surface)', padding: 16, borderRadius: 8, border: '1px solid var(--border)' }}>
-                {rules.length === 0 ? (
+                {conditions.length === 0 ? (
                   <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: '20px 0' }}>
                     No rules defined. This segment will include ALL contacts.
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {rules.map((rule, idx) => (
+                    {conditions.map((rule, idx) => (
                       <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', minWidth: 40 }}>
-                          {idx === 0 ? 'Where' : 'And'}
+                          {idx === 0 ? 'Where' : logic}
                         </span>
                         
                         <select className="form-input" style={{ flex: 1 }} value={rule.field} onChange={e => updateRule(idx, 'field', e.target.value)}>
