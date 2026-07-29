@@ -24,21 +24,21 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="flex flex-col gap-1.5 w-full">
         {label && (
-          <label className="text-sm font-medium text-[var(--text-primary)]" htmlFor={inputId}>
+          <label className="text-sm font-medium text-text-primary" htmlFor={inputId}>
             {label}
           </label>
         )}
         <div className="relative">
           {icon && (
             <i
-              className={cn(icon, 'absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] text-sm pointer-events-none')}
+              className={cn(icon, 'absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm pointer-events-none')}
             />
           )}
           <input
             ref={ref}
             id={inputId}
             className={cn(
-              'flex h-10 w-full rounded-lg border bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-[var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 border-[var(--border)]',
+              'flex h-10 w-full rounded-lg border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-50 border-border',
               icon && 'pl-9',
               error && 'border-danger-500 focus-visible:ring-danger-500 focus-visible:border-danger-500',
               className
@@ -47,7 +47,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           />
         </div>
         {error && <span className="text-xs font-medium text-danger-500">{error}</span>}
-        {hint && !error && <span className="text-xs text-[var(--text-muted)]">{hint}</span>}
+        {hint && !error && <span className="text-xs text-text-muted">{hint}</span>}
       </div>
     )
   }
@@ -69,7 +69,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <div className="flex flex-col gap-1.5 w-full">
         {label && (
-          <label className="text-sm font-medium text-[var(--text-primary)]" htmlFor={inputId}>
+          <label className="text-sm font-medium text-text-primary" htmlFor={inputId}>
             {label}
           </label>
         )}
@@ -77,14 +77,14 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           id={inputId}
           className={cn(
-            'flex min-h-[80px] w-full rounded-lg border bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] shadow-sm transition-colors placeholder:text-[var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 border-[var(--border)]',
+            'flex min-h-[80px] w-full rounded-lg border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm transition-colors placeholder:text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-50 border-border',
             error && 'border-danger-500 focus-visible:ring-danger-500 focus-visible:border-danger-500',
             className
           )}
           {...rest}
         />
         {error && <span className="text-xs font-medium text-danger-500">{error}</span>}
-        {hint && !error && <span className="text-xs text-[var(--text-muted)]">{hint}</span>}
+        {hint && !error && <span className="text-xs text-text-muted">{hint}</span>}
       </div>
     )
   }
@@ -108,7 +108,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <div className="flex flex-col gap-1.5 w-full">
         {label && (
-          <label className="text-sm font-medium text-[var(--text-primary)]" htmlFor={inputId}>
+          <label className="text-sm font-medium text-text-primary" htmlFor={inputId}>
             {label}
           </label>
         )}
@@ -117,7 +117,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             ref={ref}
             id={inputId}
             className={cn(
-              'flex h-10 w-full appearance-none rounded-lg border bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 border-[var(--border)]',
+              'flex h-10 w-full appearance-none rounded-lg border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-50 border-border',
               error && 'border-danger-500 focus-visible:ring-danger-500 focus-visible:border-danger-500',
               className
             )}
@@ -129,15 +129,15 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               </option>
             )}
             {options.map(opt => (
-              <option key={opt.value} value={opt.value} disabled={opt.disabled} className="bg-[var(--bg-surface)] text-[var(--text-primary)]">
+              <option key={opt.value} value={opt.value} disabled={opt.disabled} className="bg-surface text-text-primary">
                 {opt.label}
               </option>
             ))}
           </select>
-          <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] text-xs pointer-events-none" />
+          <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-xs pointer-events-none" />
         </div>
         {error && <span className="text-xs font-medium text-danger-500">{error}</span>}
-        {hint && !error && <span className="text-xs text-[var(--text-muted)]">{hint}</span>}
+        {hint && !error && <span className="text-xs text-text-muted">{hint}</span>}
       </div>
     )
   }

@@ -35,7 +35,7 @@ export function ContactsToolbar({ selectedCount, onSearch, onAction }: ContactsT
         </div>
       </div>
 
-      <div className="flex items-center gap-3 bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border)]">
+      <div className="flex items-center gap-3 bg-surface p-2.5 rounded-xl border border-border">
         <div className="relative flex-1 max-w-sm">
           <Input
             type="search"

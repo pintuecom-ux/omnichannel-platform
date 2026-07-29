@@ -14,11 +14,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: 'bg-[var(--accent)] text-white hover:opacity-90 shadow-sm font-semibold',
-        secondary: 'bg-[var(--bg-hover)] text-[var(--text-primary)] hover:bg-[var(--bg-active)] border border-[var(--border)]',
+        primary: 'bg-accent text-white hover:opacity-90 shadow-sm font-semibold',
+        secondary: 'bg-hover text-text-primary hover:bg-active border border-border',
         danger: 'bg-danger-600 text-white hover:bg-danger-700 shadow-sm',
-        ghost: 'hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
-        outline: 'border border-[var(--border)] bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]',
+        ghost: 'hover:bg-hover text-text-secondary hover:text-text-primary',
+        outline: 'border border-border bg-surface text-text-primary hover:bg-hover',
         success: 'bg-success-600 text-white hover:bg-success-700 shadow-sm',
       },
       size: {

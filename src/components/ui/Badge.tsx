@@ -14,7 +14,7 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border-transparent bg-[var(--bg-hover)] text-[var(--text-primary)]',
+        default: 'border-transparent bg-hover text-text-primary',
         primary: 'border-transparent bg-primary-500/15 text-primary-400',
         success: 'border-transparent bg-success-500/15 text-success-400',
         warning: 'border-transparent bg-warning-500/15 text-warning-400',
@@ -23,7 +23,7 @@ const badgeVariants = cva(
         whatsapp: 'border-transparent bg-[#25D366]/15 text-[#25D366]',
         instagram: 'border-transparent bg-[#E1306C]/15 text-[#E1306C]',
         facebook: 'border-transparent bg-[#1877F2]/15 text-[#1877F2]',
-        ghost: 'border-[var(--border)] bg-transparent text-[var(--text-secondary)]',
+        ghost: 'border-border bg-transparent text-text-secondary',
       },
       size: {
         xs: 'text-[10px] px-1.5 py-0.5',

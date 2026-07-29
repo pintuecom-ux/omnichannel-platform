@@ -89,8 +89,8 @@ export default function ListsPage() {
       {/* Header */}
       <div className="flex items-center justify-between pb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Static Lists</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-1">Manage static audiences and imported contact lists.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-text-primary">Static Lists</h1>
+          <p className="text-sm text-text-secondary mt-1">Manage static audiences and imported contact lists.</p>
         </div>
         <Button icon="fa-solid fa-plus" variant="primary" onClick={() => setModal({ open: true, mode: 'new', list: {} })}>
           Create List
@@ -113,7 +113,7 @@ export default function ListsPage() {
       </div>
 
       {/* Data Table */}
-      <div className="flex-1 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]">
+      <div className="flex-1 overflow-auto rounded-xl border border-border bg-surface">
         <Table>
           <TableHeader>
             <TableRow>
@@ -128,10 +128,10 @@ export default function ListsPage() {
             {filteredLists.map(list => (
               <TableRow key={list.id}>
                 <TableCell>
-                  <div className="font-medium text-[var(--text-primary)]">{list.name}</div>
+                  <div className="font-medium text-text-primary">{list.name}</div>
                 </TableCell>
                 <TableCell>
-                  <div className="text-sm text-[var(--text-secondary)]">{list.description || '—'}</div>
+                  <div className="text-sm text-text-secondary">{list.description || '—'}</div>
                 </TableCell>
                 <TableCell>
                   <Badge variant="success" icon="fa-solid fa-user">
@@ -139,7 +139,7 @@ export default function ListsPage() {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="text-sm text-[var(--text-secondary)]">{new Date(list.created_at).toLocaleDateString()}</div>
+                  <div className="text-sm text-text-secondary">{new Date(list.created_at).toLocaleDateString()}</div>
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
@@ -151,7 +151,7 @@ export default function ListsPage() {
             ))}
             {filteredLists.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-12 text-[var(--text-secondary)]">
+                <TableCell colSpan={5} className="text-center py-12 text-text-secondary">
                   {search ? 'No lists found matching your search.' : 'No lists created yet.'}
                 </TableCell>
               </TableRow>
@@ -173,9 +173,9 @@ export default function ListsPage() {
               onChange={e => upd('name', e.target.value)} 
             />
             <div className="flex flex-col gap-1.5 w-full">
-              <label className="text-sm font-medium text-[var(--text-primary)]">Description (Optional)</label>
+              <label className="text-sm font-medium text-text-primary">Description (Optional)</label>
               <textarea 
-                className="flex min-h-[80px] w-full rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                className="flex min-h-[80px] w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 rows={3} 
                 value={modal.list.description ?? ''} 
                 onChange={e => upd('description', e.target.value)} 
