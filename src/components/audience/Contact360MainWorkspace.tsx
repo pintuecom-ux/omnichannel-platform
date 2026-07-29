@@ -59,9 +59,8 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
                   <Activity className="h-5 w-5 text-primary" />
                   <h3 className="font-semibold">Recent Activity</h3>
                 </div>
-                  <div className="text-center py-6 text-sm text-text-secondary">
-                    No recent activity found.
-                  </div>
+                <div className="text-center py-6 text-sm text-text-secondary">
+                  No recent activity found.
                 </div>
               </div>
 
