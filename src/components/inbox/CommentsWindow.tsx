@@ -29,6 +29,7 @@ export default function CommentsWindow() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const lastLoadedConvRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (conversation?.status) setStatus(conversation.status as any)
@@ -51,8 +52,11 @@ export default function CommentsWindow() {
   }, [activeConversationId, supabase, setMessages, updateConversation])
 
   useEffect(() => {
-    loadMessages()
-  }, [loadMessages])
+    if (activeConversationId && lastLoadedConvRef.current !== activeConversationId) {
+      lastLoadedConvRef.current = activeConversationId
+      loadMessages()
+    }
+  }, [activeConversationId, loadMessages])
 
   // Realtime subscription for messages in this thread
   useEffect(() => {

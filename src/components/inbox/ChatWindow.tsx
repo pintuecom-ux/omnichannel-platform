@@ -57,6 +57,7 @@ export default function ChatWindow() {
   const [showCallModal, setShowCallModal] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement>(null)
+  const lastLoadedConvRef = useRef<string | null>(null)
 
   const isCurrentConversationUi = commentUi.conversationId === activeConversationId
   const activeTab = isCurrentConversationUi ? commentUi.activeTab : defaultTab
@@ -144,8 +145,11 @@ export default function ChatWindow() {
   }, [activeConversationId, setMessages, supabase, updateConversation])
 
   useEffect(() => {
-    loadMessages()
-  }, [loadMessages])
+    if (activeConversationId && lastLoadedConvRef.current !== activeConversationId) {
+      lastLoadedConvRef.current = activeConversationId
+      loadMessages()
+    }
+  }, [activeConversationId, loadMessages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })

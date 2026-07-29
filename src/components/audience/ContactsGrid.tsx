@@ -48,13 +48,13 @@ export function ContactsGrid({ contacts, onSelectionChange }: ContactsGridProps)
   }
 
   const handleRowClick = (id: string) => {
-    router.push(`/audience/contacts/${id}`)
+    router.push(`/contacts/${id}`)
   }
 
   return (
-    <div className="rounded-md border border-border/50 bg-card shadow-sm overflow-hidden">
+    <div className="rounded-md border border-[var(--border)] bg-[var(--bg-surface)] shadow-sm overflow-hidden">
       <Table>
-        <TableHeader className="bg-muted/30">
+        <TableHeader className="bg-[var(--bg-panel)]">
           <TableRow>
             <TableHead className="w-12">
               <Checkbox 
@@ -74,7 +74,7 @@ export function ContactsGrid({ contacts, onSelectionChange }: ContactsGridProps)
         <TableBody>
           {contacts.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="h-48 text-center text-muted-foreground">
+              <TableCell colSpan={8} className="h-48 text-center text-[var(--text-secondary)]">
                 No contacts found.
               </TableCell>
             </TableRow>
@@ -82,7 +82,7 @@ export function ContactsGrid({ contacts, onSelectionChange }: ContactsGridProps)
             contacts.map((contact) => (
               <TableRow 
                 key={contact.id} 
-                className="hover:bg-muted/20 transition-colors group cursor-pointer"
+                className="hover:bg-[var(--bg-hover)] transition-colors group cursor-pointer"
                 onClick={() => handleRowClick(contact.id)}
               >
                 <TableCell onClick={(e: React.MouseEvent) => e.stopPropagation()}>
@@ -93,42 +93,42 @@ export function ContactsGrid({ contacts, onSelectionChange }: ContactsGridProps)
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-medium text-xs">
+                    <div className="w-8 h-8 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center font-medium text-xs">
                       {contact.name?.substring(0, 2).toUpperCase() || 'NA'}
                     </div>
-                    <div className="font-medium text-foreground">{contact.name || 'Unknown Contact'}</div>
+                    <div className="font-medium text-[var(--text-primary)]">{contact.name || 'Unknown Contact'}</div>
                   </div>
                 </TableCell>
-                <TableCell className="text-muted-foreground">{contact.phone || '-'}</TableCell>
-                <TableCell className="text-muted-foreground">{contact.email || '-'}</TableCell>
+                <TableCell className="text-[var(--text-secondary)]">{contact.phone || '-'}</TableCell>
+                <TableCell className="text-[var(--text-secondary)]">{contact.email || '-'}</TableCell>
                 <TableCell>
                   <div className="flex gap-1">
                     {contact.wa_opt_in_status === 'subscribed' ? (
-                      <Badge variant="ghost" className="bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20">WhatsApp</Badge>
+                      <Badge variant="ghost" className="bg-green-500/10 text-green-500 hover:bg-green-500/20 border-green-500/20">WhatsApp</Badge>
                     ) : (
-                      <Badge variant="ghost" className="text-muted-foreground border-border/50">WhatsApp</Badge>
+                      <Badge variant="ghost" className="text-[var(--text-secondary)] border-[var(--border)]">WhatsApp</Badge>
                     )}
                   </div>
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1 flex-wrap">
                     {contact.tags?.slice(0, 2).map(tag => (
-                      <Badge key={tag} variant="ghost" className="text-xs bg-muted/50">{tag}</Badge>
+                      <Badge key={tag} variant="ghost" className="text-xs bg-[var(--bg-panel)]">{tag}</Badge>
                     ))}
                     {contact.tags && contact.tags.length > 2 && (
-                      <span className="text-xs text-muted-foreground">+{contact.tags.length - 2}</span>
+                      <span className="text-xs text-[var(--text-secondary)]">+{contact.tags.length - 2}</span>
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="text-muted-foreground text-sm">
+                <TableCell className="text-[var(--text-secondary)] text-sm">
                   {new Date(contact.created_at).toLocaleDateString()}
                 </TableCell>
                 <TableCell onClick={(e: React.MouseEvent) => e.stopPropagation()}>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="sm" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                    <Button variant="ghost" size="sm" className="h-8 w-8 text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
                       <MessageSquare className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => handleRowClick(contact.id)}>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 text-[var(--text-secondary)] hover:text-[var(--text-primary)]" onClick={() => handleRowClick(contact.id)}>
                       <ExternalLink className="h-4 w-4" />
                     </Button>
                   </div>

@@ -30,11 +30,11 @@ export function Contact360Layout({ contact, children }: Contact360LayoutProps) {
             <div>
               <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
                 {contact.name || 'Unknown Contact'}
-                <Badge variant="ghost" className="text-xs font-normal ml-2 text-muted-foreground border-border/50">
+                <Badge variant="ghost" className="text-xs font-normal ml-2 text-[var(--text-secondary)] border-[var(--border)]">
                   {contact.wa_opt_in_status === 'subscribed' ? 'Customer' : 'Lead'}
                 </Badge>
               </h1>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+              <div className="flex items-center gap-3 text-sm text-[var(--text-secondary)] mt-1">
                 <span className="flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${contact.wa_opt_in_status === 'subscribed' ? 'bg-green-500' : 'bg-amber-500'}`} />
                   {contact.wa_opt_in_status === 'subscribed' ? 'Active' : 'Pending'}
@@ -59,68 +59,68 @@ export function Contact360Layout({ contact, children }: Contact360LayoutProps) {
       <div className="flex-1 flex overflow-hidden">
         
         {/* Left Panel: Profile */}
-        <aside className="w-80 flex-none border-r border-border/50 bg-muted/10 overflow-y-auto p-4 flex flex-col gap-6">
+        <aside className="w-80 flex-none border-r border-[var(--border)] bg-[var(--bg-panel)] overflow-y-auto p-4 flex flex-col gap-6">
           {/* Identity Card */}
-          <section className="bg-card border border-border/50 rounded-lg p-4 shadow-sm">
+          <section className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg p-4 shadow-sm">
             <h3 className="font-semibold text-sm mb-3">Contact Details</h3>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Phone</span>
+                <span className="text-[var(--text-secondary)]">Phone</span>
                 <span className="font-medium">{contact.phone || '-'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Email</span>
+                <span className="text-[var(--text-secondary)]">Email</span>
                 <span className="font-medium truncate max-w-[150px]">{contact.email || '-'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Company</span>
+                <span className="text-[var(--text-secondary)]">Company</span>
                 <span className="font-medium">{contact.company_name || '-'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Country</span>
+                <span className="text-[var(--text-secondary)]">Country</span>
                 <span className="font-medium">{contact.country || '-'}</span>
               </div>
             </div>
           </section>
 
           {/* Reachability */}
-          <section className="bg-card border border-border/50 rounded-lg p-4 shadow-sm">
+          <section className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg p-4 shadow-sm">
             <h3 className="font-semibold text-sm mb-3">Reachability</h3>
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2"><span className="text-green-500">✅</span> WhatsApp</span>
-                <span className="text-muted-foreground">Connected</span>
+                <span className="text-[var(--text-secondary)]">Connected</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2"><span className={contact.email ? "text-green-500" : "text-amber-500"}>{contact.email ? "✅" : "⚠"}</span> Email</span>
-                <span className="text-muted-foreground">{contact.email ? "Verified" : "Unverified"}</span>
+                <span className="text-[var(--text-secondary)]">{contact.email ? "Verified" : "Unverified"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2"><span className="text-red-500">❌</span> SMS</span>
-                <span className="text-muted-foreground">Opted Out</span>
+                <span className="text-[var(--text-secondary)]">Opted Out</span>
               </div>
             </div>
           </section>
 
           {/* Tags */}
           <section>
-            <h3 className="font-semibold text-sm mb-3 text-muted-foreground px-1">Tags</h3>
+            <h3 className="font-semibold text-sm mb-3 text-[var(--text-secondary)] px-1">Tags</h3>
             <div className="flex flex-wrap gap-2">
               {contact.tags?.map(tag => (
                 <Badge key={tag} variant="ghost" className="bg-primary/5 hover:bg-primary/10 text-primary">{tag}</Badge>
               ))}
-              <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-muted-foreground"><Plus className="mr-1 h-3 w-3"/> Add</Button>
+              <Button variant="ghost" size="sm" className="h-6 text-xs px-2 text-[var(--text-secondary)]"><Plus className="mr-1 h-3 w-3"/> Add</Button>
             </div>
           </section>
         </aside>
 
         {/* Main Workspace (Center) */}
-        <main className="flex-1 min-w-0 overflow-y-auto bg-background">
+        <main className="flex-1 min-w-0 overflow-y-auto bg-[var(--bg-base)]">
           {children}
         </main>
 
         {/* Right Panel: Intelligence */}
-        <aside className="w-72 flex-none border-l border-border/50 bg-muted/10 overflow-y-auto p-4 hidden xl:block">
+        <aside className="w-72 flex-none border-l border-[var(--border)] bg-[var(--bg-panel)] overflow-y-auto p-4 hidden xl:block">
           <section className="bg-primary/5 border border-primary/20 rounded-lg p-4 shadow-sm mb-6 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-2 opacity-10">
               <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -128,16 +128,16 @@ export function Contact360Layout({ contact, children }: Contact360LayoutProps) {
             <h3 className="font-semibold text-sm mb-2 text-primary flex items-center gap-2">
               <span className="text-lg">✨</span> AI Summary
             </h3>
-            <p className="text-sm text-foreground/80 leading-relaxed">
+            <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
               Customer usually replies within 15 minutes. Prefers WhatsApp communication. Interested in premium tier products based on last browsing session. Likely to convert if offered a 10% discount.
             </p>
           </section>
 
-          <section className="bg-card border border-border/50 rounded-lg p-4 shadow-sm">
+          <section className="bg-[var(--bg-surface)] border border-[var(--border)] rounded-lg p-4 shadow-sm">
             <h3 className="font-semibold text-sm mb-3">Next Best Action</h3>
-            <div className="bg-muted p-3 rounded text-sm border-l-2 border-primary">
+            <div className="bg-[var(--bg-panel)] p-3 rounded text-sm border-l-2 border-primary">
               <div className="font-medium mb-1">Send Engagement Follow-up</div>
-              <div className="text-muted-foreground text-xs">It has been 14 days since last contact. AI suggests sending the "Re-engagement" flow.</div>
+              <div className="text-[var(--text-secondary)] text-xs">It has been 14 days since last contact. AI suggests sending the "Re-engagement" flow.</div>
               <Button size="sm" className="w-full mt-3">Execute Flow</Button>
             </div>
           </section>
