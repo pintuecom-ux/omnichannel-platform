@@ -59,15 +59,44 @@ const CHANNEL_CONFIG: Record<string, { label: string; icon: string; color: strin
   apple: { label: 'Apple Messages for Business', icon: 'fa-apple', color: '#a855f7', rule: 'Strictly relationship-based or transactional business updates.', badge: 'AMB Protected' },
 }
 
+/** Helper to extract components from Meta template object */
+function parseTemplateDetails(t: any) {
+  if (!t) return { headerText: '', bodyText: '', footerText: '', buttons: [], category: 'MARKETING', status: 'APPROVED' }
+
+  let headerText = t.header_text || ''
+  let bodyText = t.body_text || ''
+  let footerText = t.footer_text || ''
+  let buttons = t.buttons || []
+  let category = t.category || 'MARKETING'
+  let status = t.status || 'APPROVED'
+
+  if (Array.isArray(t.components)) {
+    const headerComp = t.components.find((c: any) => c.type === 'HEADER')
+    if (headerComp && headerComp.text) headerText = headerComp.text
+
+    const bodyComp = t.components.find((c: any) => c.type === 'BODY')
+    if (bodyComp && bodyComp.text) bodyText = bodyComp.text
+
+    const footerComp = t.components.find((c: any) => c.type === 'FOOTER')
+    if (footerComp && footerComp.text) footerText = footerComp.text
+
+    const buttonComp = t.components.find((c: any) => c.type === 'BUTTONS')
+    if (buttonComp && Array.isArray(buttonComp.buttons)) buttons = buttonComp.buttons
+  }
+
+  return { headerText, bodyText, footerText, buttons, category, status }
+}
+
 export default function BroadcastPage() {
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([])
   const [contacts, setContacts] = useState<ContactRecipient[]>([])
   const [segments, setSegments] = useState<string[]>([])
   const [loading, setLoading] = useState<boolean>(true)
+  const [syncingAssets, setSyncingAssets] = useState<boolean>(false)
   const [search, setSearch] = useState<string>('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
 
-  // Meta WABA Account Status & Messaging Tier info from API
+  // Meta WABA Account Status info
   const [metaWaba, setMetaWaba] = useState<any>({
     tier: 'Tier 2 (10,000 unique recipients / 24h)',
     daily_limit: 10000,
@@ -75,7 +104,7 @@ export default function BroadcastPage() {
     opt_out_button_enabled: true,
   })
 
-  // Assets fetched dynamically from platform databases
+  // Real assets fetched dynamically from platform APIs
   const [templates, setTemplates] = useState<any[]>([])
   const [flows, setFlows] = useState<any[]>([])
   const [catalogItems, setCatalogItems] = useState<any[]>([])
@@ -89,18 +118,19 @@ export default function BroadcastPage() {
   const [fallbackChannel, setFallbackChannel] = useState<string>('email')
   const [newCampAssetType, setNewCampAssetType] = useState<'TEMPLATE' | 'FLOW' | 'CATALOG' | 'DIRECT_TEXT' | 'HTML_EMAIL' | 'PUSH_ALERT'>('TEMPLATE')
   const [selectedAssetName, setSelectedAssetName] = useState<string>('')
-  
-  // Selected Asset Full Object
+
+  // Selected Asset Objects
   const [selectedTemplateObj, setSelectedTemplateObj] = useState<any>(null)
   const [selectedFlowObj, setSelectedFlowObj] = useState<any>(null)
   const [selectedCatalogObj, setSelectedCatalogObj] = useState<any>(null)
 
-  // Message & Variable Preview Controls
+  // Message & Parameter Control State
   const [messagePreviewText, setMessagePreviewText] = useState<string>('')
   const [subjectText, setSubjectText] = useState<string>('')
   const [includeOptOut, setIncludeOptOut] = useState<boolean>(true)
   const [param1Val, setParam1Val] = useState<string>('Sarah Jenkins')
   const [param2Val, setParam2Val] = useState<string>('VIP2026')
+  const [param3Val, setParam3Val] = useState<string>('ORDER-1092')
   const [submittingWizard, setSubmittingWizard] = useState<boolean>(false)
 
   // Live Batch Execution Room State
@@ -122,37 +152,75 @@ export default function BroadcastPage() {
         setCampaigns(data.campaigns || [])
         setContacts(data.contacts || [])
         setSegments(data.segments || ['All Contacts (Whole CRM)'])
-        if (data.meta_waba_status) {
-          setMetaWaba(data.meta_waba_status)
-        }
+        if (data.meta_waba_status) setMetaWaba(data.meta_waba_status)
       }
 
-      // Pull live messaging assets from existing endpoints
-      try {
-        const [tplRes, flwRes, catRes] = await Promise.all([
-          fetch('/api/templates').catch(() => null),
-          fetch('/api/flows').catch(() => null),
-          fetch('/api/catalog').catch(() => null),
-        ])
-        if (tplRes) {
-          const tplData = await tplRes.json()
-          setTemplates(tplData.templates || tplData || [])
-        }
-        if (flwRes) {
-          const flwData = await flwRes.json()
-          setFlows(flwData.flows || flwData || [])
-        }
-        if (catRes) {
-          const catData = await catRes.json()
-          setCatalogItems(catData.products || [])
-        }
-      } catch (assetErr) {
-        console.warn('Error loading dynamic platform assets:', assetErr)
-      }
+      // Fetch live assets from Meta & DB
+      await fetchAssets()
     } catch (e) {
       console.error('Error loading broadcast dashboard:', e)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchAssets = async () => {
+    try {
+      const [tplRes, flwRes, catRes] = await Promise.all([
+        fetch('/api/templates').catch(() => null),
+        fetch('/api/flows').catch(() => null),
+        fetch('/api/catalog').catch(() => null),
+      ])
+      if (tplRes) {
+        const tplData = await tplRes.json()
+        setTemplates(tplData.templates || tplData || [])
+      }
+      if (flwRes) {
+        const flwData = await flwRes.json()
+        setFlows(flwData.flows || flwData || [])
+      }
+      if (catRes) {
+        const catData = await catRes.json()
+        setCatalogItems(catData.products || [])
+      }
+    } catch (assetErr) {
+      console.warn('Error loading dynamic platform assets:', assetErr)
+    }
+  }
+
+  const syncTemplatesFromMeta = async () => {
+    setSyncingAssets(true)
+    try {
+      const res = await fetch('/api/templates?sync=true')
+      const data = await res.json()
+      if (data.templates) {
+        setTemplates(data.templates)
+        if (data.templates.length > 0) {
+          setSelectedAssetName(data.templates[0].name)
+        }
+      }
+    } catch (e) {
+      console.error('Failed to sync templates from Meta:', e)
+    } finally {
+      setSyncingAssets(false)
+    }
+  }
+
+  const syncFlowsFromMeta = async () => {
+    setSyncingAssets(true)
+    try {
+      const res = await fetch('/api/flows?sync=true')
+      const data = await res.json()
+      if (data.flows) {
+        setFlows(data.flows)
+        if (data.flows.length > 0) {
+          setSelectedAssetName(data.flows[0].name || data.flows[0].id)
+        }
+      }
+    } catch (e) {
+      console.error('Failed to sync flows from Meta:', e)
+    } finally {
+      setSyncingAssets(false)
     }
   }
 
@@ -183,99 +251,69 @@ export default function BroadcastPage() {
     }
   }, [primaryChannel])
 
-  // Automatically sync asset list defaults when changing asset type
+  // Automatically sync selectedAssetName when switching asset type
   useEffect(() => {
     if (newCampAssetType === 'TEMPLATE') {
-      const firstTpl = templates[0]
-      if (firstTpl) {
-        setSelectedAssetName(firstTpl.name)
+      if (templates.length > 0) {
+        setSelectedAssetName(templates[0].name || templates[0].id)
       } else {
-        setSelectedAssetName('summer_festival_discount')
+        setSelectedAssetName('')
+        setSelectedTemplateObj(null)
+        setMessagePreviewText('')
       }
     } else if (newCampAssetType === 'FLOW') {
-      const firstFlow = flows[0]
-      if (firstFlow) {
-        setSelectedAssetName(firstFlow.name || firstFlow.id)
+      if (flows.length > 0) {
+        setSelectedAssetName(flows[0].name || flows[0].id)
       } else {
-        setSelectedAssetName('take_order')
+        setSelectedAssetName('')
+        setSelectedFlowObj(null)
+        setMessagePreviewText('')
       }
     } else if (newCampAssetType === 'CATALOG') {
-      const firstCat = catalogItems[0]
-      if (firstCat) {
-        setSelectedAssetName(firstCat.name)
+      if (catalogItems.length > 0) {
+        setSelectedAssetName(catalogItems[0].name || catalogItems[0].id)
       } else {
-        setSelectedAssetName('React Air Flex Summer Sneakers')
+        setSelectedAssetName('')
+        setSelectedCatalogObj(null)
+        setMessagePreviewText('')
       }
     }
   }, [newCampAssetType, templates, flows, catalogItems])
 
-  // ── DYNAMIC PREVIEW RESOLUTION LOGIC ──
-  // Resolves full asset object and updates preview text whenever selectedAssetName or asset lists change
+  // ── DYNAMIC ASSET RESOLUTION & REAL PREVIEW SYNCHRONIZATION ──
   useEffect(() => {
-    if (!selectedAssetName) return
+    if (!selectedAssetName) {
+      if (newCampAssetType === 'TEMPLATE') setSelectedTemplateObj(null)
+      if (newCampAssetType === 'FLOW') setSelectedFlowObj(null)
+      if (newCampAssetType === 'CATALOG') setSelectedCatalogObj(null)
+      return
+    }
 
     if (newCampAssetType === 'TEMPLATE') {
       const found = templates.find((t: any) => t.name === selectedAssetName || t.id === selectedAssetName)
       if (found) {
         setSelectedTemplateObj(found)
-        // Extract body text from components or body_text property
-        let bodyText = found.body_text || ''
-        if (!bodyText && Array.isArray(found.components)) {
-          const bodyComp = found.components.find((c: any) => c.type === 'BODY')
-          if (bodyComp) bodyText = bodyComp.text || ''
-        }
-        if (!bodyText) {
-          bodyText = `Hi {{1}}! 🎉 Enjoy an exclusive VIP offer from our ReactCommerce store today! Code: {{2}}`
-        }
-        setMessagePreviewText(bodyText)
+        const details = parseTemplateDetails(found)
+        setMessagePreviewText(details.bodyText || found.body_text || '')
       } else {
-        setSelectedTemplateObj({
-          name: selectedAssetName,
-          category: 'MARKETING',
-          status: 'APPROVED',
-          language: 'en_US',
-          header: { type: 'TEXT', text: '🔥 Summer Sale Unlocked' },
-          body_text: 'Hi {{1}}! 🎉 Enjoy an exclusive VIP offer from our ReactCommerce store today! Use code: {{2}}',
-          footer: 'ReactCommerce • Reply STOP to Opt Out',
-          buttons: [
-            { type: 'URL', text: 'Shop Summer Collection', url: 'https://reactcommerce.shop' },
-            { type: 'QUICK_REPLY', text: 'Stop Promotions' }
-          ]
-        })
-        setMessagePreviewText('Hi {{1}}! 🎉 Enjoy an exclusive VIP offer from our ReactCommerce store today! Use code: {{2}}')
+        setSelectedTemplateObj(null)
       }
     } else if (newCampAssetType === 'FLOW') {
       const found = flows.find((f: any) => f.name === selectedAssetName || f.id === selectedAssetName)
       if (found) {
         setSelectedFlowObj(found)
         const flowName = found.name || selectedAssetName
-        setMessagePreviewText(`Hi {{1}}! 👋 Tap below to launch our interactive "${flowName}" flow in WhatsApp and complete your order.`)
+        setMessagePreviewText(`Hi {{1}}! 👋 Please complete our interactive "${flowName}" flow in WhatsApp.`)
       } else {
-        setSelectedFlowObj({
-          id: selectedAssetName === 'take_order' ? 'flow_take_order_01' : 'flow_9812491',
-          name: selectedAssetName,
-          status: 'PUBLISHED',
-          categories: ['OTHER'],
-        })
-        setMessagePreviewText(`Hi {{1}}! 👋 Tap below to launch our interactive "${selectedAssetName}" flow in WhatsApp and complete your request.`)
+        setSelectedFlowObj(null)
       }
     } else if (newCampAssetType === 'CATALOG') {
       const found = catalogItems.find((c: any) => c.name === selectedAssetName || c.id === selectedAssetName || c.retailer_id === selectedAssetName)
       if (found) {
         setSelectedCatalogObj(found)
-        setMessagePreviewText(`Hi {{1}}! 🔥 Featured SKU from our Meta Catalog: ${found.name} (${found.price || '$129.00'} ${found.currency || 'USD'}). Tap below to view in WhatsApp!`)
+        setMessagePreviewText(`Hi {{1}}! Check out our featured product: ${found.name} (${found.price || ''} ${found.currency || 'USD'}). Tap below to view in WhatsApp!`)
       } else {
-        setSelectedCatalogObj({
-          id: 'cat_item_101',
-          name: selectedAssetName,
-          price: '129.00',
-          currency: 'USD',
-          retailer_id: 'SKU_AIR_FLEX_01',
-          catalog_name: 'ReactCommerce Master Catalog',
-          catalog_id: '1084291823901',
-          image_url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=400&q=80',
-        })
-        setMessagePreviewText(`Hi {{1}}! 🔥 Featured SKU from our Meta Catalog: ${selectedAssetName} ($129.00 USD). Tap below to view product details!`)
+        setSelectedCatalogObj(null)
       }
     }
   }, [selectedAssetName, newCampAssetType, templates, flows, catalogItems])
@@ -414,7 +452,6 @@ export default function BroadcastPage() {
     setTimeout(executeChunk, 400)
   }
 
-  // Filter campaigns
   const filteredCampaigns = campaigns.filter(c => {
     const matchesSearch = !search ||
       c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -424,7 +461,6 @@ export default function BroadcastPage() {
     return matchesSearch && matchesStatus
   })
 
-  // Filtered dispatch logs for tabs in Dispatch Room
   const filteredLogs = dispatchLogs.filter(l => {
     if (activeTab === 'COMPLIANT') return l.status === 'DELIVERED'
     if (activeTab === 'FAILOVER') return l.status === 'DELIVERED_FAILOVER'
@@ -437,10 +473,14 @@ export default function BroadcastPage() {
   const totalRead = campaigns.reduce((acc, c) => acc + (c.read_count || 0), 0)
   const avgDeliveryRate = totalSentMessages > 0 ? (totalDelivered / totalSentMessages) * 100 : 99.1
 
-  // Render personalized text with parameter values
-  const renderedPersonalizedText = messagePreviewText
+  // Extract parsed template details for active selectedTemplateObj
+  const tplDetails = parseTemplateDetails(selectedTemplateObj)
+
+  // Dynamically replace {{1}}, {{2}}, {{3}} in preview text
+  const renderedPersonalizedText = (messagePreviewText || tplDetails.bodyText || '')
     .replace(/\{\{1\}\}/g, param1Val || 'Sarah Jenkins')
     .replace(/\{\{2\}\}/g, param2Val || 'VIP2026')
+    .replace(/\{\{3\}\}/g, param3Val || 'ORDER-1092')
 
   return (
     <div className="generic-page">
@@ -710,7 +750,7 @@ export default function BroadcastPage() {
                     />
                   </div>
 
-                  {/* Primary Channel Selector (7 Universal Channels) */}
+                  {/* Primary Channel Selector */}
                   <div>
                     <div className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Primary Messaging Channel *</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 6 }}>
@@ -746,7 +786,7 @@ export default function BroadcastPage() {
                     </div>
                   </div>
 
-                  {/* Regulatory Compliance & Guard Notice for Active Channel */}
+                  {/* Regulatory Compliance Guard Notice */}
                   <div style={{ background: 'rgba(232, 180, 64, 0.08)', border: '1px solid rgba(232, 180, 64, 0.3)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
                     <i className="fa-solid fa-scale-balanced" style={{ color: '#ffc107', fontSize: 22 }} />
                     <div style={{ flex: 1 }}>
@@ -754,7 +794,7 @@ export default function BroadcastPage() {
                         Automated Regulatory Compliance Guard: {CHANNEL_CONFIG[primaryChannel]?.badge}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4 }}>
-                        {CHANNEL_CONFIG[primaryChannel]?.rule} Our system automatically validates customer timestamps before executing API calls to prevent domain penalties or spam blocks!
+                        {CHANNEL_CONFIG[primaryChannel]?.rule} Our system automatically validates customer timestamps before executing API calls!
                       </div>
                     </div>
                   </div>
@@ -776,9 +816,6 @@ export default function BroadcastPage() {
                           </option>
                         ))}
                       </select>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-                        If a contact is outside the Meta 24h window or unreachable on {primaryChannel.toUpperCase()}, the router seamlessly dispatches via your fallback choice.
-                      </div>
                     </div>
 
                     <div>
@@ -795,9 +832,6 @@ export default function BroadcastPage() {
                         <option value="Tag: VIP">Tag: VIP Customers (Spend &gt; $500)</option>
                         <option value="Tag: Active 24 Hours">⚡ Tag: Active within 24 Hours (100% FB/IG Compliant)</option>
                       </select>
-                      <div style={{ fontSize: 11, color: '#25D366', marginTop: 6, fontWeight: 600 }}>
-                        ● Audience source linked directly to live Supabase CRM database.
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -849,16 +883,39 @@ export default function BroadcastPage() {
                       <div className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>{primaryChannel === 'email' ? 'Email Subject Line *' : 'Notification Title *'}</div>
                       <input
                         className="form-input"
-                        placeholder={primaryChannel === 'email' ? 'Special Summer Offer Inside...' : 'Mega Discount Unlocked!'}
+                        placeholder={primaryChannel === 'email' ? 'Special Offer Inside...' : 'Notification Title'}
                         value={subjectText}
                         onChange={e => setSubjectText(e.target.value)}
                       />
                     </div>
                   )}
 
-                  {/* Dynamic Asset Selection Dropdown from Database */}
+                  {/* STRICT ZERO-DUMMY ASSET DROPDOWN (ONLY SHOWS REAL METADATA FROM META/SUPABASE) */}
                   <div>
-                    <div className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Select Existing Asset or Reference SKU *</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <div className="form-label" style={{ fontWeight: 700, fontSize: 13, margin: 0 }}>Select Existing Asset or Reference SKU *</div>
+                      {newCampAssetType === 'TEMPLATE' && (
+                        <button
+                          type="button"
+                          disabled={syncingAssets}
+                          onClick={syncTemplatesFromMeta}
+                          style={{ background: 'none', border: 'none', color: '#25D366', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                        >
+                          <i className={`fa-solid fa-rotate ${syncingAssets ? 'fa-spin' : ''}`} /> Sync Templates from Meta
+                        </button>
+                      )}
+                      {newCampAssetType === 'FLOW' && (
+                        <button
+                          type="button"
+                          disabled={syncingAssets}
+                          onClick={syncFlowsFromMeta}
+                          style={{ background: 'none', border: 'none', color: '#0084FF', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                        >
+                          <i className={`fa-solid fa-rotate ${syncingAssets ? 'fa-spin' : ''}`} /> Sync Flows from Meta
+                        </button>
+                      )}
+                    </div>
+
                     <select
                       className="form-input"
                       value={selectedAssetName}
@@ -867,38 +924,65 @@ export default function BroadcastPage() {
                     >
                       {newCampAssetType === 'TEMPLATE' && (
                         <>
-                          <option value="summer_festival_discount">📣 summer_festival_discount (Marketing / APPROVED)</option>
-                          <option value="order_status_update">📦 order_status_update (Utility / APPROVED)</option>
-                          {templates.map((t, idx) => (
-                            <option key={idx} value={t.name || t.id}>💬 {t.name} ({t.category || 'MARKETING'} / {t.status || 'APPROVED'})</option>
-                          ))}
+                          {templates.length === 0 ? (
+                            <option value="">⚠️ No Meta Approved Templates found on your WABA account</option>
+                          ) : (
+                            templates.map((t, idx) => (
+                              <option key={idx} value={t.name || t.id}>
+                                💬 {t.name} ({t.category || 'MARKETING'} / {t.status || 'APPROVED'})
+                              </option>
+                            ))
+                          )}
                         </>
                       )}
                       {newCampAssetType === 'FLOW' && (
                         <>
-                          <option value="take_order">📋 take_order (Interactive WA Flow / Meta Published)</option>
-                          <option value="Customer Satisfaction Survey Flow">📋 Customer Satisfaction Survey Flow (v6.1 Schema)</option>
-                          {flows.map((f, idx) => (
-                            <option key={idx} value={f.name || f.id}>🔗 {f.name} ({f.status || 'PUBLISHED'})</option>
-                          ))}
+                          {flows.length === 0 ? (
+                            <option value="">⚠️ No published WhatsApp Flows found</option>
+                          ) : (
+                            flows.map((f, idx) => (
+                              <option key={idx} value={f.name || f.id}>
+                                📋 {f.name} ({f.status || 'PUBLISHED'})
+                              </option>
+                            ))
+                          )}
                         </>
                       )}
                       {newCampAssetType === 'CATALOG' && (
                         <>
-                          <option value="React Air Flex Summer Sneakers">👟 React Air Flex Summer Sneakers (ID: 10842918)</option>
-                          <option value="Classic Vintage Leather Biker Jacket">🧥 Classic Vintage Leather Biker Jacket ($249.50 USD)</option>
-                          {catalogItems.map((c, idx) => (
-                            <option key={idx} value={c.name}>🛍️ {c.name} ({c.retailer_id})</option>
-                          ))}
+                          {catalogItems.length === 0 ? (
+                            <option value="">⚠️ No SKUs found in Meta Commerce Catalog</option>
+                          ) : (
+                            catalogItems.map((c, idx) => (
+                              <option key={idx} value={c.name}>
+                                🛍️ {c.name} ({c.retailer_id || c.price || 'SKU'})
+                              </option>
+                            ))
+                          )}
                         </>
                       )}
                       {(newCampAssetType === 'DIRECT_TEXT' || newCampAssetType === 'HTML_EMAIL' || newCampAssetType === 'PUSH_ALERT') && (
-                        <>
-                          <option value="Direct Conversational Promo v1">✨ Direct Conversational Promo (With Placeholders)</option>
-                          <option value="VIP Re-Engagement Campaign Asset">🔥 VIP Re-Engagement Campaign Asset</option>
-                        </>
+                        <option value="Direct Conversational Promo">✨ Direct Conversational Message Body</option>
                       )}
                     </select>
+
+                    {/* Zero-Asset Sync Warning Banner */}
+                    {newCampAssetType === 'TEMPLATE' && templates.length === 0 && (
+                      <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: 12, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+                        <div style={{ fontSize: 12, color: '#f87171' }}>
+                          <i className="fa-solid fa-triangle-exclamation" style={{ marginRight: 6 }} />
+                          No Meta Approved Message Templates found on your WhatsApp Business Account.
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 12px', fontSize: 11 }}
+                          onClick={syncTemplatesFromMeta}
+                        >
+                          <i className="fa-solid fa-rotate" style={{ marginRight: 6 }} /> Sync from Meta
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* META BULK COMPLIANCE GUARD PANEL */}
@@ -916,7 +1000,7 @@ export default function BroadcastPage() {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 11, color: 'var(--text-secondary)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <i className="fa-solid fa-check-circle" style={{ color: '#25D366' }} />
-                          <span>Approved Meta Template Category: <strong style={{ color: '#fff' }}>{selectedTemplateObj?.category || 'MARKETING'}</strong></span>
+                          <span>Approved Meta Template Category: <strong style={{ color: '#fff' }}>{tplDetails?.category || 'MARKETING'}</strong></span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <i className="fa-solid fa-check-circle" style={{ color: '#25D366' }} />
@@ -991,7 +1075,7 @@ export default function BroadcastPage() {
                       </div>
                     </div>
 
-                    {/* ── REAL-TIME ASSET PREVIEW SUITE (DYNAMICALLY RENDERS SELECTED TEMPLATE / FLOW / CATALOG) ── */}
+                    {/* ── REAL-TIME ASSET PREVIEW SUITE ── */}
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
                         <span>📱 Live Selected Asset DM Preview</span>
@@ -1007,21 +1091,25 @@ export default function BroadcastPage() {
                           {newCampAssetType === 'TEMPLATE' && (
                             <div style={{ background: '#005c4b', borderRadius: 12, borderTopRightRadius: 2, padding: '14px', color: '#e9edef', fontSize: 12, boxShadow: '0 2px 4px rgba(0,0,0,0.4)', position: 'relative', lineHeight: 1.4 }}>
                               {/* Header Component if present */}
-                              {selectedTemplateObj?.header?.text && (
+                              {tplDetails?.headerText && (
                                 <div style={{ fontWeight: 800, fontSize: 13, color: '#fff', marginBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 4 }}>
-                                  {selectedTemplateObj.header.text}
+                                  {tplDetails.headerText}
                                 </div>
                               )}
                               
                               {/* Rendered Body Text with dynamic parameters */}
                               <div style={{ whiteSpace: 'pre-line' }}>
-                                {renderedPersonalizedText}
+                                {renderedPersonalizedText || (
+                                  <span style={{ color: 'rgba(255,255,255,0.5)', fontStyle: 'italic' }}>
+                                    Select a Meta Approved Template above to view body text preview.
+                                  </span>
+                                )}
                               </div>
 
                               {/* Footer Text if present */}
-                              {selectedTemplateObj?.footer && (
+                              {tplDetails?.footerText && (
                                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 8, fontStyle: 'italic' }}>
-                                  {selectedTemplateObj.footer}
+                                  {tplDetails.footerText}
                                 </div>
                               )}
 
@@ -1032,18 +1120,18 @@ export default function BroadcastPage() {
                             </div>
                           )}
 
-                          {/* B. INTERACTIVE WHATSAPP FLOW PREVIEW (e.g. "take_order") */}
+                          {/* B. INTERACTIVE WHATSAPP FLOW PREVIEW */}
                           {newCampAssetType === 'FLOW' && (
                             <div style={{ background: '#005c4b', borderRadius: 12, borderTopRightRadius: 2, padding: '14px', color: '#e9edef', fontSize: 12, boxShadow: '0 2px 4px rgba(0,0,0,0.4)' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.2)', padding: '8px 12px', borderRadius: 8, marginBottom: 8, border: '1px solid rgba(255,255,255,0.1)' }}>
                                 <i className="fa-solid fa-diagram-project" style={{ color: '#53bdeb', fontSize: 18 }} />
                                 <div>
-                                  <div style={{ fontWeight: 700, color: '#fff', fontSize: 13 }}>Flow: {selectedFlowObj?.name || selectedAssetName}</div>
-                                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>Status: Meta Published (v6.1 Schema)</div>
+                                  <div style={{ fontWeight: 700, color: '#fff', fontSize: 13 }}>Flow: {selectedFlowObj?.name || selectedAssetName || 'No Flow Selected'}</div>
+                                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>Status: {selectedFlowObj?.status || 'PUBLISHED'} (v6.1 Schema)</div>
                                 </div>
                               </div>
                               <div style={{ whiteSpace: 'pre-line' }}>
-                                {renderedPersonalizedText}
+                                {renderedPersonalizedText || 'Select a published flow to preview message content.'}
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 8, fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>
                                 <span>12:45 PM</span>
@@ -1055,21 +1143,23 @@ export default function BroadcastPage() {
                           {/* C. META COMMERCE CATALOG SKU PREVIEW */}
                           {newCampAssetType === 'CATALOG' && (
                             <div style={{ background: '#005c4b', borderRadius: 12, borderTopRightRadius: 2, padding: '12px', color: '#e9edef', fontSize: 12, boxShadow: '0 2px 4px rgba(0,0,0,0.4)' }}>
-                              <div style={{ background: '#111b21', borderRadius: 10, overflow: 'hidden', marginBottom: 10, border: '1px solid #2a3942' }}>
-                                {selectedCatalogObj?.image_url && (
-                                  <img src={selectedCatalogObj.image_url} alt="Product SKU" style={{ width: '100%', height: 110, objectFit: 'cover' }} />
-                                )}
-                                <div style={{ padding: 10 }}>
-                                  <div style={{ fontWeight: 800, color: '#fff', fontSize: 13 }}>{selectedCatalogObj?.name || selectedAssetName}</div>
-                                  <div style={{ fontSize: 11, color: '#25D366', fontWeight: 700, marginTop: 2 }}>
-                                    ${selectedCatalogObj?.price || '129.00'} {selectedCatalogObj?.currency || 'USD'}
-                                  </div>
-                                  <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
-                                    SKU: {selectedCatalogObj?.retailer_id || 'SKU_01'} • Catalog ID: {selectedCatalogObj?.catalog_id || '1084291823901'}
+                              {selectedCatalogObj ? (
+                                <div style={{ background: '#111b21', borderRadius: 10, overflow: 'hidden', marginBottom: 10, border: '1px solid #2a3942' }}>
+                                  {selectedCatalogObj.image_url && (
+                                    <img src={selectedCatalogObj.image_url} alt="Product SKU" style={{ width: '100%', height: 110, objectFit: 'cover' }} />
+                                  )}
+                                  <div style={{ padding: 10 }}>
+                                    <div style={{ fontWeight: 800, color: '#fff', fontSize: 13 }}>{selectedCatalogObj.name}</div>
+                                    <div style={{ fontSize: 11, color: '#25D366', fontWeight: 700, marginTop: 2 }}>
+                                      ${selectedCatalogObj.price || '0.00'} {selectedCatalogObj.currency || 'USD'}
+                                    </div>
+                                    <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
+                                      SKU: {selectedCatalogObj.retailer_id || 'SKU'} • Catalog ID: {selectedCatalogObj.catalog_id || 'CATALOG'}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                              <div style={{ whiteSpace: 'pre-line' }}>{renderedPersonalizedText}</div>
+                              ) : null}
+                              <div style={{ whiteSpace: 'pre-line' }}>{renderedPersonalizedText || 'Select a Meta Catalog product to preview.'}</div>
                             </div>
                           )}
 
@@ -1077,7 +1167,7 @@ export default function BroadcastPage() {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
                             {newCampAssetType === 'FLOW' ? (
                               <div style={{ background: '#1f2c34', border: '1px solid #2a3942', borderRadius: 8, padding: '9px 0', textAlign: 'center', fontSize: 12, color: '#53bdeb', fontWeight: 800, cursor: 'pointer' }}>
-                                <i className="fa-solid fa-list-ul" style={{ marginRight: 6 }} /> 📋 Open Flow: {selectedAssetName}
+                                <i className="fa-solid fa-list-ul" style={{ marginRight: 6 }} /> 📋 Open Flow: {selectedAssetName || 'Flow'}
                               </div>
                             ) : newCampAssetType === 'CATALOG' ? (
                               <div style={{ background: '#1f2c34', border: '1px solid #2a3942', borderRadius: 8, padding: '9px 0', textAlign: 'center', fontSize: 12, color: '#53bdeb', fontWeight: 800, cursor: 'pointer' }}>
@@ -1085,9 +1175,16 @@ export default function BroadcastPage() {
                               </div>
                             ) : (
                               <>
-                                <div style={{ background: '#1f2c34', border: '1px solid #2a3942', borderRadius: 8, padding: '9px 0', textAlign: 'center', fontSize: 12, color: '#53bdeb', fontWeight: 800, cursor: 'pointer' }}>
-                                  <i className="fa-solid fa-external-link" style={{ marginRight: 6 }} /> Claim VIP Offer Now
-                                </div>
+                                {tplDetails?.buttons?.map((b: any, idx: number) => (
+                                  <div key={idx} style={{ background: '#1f2c34', border: '1px solid #2a3942', borderRadius: 8, padding: '9px 0', textAlign: 'center', fontSize: 12, color: '#53bdeb', fontWeight: 800, cursor: 'pointer' }}>
+                                    <i className={`fa-solid ${b.type === 'URL' ? 'fa-external-link' : 'fa-reply'}`} style={{ marginRight: 6 }} /> {b.text || 'Action Button'}
+                                  </div>
+                                ))}
+                                {(!tplDetails?.buttons || tplDetails.buttons.length === 0) && (
+                                  <div style={{ background: '#1f2c34', border: '1px solid #2a3942', borderRadius: 8, padding: '9px 0', textAlign: 'center', fontSize: 12, color: '#53bdeb', fontWeight: 800, cursor: 'pointer' }}>
+                                    <i className="fa-solid fa-external-link" style={{ marginRight: 6 }} /> Claim VIP Offer Now
+                                  </div>
+                                )}
                                 {includeOptOut && (
                                   <div style={{ background: '#1f2c34', border: '1px solid #2a3942', borderRadius: 8, padding: '8px 0', textAlign: 'center', fontSize: 11, color: '#e84040', fontWeight: 700, cursor: 'pointer' }}>
                                     🛑 Stop Promotions / Unsubscribe
@@ -1110,7 +1207,6 @@ export default function BroadcastPage() {
                             <div style={{ background: '#262626', padding: '10px 14px', borderRadius: 18, borderBottomRightRadius: 4, fontSize: 12, lineHeight: 1.4, display: 'inline-block', maxWidth: '90%', whiteSpace: 'pre-line' }}>
                               {renderedPersonalizedText}
                             </div>
-                            <div style={{ fontSize: 9, color: '#737373', marginTop: 4, textAlign: 'right' }}>Seen by customer 2m ago</div>
                           </div>
                         </div>
                       )}
@@ -1123,7 +1219,6 @@ export default function BroadcastPage() {
                               {renderedPersonalizedText}
                             </div>
                           </div>
-                          <div style={{ fontSize: 10, color: '#b0b3b8', textAlign: 'right' }}>● Delivered on Facebook Messenger</div>
                         </div>
                       )}
 
@@ -1147,11 +1242,6 @@ export default function BroadcastPage() {
                           <div style={{ color: '#4b5563', lineHeight: 1.5, whiteSpace: 'pre-line' }}>
                             {renderedPersonalizedText}
                           </div>
-                          {primaryChannel === 'email' && (
-                            <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 12, paddingTop: 8, fontSize: 10, color: '#9ca3af', textAlign: 'center' }}>
-                              Sent via ReactCommerce • <span style={{ textDecoration: 'underline' }}>Unsubscribe instantly (GDPR/CAN-SPAM Compliant)</span>
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
@@ -1175,7 +1265,7 @@ export default function BroadcastPage() {
                     Next: Configure Asset & Preview <i className="fa-solid fa-arrow-right" style={{ marginLeft: 6 }} />
                   </button>
                 ) : (
-                  <button type="button" className="btn btn-primary" onClick={() => handleCreateCampaign('READY')} disabled={submittingWizard} style={{ background: '#25D366', borderColor: '#25D366', color: '#fff', fontWeight: 700 }}>
+                  <button type="button" className="btn btn-primary" onClick={() => handleCreateCampaign('READY')} disabled={submittingWizard || (newCampAssetType === 'TEMPLATE' && templates.length === 0)} style={{ background: '#25D366', borderColor: '#25D366', color: '#fff', fontWeight: 700 }}>
                     {submittingWizard ? 'Saving…' : <><i className="fa-solid fa-check" style={{ marginRight: 6 }} /> Register Campaign & Open Dispatch Room</>}
                   </button>
                 )}
