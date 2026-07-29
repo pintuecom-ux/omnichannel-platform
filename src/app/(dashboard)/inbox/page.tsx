@@ -160,8 +160,8 @@ export default function InboxPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-full w-full overflow-hidden bg-[var(--bg-base)]">
-        <div className="w-[340px] border-r border-[var(--border)] flex flex-col p-4 gap-4">
+      <div className="flex h-full w-full overflow-hidden bg-base">
+        <div className="w-[340px] border-r border-border flex flex-col p-4 gap-4">
           <div className="h-10 bg-neutral-100 rounded-lg animate-pulse" />
           <div className="flex-1 flex flex-col gap-3">
             {[1, 2, 3, 4, 5].map((i) => (
@@ -169,7 +169,7 @@ export default function InboxPage() {
             ))}
           </div>
         </div>
-        <div className="flex-1 flex items-center justify-center bg-[var(--bg-panel)] border-l border-[var(--border)]">
+        <div className="flex-1 flex items-center justify-center bg-panel border-l border-border">
           <div className="w-64 h-64 bg-neutral-100 rounded-full animate-pulse opacity-50" />
         </div>
       </div>
@@ -177,7 +177,7 @@ export default function InboxPage() {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-[var(--bg-base)]">
+    <div className="flex h-full w-full overflow-hidden bg-base">
       <ConversationPanel onRefresh={handleRefresh} />
       {activeConversationId ? (
         <>
@@ -185,7 +185,7 @@ export default function InboxPage() {
           <InfoPanel />
         </>
       ) : (
-        <div className="flex flex-1 items-center justify-center bg-[var(--bg-panel)] p-8 border-l border-[var(--border)]">
+        <div className="flex flex-1 items-center justify-center bg-panel p-8 border-l border-border">
           <EmptyState 
             title="Your inbox is empty" 
             description="Select a conversation from the left to start chatting."
