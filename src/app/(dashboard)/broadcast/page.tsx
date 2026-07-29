@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useRef } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 export interface CampaignItem {
   id: string
@@ -149,8 +150,11 @@ function extractTemplateVariables(selectedTpl: any): MetaTemplateVariable[] {
 }
 
 export default function BroadcastPage() {
+  const supabase = createClient()
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([])
   const [contacts, setContacts] = useState<ContactRecipient[]>([])
+  const [audienceLists, setAudienceLists] = useState<any[]>([])
+  const [audienceSegments, setAudienceSegments] = useState<any[]>([])
   const [segments, setSegments] = useState<string[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [syncingAssets, setSyncingAssets] = useState<boolean>(false)
@@ -213,6 +217,13 @@ export default function BroadcastPage() {
   const fetchData = async () => {
     setLoading(true)
     try {
+      const { data: { session } } = await supabase.auth.getSession()
+      let wsId = ''
+      if (session) {
+        const { data: p } = await supabase.from('profiles').select('workspace_id').eq('id', session.user.id).single()
+        if (p) wsId = p.workspace_id
+      }
+
       const res = await fetch('/api/broadcast')
       const data = await res.json()
       if (data.success) {
@@ -220,6 +231,19 @@ export default function BroadcastPage() {
         setContacts(data.contacts || [])
         setSegments(data.segments || ['All Contacts (Whole CRM)'])
         if (data.meta_waba_status) setMetaWaba(data.meta_waba_status)
+      }
+
+      if (wsId) {
+        const listsRes = await fetch(`/api/lists?workspace_id=${wsId}`).catch(() => null)
+        if (listsRes) {
+          const lData = await listsRes.json()
+          setAudienceLists(lData.lists || [])
+        }
+        const segRes = await fetch(`/api/segments?workspace_id=${wsId}`).catch(() => null)
+        if (segRes) {
+          const sData = await segRes.json()
+          setAudienceSegments(sData.segments || [])
+        }
       }
 
       await fetchAssets()
@@ -889,11 +913,24 @@ export default function BroadcastPage() {
                         onChange={e => setNewCampSegment(e.target.value)}
                         style={{ cursor: 'pointer', fontWeight: 600 }}
                       >
-                        {segments.map((seg, idx) => (
-                          <option key={idx} value={seg}>{seg}</option>
-                        ))}
-                        <option value="Tag: VIP">Tag: VIP Customers (Spend &gt; $500)</option>
-                        <option value="Tag: Active 24 Hours">⚡ Tag: Active within 24 Hours (100% FB/IG Compliant)</option>
+                        <option value="All Contacts (Whole CRM)">All Contacts (Whole CRM)</option>
+                        {audienceLists.length > 0 && <optgroup label="Static Lists">
+                          {audienceLists.map((list) => (
+                            <option key={list.id} value={`List: ${list.name}`}>List: {list.name} ({list.contact_count} contacts)</option>
+                          ))}
+                        </optgroup>}
+                        {audienceSegments.length > 0 && <optgroup label="Dynamic Segments">
+                          {audienceSegments.map((seg) => (
+                            <option key={seg.id} value={`Segment: ${seg.name}`}>Segment: {seg.name} ({seg.contact_count} contacts)</option>
+                          ))}
+                        </optgroup>}
+                        <optgroup label="Legacy Tags">
+                          {segments.filter(s => s !== 'All Contacts (Whole CRM)').map((seg, idx) => (
+                            <option key={`legacy_${idx}`} value={seg}>{seg}</option>
+                          ))}
+                          <option value="Tag: VIP">Tag: VIP Customers (Spend &gt; $500)</option>
+                          <option value="Tag: Active 24 Hours">⚡ Tag: Active within 24 Hours (100% FB/IG Compliant)</option>
+                        </optgroup>
                       </select>
                     </div>
                   </div>

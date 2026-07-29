@@ -68,7 +68,13 @@ export interface Channel {
 export interface Contact {
   id: string
   workspace_id: string
+  external_id?: string | null
   name: string | null
+  first_name?: string | null
+  last_name?: string | null
+  company_name?: string | null
+  country?: string | null
+  city?: string | null
   phone: string | null
   email: string | null
   instagram_username: string | null
@@ -76,6 +82,15 @@ export interface Contact {
   facebook_scoped_id?: string | null
   facebook_id: string | null
   avatar_url: string | null
+  wa_opt_in_status?: 'subscribed' | 'unsubscribed' | 'pending' | 'never_opted_in' | 'suppressed' | string
+  email_opt_in_status?: 'subscribed' | 'unsubscribed' | 'pending' | 'never_opted_in' | 'suppressed' | string
+  sms_opt_in_status?: 'subscribed' | 'unsubscribed' | 'pending' | 'never_opted_in' | 'suppressed' | string
+  fb_opt_in_status?: 'subscribed' | 'unsubscribed' | 'pending' | 'never_opted_in' | 'suppressed' | string
+  ig_opt_in_status?: 'subscribed' | 'unsubscribed' | 'pending' | 'never_opted_in' | 'suppressed' | string
+  first_seen_at?: string | null
+  last_seen_at?: string | null
+  source?: string | null
+  is_suppressed?: boolean
   tags: string[]
   notes: string | null
   meta: Record<string, any>
@@ -253,10 +268,47 @@ export interface ContactList {
   id: string
   workspace_id: string
   name: string
-  platform: Platform | null
+  list_type: 'standard' | 'signup_form' | 'channel_master' | 'suppression' | 'import' | string
+  platform?: Platform | null
   description: string | null
+  tags?: string[]
+  double_opt_in_enabled?: boolean
+  is_archived?: boolean
   contact_count: number
+  created_by?: string | null
   created_at: string
+  updated_at?: string
+}
+
+export interface ListSubscription {
+  id: string
+  list_id: string
+  contact_id: string
+  status: 'subscribed' | 'unsubscribed' | 'pending' | 'cleaned' | string
+  channel?: string | null
+  source?: string | null
+  unsubscribe_reason?: string | null
+  subscribed_at: string
+  unsubscribed_at?: string | null
+  // Joined fields
+  contact?: Contact
+  list?: ContactList
+}
+
+export interface Segment {
+  id: string
+  workspace_id: string
+  name: string
+  description?: string | null
+  condition_set: Record<string, any>
+  evaluation_model?: 'realtime' | 'lazy' | 'batch' | string
+  contact_count?: number
+  last_computed_at?: string | null
+  is_archived?: boolean
+  tags?: string[]
+  created_by?: string | null
+  created_at: string
+  updated_at?: string
 }
 
 // WhatsApp Flows
