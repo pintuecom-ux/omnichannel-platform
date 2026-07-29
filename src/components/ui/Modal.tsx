@@ -25,7 +25,7 @@ export function ModalContent({ className, children, ...props }: React.HTMLAttrib
   return (
     <div
       className={cn(
-        "relative z-50 grid w-full max-w-lg gap-4 bg-white p-6 shadow-lg sm:rounded-lg animate-in fade-in-90 zoom-in-95",
+        "relative z-50 grid w-full max-w-lg gap-4 bg-[var(--bg-panel)] border border-[var(--border)] p-6 shadow-2xl sm:rounded-xl text-[var(--text-primary)] animate-in fade-in-90 zoom-in-95",
         className
       )}
       {...props}
@@ -43,7 +43,7 @@ export function ModalHeader({ className, ...props }: React.HTMLAttributes<HTMLDi
 
 export function ModalTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
-    <h2 className={cn("text-lg font-semibold leading-none tracking-tight text-neutral-900", className)} {...props} />
+    <h2 className={cn("text-lg font-semibold leading-none tracking-tight text-[var(--text-primary)]", className)} {...props} />
   )
 }
 

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useInboxStore } from '@/stores/useInboxStore'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -13,7 +13,7 @@ import { MessageCircle, RefreshCw } from 'lucide-react'
 import Button from '@/components/ui/Button'
 
 export default function InboxPage() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const { setConversations, activeConversationId } = useInboxStore()
   const { setProfile } = useAuthStore()
   const [loadError, setLoadError] = useState<string | null>(null)

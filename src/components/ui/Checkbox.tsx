@@ -13,7 +13,7 @@ export function Checkbox({ checked, onCheckedChange, className, ...props }: Chec
       checked={checked} 
       onChange={(e) => onCheckedChange?.(e.target.checked)}
       className={cn(
-        "peer h-4 w-4 shrink-0 rounded-sm border border-neutral-300 bg-white shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50 accent-primary-600",
+        "peer h-4 w-4 shrink-0 rounded-md border border-[var(--border)] bg-[var(--bg-surface)] shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 accent-[var(--accent)] cursor-pointer",
         className
       )}
       {...props} 

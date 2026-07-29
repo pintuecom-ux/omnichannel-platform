@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useInboxStore, useActiveConversation } from '@/stores/useInboxStore'
 import { getInitials, getAvatarColor } from '@/lib/utils'
@@ -8,7 +8,7 @@ import PostCommenterPanel from './PostCommenterPanel'
 const QUICK_TAGS = ['VIP', 'Lead', 'Hot Lead', 'B2B', 'Repeat Buyer', 'Wholesale', 'Delhi NCR']
 
 export default function InfoPanel() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const { updateConversation } = useInboxStore()
   const conversation = useActiveConversation()
   const [showDrawer, setShowDrawer] = useState(false)

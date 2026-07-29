@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useInboxStore, useActiveConversation } from '@/stores/useInboxStore'
 import { createClient } from '@/lib/supabase/client'
 import type { Template } from '@/types'
@@ -60,7 +60,7 @@ export default function InputArea({ onMessageSent }: Props) {
   const isSendingRef = useRef(false)
   const textRef      = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const supabase     = createClient()
+  const supabase     = useMemo(() => createClient(), [])
 
   const { activeConversationId, addMessage, replyToMessage, setReplyTo } = useInboxStore()
   const conversation = useActiveConversation()

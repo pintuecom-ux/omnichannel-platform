@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useInboxStore, useActiveConversation } from '@/stores/useInboxStore'
 import { formatMessageDate, getInitials, getAvatarColor } from '@/lib/utils'
@@ -9,7 +9,7 @@ const STATUS_CYCLE = ['open', 'pending', 'closed'] as const
 const STATUS_LABEL = { open: 'Open', pending: 'Pending', closed: 'Closed' }
 
 export default function CommentsWindow() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const {
     activeConversationId,
     messages,

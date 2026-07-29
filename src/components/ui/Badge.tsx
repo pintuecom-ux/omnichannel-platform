@@ -14,16 +14,16 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border-transparent bg-neutral-100 text-neutral-800',
-        primary: 'border-transparent bg-primary-100 text-primary-800',
-        success: 'border-transparent bg-success-100 text-success-800',
-        warning: 'border-transparent bg-warning-100 text-warning-800',
-        danger: 'border-transparent bg-danger-100 text-danger-800',
-        info: 'border-transparent bg-blue-100 text-blue-800',
-        whatsapp: 'border-transparent bg-[#25D366]/10 text-[#075E54]',
-        instagram: 'border-transparent bg-[#E1306C]/10 text-[#E1306C]',
-        facebook: 'border-transparent bg-[#1877F2]/10 text-[#1877F2]',
-        ghost: 'border-neutral-200 bg-transparent text-neutral-600',
+        default: 'border-transparent bg-[var(--bg-hover)] text-[var(--text-primary)]',
+        primary: 'border-transparent bg-primary-500/15 text-primary-400',
+        success: 'border-transparent bg-success-500/15 text-success-400',
+        warning: 'border-transparent bg-warning-500/15 text-warning-400',
+        danger: 'border-transparent bg-danger-500/15 text-danger-400',
+        info: 'border-transparent bg-blue-500/15 text-blue-400',
+        whatsapp: 'border-transparent bg-[#25D366]/15 text-[#25D366]',
+        instagram: 'border-transparent bg-[#E1306C]/15 text-[#E1306C]',
+        facebook: 'border-transparent bg-[#1877F2]/15 text-[#1877F2]',
+        ghost: 'border-[var(--border)] bg-transparent text-[var(--text-secondary)]',
       },
       size: {
         xs: 'text-[10px] px-1.5 py-0.5',

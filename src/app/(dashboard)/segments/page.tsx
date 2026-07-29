@@ -147,11 +147,11 @@ export default function SegmentsPage() {
   const filteredSegments = segments.filter(s => s.name.toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <div className="flex h-full w-full flex-col bg-neutral-50 p-6 overflow-hidden">
+    <div className="flex h-full w-full flex-col p-6 overflow-hidden">
       <div className="flex items-center justify-between pb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Dynamic Segments</h1>
-          <p className="text-sm text-neutral-500 mt-1">Rule-based audiences that update in real-time.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Dynamic Segments</h1>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">Rule-based audiences that update in real-time.</p>
         </div>
         <Button icon="fa-solid fa-plus" variant="primary" onClick={() => openModal('new')}>
           Create Segment
@@ -169,7 +169,7 @@ export default function SegmentsPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-white rounded-lg border border-neutral-200">
+      <div className="flex-1 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]">
         <Table>
           <TableHeader>
             <TableRow>
@@ -185,12 +185,12 @@ export default function SegmentsPage() {
               <TableRow key={seg.id}>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-neutral-900">{seg.name}</span>
+                    <span className="font-medium text-[var(--text-primary)]">{seg.name}</span>
                     <Badge variant="ghost" size="xs">{seg.condition_set?.conditions?.length || 0} rules</Badge>
                   </div>
                 </TableCell>
                 <TableCell>
-                  <div className="text-sm text-neutral-500">{seg.description || '—'}</div>
+                  <div className="text-sm text-[var(--text-secondary)]">{seg.description || '—'}</div>
                 </TableCell>
                 <TableCell>
                   <Badge variant="info" icon="fa-solid fa-users">
@@ -198,7 +198,7 @@ export default function SegmentsPage() {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="text-sm text-neutral-500">
+                  <div className="text-sm text-[var(--text-secondary)]">
                     {seg.last_calculated_at ? new Date(seg.last_calculated_at).toLocaleString() : 'Never'}
                   </div>
                 </TableCell>
@@ -206,7 +206,7 @@ export default function SegmentsPage() {
                   <div className="flex justify-end gap-2">
                     <Button variant="ghost" size="icon" icon="fa-solid fa-rotate-right" onClick={() => refreshCount(seg.id)} title="Refresh Count" />
                     <Button variant="ghost" size="icon" icon="fa-solid fa-pen" onClick={() => openModal('edit', seg)} />
-                    <Button variant="ghost" size="icon" icon="fa-solid fa-trash" className="text-danger-600 hover:text-danger-700 hover:bg-danger-50" onClick={() => del(seg.id)} />
+                    <Button variant="ghost" size="icon" icon="fa-solid fa-trash" className="text-danger-500 hover:text-danger-600 hover:bg-danger-500/10" onClick={() => del(seg.id)} />
                   </div>
                 </TableCell>
               </TableRow>
@@ -240,18 +240,18 @@ export default function SegmentsPage() {
               onChange={e => setModal(m => ({ ...m, segment: { ...m.segment, name: e.target.value } }))} 
             />
             <div className="flex flex-col gap-1.5 w-full">
-              <label className="text-sm font-medium text-neutral-900">Description (Optional)</label>
+              <label className="text-sm font-medium text-[var(--text-primary)]">Description (Optional)</label>
               <textarea 
-                className="flex min-h-[60px] w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                className="flex min-h-[60px] w-full rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                 rows={2} 
                 value={modal.segment.description ?? ''} 
                 onChange={e => setModal(m => ({ ...m, segment: { ...m.segment, description: e.target.value } }))} 
               />
             </div>
 
-            <div className="mt-4 flex items-center justify-between border-b border-neutral-200 pb-2">
+            <div className="mt-4 flex items-center justify-between border-b border-[var(--border)] pb-2">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Filter Rules</span>
+                <span className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Filter Rules</span>
                 <Select 
                   className="h-7 py-0 px-2 text-xs w-24"
                   value={logic} 
@@ -267,16 +267,16 @@ export default function SegmentsPage() {
               </Button>
             </div>
 
-            <div className="rounded-md border border-neutral-200 bg-neutral-50 p-4">
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] p-4">
               {conditions.length === 0 ? (
-                <div className="text-center text-sm text-neutral-500 py-4">
+                <div className="text-center text-sm text-[var(--text-muted)] py-4">
                   No rules defined. This segment will include ALL contacts.
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
                   {conditions.map((rule, idx) => (
                     <div key={idx} className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-neutral-400 w-12 text-center">
+                      <span className="text-xs font-semibold text-[var(--text-muted)] w-12 text-center">
                         {idx === 0 ? 'Where' : logic}
                       </span>
                       
@@ -301,7 +301,7 @@ export default function SegmentsPage() {
                         placeholder="Value..." 
                       />
                       
-                      <Button variant="ghost" size="icon" icon="fa-solid fa-xmark" onClick={() => removeRule(idx)} className="text-neutral-400 hover:text-danger-600 shrink-0" />
+                      <Button variant="ghost" size="icon" icon="fa-solid fa-xmark" onClick={() => removeRule(idx)} className="text-[var(--text-muted)] hover:text-danger-500 shrink-0" />
                     </div>
                   ))}
                 </div>

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useInboxStore, useActiveConversation } from '@/stores/useInboxStore'
 import { formatMessageDate, getInitials, getAvatarColor } from '@/lib/utils'
@@ -16,7 +16,7 @@ interface PostDetails {
 }
 
 export default function PostCommenterPanel() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const conversation = useActiveConversation()
   const { selectedComment, messages } = useInboxStore()
   const [post, setPost] = useState<PostDetails | null>(null)

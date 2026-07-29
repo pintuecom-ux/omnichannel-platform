@@ -85,12 +85,12 @@ export default function ListsPage() {
   const filteredLists = lists.filter(l => l.name.toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <div className="flex h-full w-full flex-col bg-neutral-50 p-6 overflow-hidden">
+    <div className="flex h-full w-full flex-col p-6 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between pb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Static Lists</h1>
-          <p className="text-sm text-neutral-500 mt-1">Manage static audiences and imported contact lists.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">Static Lists</h1>
+          <p className="text-sm text-[var(--text-secondary)] mt-1">Manage static audiences and imported contact lists.</p>
         </div>
         <Button icon="fa-solid fa-plus" variant="primary" onClick={() => setModal({ open: true, mode: 'new', list: {} })}>
           Create List
@@ -113,7 +113,7 @@ export default function ListsPage() {
       </div>
 
       {/* Data Table */}
-      <div className="flex-1 overflow-auto bg-white rounded-lg border border-neutral-200">
+      <div className="flex-1 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--bg-surface)]">
         <Table>
           <TableHeader>
             <TableRow>
@@ -128,10 +128,10 @@ export default function ListsPage() {
             {filteredLists.map(list => (
               <TableRow key={list.id}>
                 <TableCell>
-                  <div className="font-medium text-neutral-900">{list.name}</div>
+                  <div className="font-medium text-[var(--text-primary)]">{list.name}</div>
                 </TableCell>
                 <TableCell>
-                  <div className="text-sm text-neutral-500">{list.description || '—'}</div>
+                  <div className="text-sm text-[var(--text-secondary)]">{list.description || '—'}</div>
                 </TableCell>
                 <TableCell>
                   <Badge variant="success" icon="fa-solid fa-user">
@@ -139,19 +139,19 @@ export default function ListsPage() {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="text-sm text-neutral-500">{new Date(list.created_at).toLocaleDateString()}</div>
+                  <div className="text-sm text-[var(--text-secondary)]">{new Date(list.created_at).toLocaleDateString()}</div>
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
                     <Button variant="ghost" size="icon" icon="fa-solid fa-pen" onClick={() => setModal({ open: true, mode: 'edit', list })} />
-                    <Button variant="ghost" size="icon" icon="fa-solid fa-trash" className="text-danger-600 hover:text-danger-700 hover:bg-danger-50" onClick={() => del(list.id)} />
+                    <Button variant="ghost" size="icon" icon="fa-solid fa-trash" className="text-danger-500 hover:text-danger-600 hover:bg-danger-500/10" onClick={() => del(list.id)} />
                   </div>
                 </TableCell>
               </TableRow>
             ))}
             {filteredLists.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-12 text-neutral-500">
+                <TableCell colSpan={5} className="text-center py-12 text-[var(--text-secondary)]">
                   {search ? 'No lists found matching your search.' : 'No lists created yet.'}
                 </TableCell>
               </TableRow>
@@ -173,9 +173,9 @@ export default function ListsPage() {
               onChange={e => upd('name', e.target.value)} 
             />
             <div className="flex flex-col gap-1.5 w-full">
-              <label className="text-sm font-medium text-neutral-900">Description (Optional)</label>
+              <label className="text-sm font-medium text-[var(--text-primary)]">Description (Optional)</label>
               <textarea 
-                className="flex min-h-[80px] w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                className="flex min-h-[80px] w-full rounded-lg border border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 text-sm text-[var(--text-primary)] shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
                 rows={3} 
                 value={modal.list.description ?? ''} 
                 onChange={e => upd('description', e.target.value)} 

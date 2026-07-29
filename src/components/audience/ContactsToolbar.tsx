@@ -35,19 +35,18 @@ export function ContactsToolbar({ selectedCount, onSearch, onAction }: ContactsT
         </div>
       </div>
 
-      <div className="flex items-center gap-2 bg-muted/30 p-2 rounded-lg border border-border/50">
+      <div className="flex items-center gap-3 bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border)]">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
             placeholder="Search contacts..."
-            className="pl-8 bg-background border-muted-foreground/20"
+            icon="fa-solid fa-magnifying-glass"
             value={searchQuery}
             onChange={handleSearchChange}
           />
         </div>
         
-        <Button variant="outline" size="sm" className="bg-background text-muted-foreground hover:text-foreground">
+        <Button variant="outline" size="sm">
           <Filter className="mr-2 h-4 w-4" />
           Filters
         </Button>

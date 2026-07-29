@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useInboxStore, useActiveConversation } from '@/stores/useInboxStore'
 import { formatMessageDate } from '@/lib/utils'
@@ -22,7 +22,7 @@ interface PostPreview {
 }
 
 export default function ChatWindow() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const {
     activeConversationId,
     messages,
