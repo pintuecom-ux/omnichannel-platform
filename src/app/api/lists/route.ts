@@ -30,19 +30,21 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { workspace_id, name, list_type, description, tags, double_opt_in_enabled } = body
+    const { workspace_id, name, type, list_type, description, visibility } = body
 
     if (!workspace_id || !name) return NextResponse.json({ error: 'Missing workspace_id or name' }, { status: 400 })
+
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `list-${Date.now()}`
 
     const { data, error } = await admin
       .from('lists')
       .insert({
         workspace_id,
         name,
-        list_type: list_type || 'standard',
-        description,
-        tags: tags || [],
-        double_opt_in_enabled: double_opt_in_enabled || false,
+        slug,
+        description: description || null,
+        type: type || list_type || 'static',
+        visibility: visibility || 'shared'
       })
       .select()
       .single()

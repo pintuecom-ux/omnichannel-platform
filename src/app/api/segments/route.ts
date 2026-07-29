@@ -30,18 +30,22 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { workspace_id, name, description, condition_set, tags } = body
+    const { workspace_id, name, description, condition_set, type, visibility } = body
 
     if (!workspace_id || !name || !condition_set) return NextResponse.json({ error: 'Missing workspace_id, name, or condition_set' }, { status: 400 })
+
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `segment-${Date.now()}`
 
     const { data, error } = await admin
       .from('segments')
       .insert({
         workspace_id,
         name,
-        description,
-        condition_set,
-        tags: tags || [],
+        slug,
+        description: description || null,
+        condition_set: condition_set || {},
+        type: type || 'live',
+        visibility: visibility || 'shared'
       })
       .select()
       .single()
