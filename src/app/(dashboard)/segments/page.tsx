@@ -1,7 +1,14 @@
 'use client'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Segment, ConditionSet } from '@/types'
+import Button from '@/components/ui/Button'
+import { Input, Select } from '@/components/ui/Input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
+import Badge from '@/components/ui/Badge'
+import { Modal, ModalContent, ModalHeader, ModalTitle, ModalFooter } from '@/components/ui/Modal'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { Filter } from 'lucide-react'
 
 const FIELD_OPTIONS = [
   { value: 'tags', label: 'Tags' },
@@ -25,6 +32,7 @@ export default function SegmentsPage() {
   const [saving, setSaving] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
   const [estimatedCount, setEstimatedCount] = useState<number | null>(null)
+  const [search, setSearch] = useState('')
 
   // Segment Builder State
   const [conditions, setConditions] = useState<any[]>([])
@@ -83,18 +91,6 @@ export default function SegmentsPage() {
     setConditions(prev => prev.filter((_, i) => i !== index))
   }
 
-  async function evaluateSegment() {
-    if (!workspaceId) return
-    setEvaluating(true)
-    try {
-      alert('Estimation requires saving the segment first in this implementation.')
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setEvaluating(false)
-    }
-  }
-
   async function save() {
     if (!workspaceId) return
     setSaving(true)
@@ -116,7 +112,6 @@ export default function SegmentsPage() {
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       
-      // If it's a new segment, we should evaluate it now to get the count
       if (modal.mode === 'new' && data.segment?.id) {
          await fetch(`/api/segments/${data.segment.id}/evaluate?workspace_id=${workspaceId}`)
       }
@@ -149,143 +144,188 @@ export default function SegmentsPage() {
     }
   }
 
+  const filteredSegments = segments.filter(s => s.name.toLowerCase().includes(search.toLowerCase()))
+
   return (
-    <div className="generic-page">
-      <div className="page-header">
-        <span className="page-title">
-          <i className="fa-solid fa-filter" style={{ color: 'var(--accent)', marginRight: 8 }} />
-          Dynamic Segments
-        </span>
-        <button className="btn btn-primary" onClick={() => openModal('new')}>
-          <i className="fa-solid fa-plus" /> Create Segment
-        </button>
+    <div className="flex h-full w-full flex-col bg-neutral-50 p-6 overflow-hidden">
+      <div className="flex items-center justify-between pb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Dynamic Segments</h1>
+          <p className="text-sm text-neutral-500 mt-1">Rule-based audiences that update in real-time.</p>
+        </div>
+        <Button icon="fa-solid fa-plus" variant="primary" onClick={() => openModal('new')}>
+          Create Segment
+        </Button>
       </div>
 
-      <div className="page-body">
-        <div className="data-table">
-          <div className="table-header">
-            <span className="table-title">Your Segments</span>
-          </div>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Segment Name</th>
-                <th>Description</th>
-                <th>Matching Contacts</th>
-                <th>Last Evaluated</th>
-                <th style={{ width: 90 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {segments.map(seg => (
-                <tr key={seg.id}>
-                  <td><div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{seg.name} <span className="pill" style={{ marginLeft: 6 }}>{seg.condition_set?.conditions?.length || 0} conditions</span></div></td>
-                  <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{seg.description || '—'}</td>
-                  <td>
-                    <div className="pill blue" style={{ padding: '4px 10px' }}>
-                      <i className="fa-solid fa-users" style={{ marginRight: 6 }} />{seg.cached_count || 0}
-                    </div>
-                  </td>
-                  <td style={{ fontSize: 12 }}>
+      <div className="flex items-center justify-between pb-4">
+        <div className="w-[320px]">
+          <Input 
+            placeholder="Search segments..." 
+            icon="fa-solid fa-magnifying-glass"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-auto bg-white rounded-lg border border-neutral-200">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[300px]">Segment Name</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Matching Contacts</TableHead>
+              <TableHead>Last Evaluated</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredSegments.map(seg => (
+              <TableRow key={seg.id}>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-neutral-900">{seg.name}</span>
+                    <Badge variant="ghost" size="xs">{seg.condition_set?.conditions?.length || 0} rules</Badge>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="text-sm text-neutral-500">{seg.description || '—'}</div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="info" icon="fa-solid fa-users">
+                    {seg.cached_count || 0}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="text-sm text-neutral-500">
                     {seg.last_calculated_at ? new Date(seg.last_calculated_at).toLocaleString() : 'Never'}
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="icon-btn" onClick={() => refreshCount(seg.id)} title="Refresh Count"><i className="fa-solid fa-rotate-right" style={{ fontSize: 11 }} /></button>
-                      <button className="icon-btn" onClick={() => openModal('edit', seg)}><i className="fa-solid fa-pen" style={{ fontSize: 11 }} /></button>
-                      <button className="icon-btn" onClick={() => del(seg.id)}><i className="fa-solid fa-trash" style={{ fontSize: 11, color: '#e84040' }} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {segments.length === 0 && (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No segments created yet.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" size="icon" icon="fa-solid fa-rotate-right" onClick={() => refreshCount(seg.id)} title="Refresh Count" />
+                    <Button variant="ghost" size="icon" icon="fa-solid fa-pen" onClick={() => openModal('edit', seg)} />
+                    <Button variant="ghost" size="icon" icon="fa-solid fa-trash" className="text-danger-600 hover:text-danger-700 hover:bg-danger-50" onClick={() => del(seg.id)} />
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+            {filteredSegments.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-12">
+                  <EmptyState 
+                    title={search ? 'No segments found' : 'No segments yet'} 
+                    description={search ? 'Adjust your search query.' : 'Create your first dynamic segment to organize contacts.'}
+                    icon={<Filter />}
+                    action={!search ? <Button variant="primary" onClick={() => openModal('new')}>Create Segment</Button> : undefined}
+                  />
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
       </div>
 
-      {modal.open && (
-        <div className="tpl-modal-overlay open" onClick={() => setModal(m => ({ ...m, open: false }))}>
-          <div className="tpl-modal" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
-            <div className="tpl-modal-header">
-              <div className="tpl-modal-title">{modal.mode === 'new' ? 'Create New Segment' : 'Edit Segment'}</div>
-              <button className="icon-btn" onClick={() => setModal(m => ({ ...m, open: false }))}><i className="fa-solid fa-xmark" /></button>
+      <Modal open={modal.open} onOpenChange={(open) => !open && setModal(m => ({ ...m, open: false }))}>
+        <ModalContent className="max-w-2xl">
+          <ModalHeader>
+            <ModalTitle>{modal.mode === 'new' ? 'Create New Segment' : 'Edit Segment'}</ModalTitle>
+          </ModalHeader>
+          <div className="flex flex-col gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
+            <Input 
+              label="Segment Name" 
+              placeholder="e.g. Active VIP Customers" 
+              value={modal.segment.name ?? ''} 
+              onChange={e => setModal(m => ({ ...m, segment: { ...m.segment, name: e.target.value } }))} 
+            />
+            <div className="flex flex-col gap-1.5 w-full">
+              <label className="text-sm font-medium text-neutral-900">Description (Optional)</label>
+              <textarea 
+                className="flex min-h-[60px] w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                rows={2} 
+                value={modal.segment.description ?? ''} 
+                onChange={e => setModal(m => ({ ...m, segment: { ...m.segment, description: e.target.value } }))} 
+              />
             </div>
-            
-            <div className="tpl-modal-body" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
-              <div className="form-group">
-                <div className="form-label">Segment Name</div>
-                <input className="form-input" value={modal.segment.name ?? ''} onChange={e => setModal(m => ({ ...m, segment: { ...m.segment, name: e.target.value } }))} placeholder="e.g. Active VIP Customers in Delhi" />
-              </div>
-              <div className="form-group">
-                <div className="form-label">Description (Optional)</div>
-                <textarea className="form-input" rows={2} value={modal.segment.description ?? ''} onChange={e => setModal(m => ({ ...m, segment: { ...m.segment, description: e.target.value } }))} />
-              </div>
 
-              <div style={{ marginTop: 24, marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                  Filter Rules (
-                  <select value={logic} onChange={e => setLogic(e.target.value as 'AND' | 'OR')} className="form-input" style={{ padding: '0 4px', height: 24, fontSize: 11 }}>
-                    <option value="AND">AND</option>
-                    <option value="OR">OR</option>
-                  </select> Logic)
+            <div className="mt-4 flex items-center justify-between border-b border-neutral-200 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-neutral-500 uppercase tracking-wider">Filter Rules</span>
+                <Select 
+                  className="h-7 py-0 px-2 text-xs w-24"
+                  value={logic} 
+                  onChange={e => setLogic(e.target.value as 'AND' | 'OR')}
+                  options={[
+                    { value: 'AND', label: 'Match ALL' },
+                    { value: 'OR', label: 'Match ANY' }
+                  ]}
+                />
+              </div>
+              <Button variant="secondary" size="sm" icon="fa-solid fa-plus" onClick={addRule}>
+                Add Rule
+              </Button>
+            </div>
+
+            <div className="rounded-md border border-neutral-200 bg-neutral-50 p-4">
+              {conditions.length === 0 ? (
+                <div className="text-center text-sm text-neutral-500 py-4">
+                  No rules defined. This segment will include ALL contacts.
                 </div>
-                <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 11 }} onClick={addRule}>
-                  <i className="fa-solid fa-plus" style={{ marginRight: 4 }}/> Add Rule
-                </button>
-              </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {conditions.map((rule, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-neutral-400 w-12 text-center">
+                        {idx === 0 ? 'Where' : logic}
+                      </span>
+                      
+                      <Select 
+                        className="flex-1"
+                        value={rule.field} 
+                        onChange={e => updateRule(idx, 'field', e.target.value)}
+                        options={FIELD_OPTIONS}
+                      />
+                      
+                      <Select 
+                        className="flex-1"
+                        value={rule.operator} 
+                        onChange={e => updateRule(idx, 'operator', e.target.value)}
+                        options={OPERATOR_OPTIONS}
+                      />
 
-              <div style={{ background: 'var(--bg-surface)', padding: 16, borderRadius: 8, border: '1px solid var(--border)' }}>
-                {conditions.length === 0 ? (
-                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: '20px 0' }}>
-                    No rules defined. This segment will include ALL contacts.
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {conditions.map((rule, idx) => (
-                      <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', minWidth: 40 }}>
-                          {idx === 0 ? 'Where' : logic}
-                        </span>
-                        
-                        <select className="form-input" style={{ flex: 1 }} value={rule.field} onChange={e => updateRule(idx, 'field', e.target.value)}>
-                          {FIELD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
-                        
-                        <select className="form-input" style={{ flex: 1 }} value={rule.operator} onChange={e => updateRule(idx, 'operator', e.target.value)}>
-                          {OPERATOR_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
-
-                        <input className="form-input" style={{ flex: 1.5 }} value={rule.value} onChange={e => updateRule(idx, 'value', e.target.value)} placeholder="Value..." />
-                        
-                        <button className="icon-btn" onClick={() => removeRule(idx)}>
-                          <i className="fa-solid fa-xmark" style={{ color: 'var(--text-muted)' }} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <div className="tpl-modal-footer" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <div>
-                 {estimatedCount !== null && (
-                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                     Estimated matches: <strong style={{ color: 'var(--text-primary)' }}>{estimatedCount}</strong>
-                   </span>
-                 )}
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-secondary" onClick={() => setModal(m => ({ ...m, open: false }))}>Cancel</button>
-                <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save Segment'}</button>
-              </div>
+                      <Input 
+                        className="flex-[1.5]"
+                        value={rule.value} 
+                        onChange={e => updateRule(idx, 'value', e.target.value)} 
+                        placeholder="Value..." 
+                      />
+                      
+                      <Button variant="ghost" size="icon" icon="fa-solid fa-xmark" onClick={() => removeRule(idx)} className="text-neutral-400 hover:text-danger-600 shrink-0" />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+          
+          <ModalFooter className="flex justify-between items-center w-full">
+            <div>
+              {estimatedCount !== null && (
+                <span className="text-sm text-neutral-500">
+                  Estimated matches: <strong className="text-neutral-900">{estimatedCount}</strong>
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => setModal(m => ({ ...m, open: false }))}>Cancel</Button>
+              <Button variant="primary" onClick={save} loading={saving}>
+                {modal.mode === 'new' ? 'Create Segment' : 'Save Changes'}
+              </Button>
+            </div>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   )
 }

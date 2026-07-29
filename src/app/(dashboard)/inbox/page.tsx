@@ -7,6 +7,10 @@ import ConversationPanel from '@/components/inbox/ConversationPanel'
 import ChatWindow from '@/components/inbox/ChatWindow'
 import InfoPanel from '@/components/inbox/InfoPanel'
 import type { Conversation } from '@/types'
+import { Alert } from '@/components/ui/Alert'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { MessageCircle, RefreshCw } from 'lucide-react'
+import Button from '@/components/ui/Button'
 
 export default function InboxPage() {
   const supabase = createClient()
@@ -14,12 +18,18 @@ export default function InboxPage() {
   const { setProfile } = useAuthStore()
   const [loadError, setLoadError] = useState<string | null>(null)
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   const loadData = useCallback(async () => {
     setLoadError(null)
+    setIsLoading(true)
 
     const { data: { session } } = await supabase.auth.getSession()
-    if (!session) { setLoadError('Not logged in'); return }
+    if (!session) { 
+      setLoadError('Not logged in')
+      setIsLoading(false)
+      return 
+    }
 
     const { data: profile, error: profileErr } = await supabase
       .from('profiles')
@@ -37,6 +47,7 @@ export default function InboxPage() {
       } else {
         setLoadError(`Could not load profile.\nError [${code}]: ${msg}`)
       }
+      setIsLoading(false)
       return
     }
 
@@ -68,6 +79,7 @@ export default function InboxPage() {
     if (convErr) {
       console.error('[Inbox] Conversations error:', convErr.message)
       setLoadError(`Error loading conversations: ${convErr.message}`)
+      setIsLoading(false)
       return
     }
 
@@ -93,6 +105,7 @@ export default function InboxPage() {
 
     console.log(`[Inbox] Loaded ${merged.length} conversations`)
     setConversations(merged as Conversation[])
+    setIsLoading(false)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRefresh = useCallback(async () => {
@@ -132,20 +145,39 @@ export default function InboxPage() {
 
   if (loadError) {
     return (
-      <div className="page-inbox" style={{ alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, padding: 32 }}>
-        <i className="fa-solid fa-circle-exclamation" style={{ fontSize: 40, color: 'var(--accent4)', opacity: 0.7 }} />
-        <p style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center', maxWidth: 440, lineHeight: 1.7, whiteSpace: 'pre-line' }}>
-          {loadError}
-        </p>
-        <button className="btn btn-secondary" onClick={handleRefresh}>
-          <i className="fa-solid fa-rotate" /> Retry
-        </button>
+      <div className="flex h-full w-full items-center justify-center p-8 bg-neutral-50/50">
+        <div className="max-w-md w-full flex flex-col gap-4">
+          <Alert variant="error" title="Failed to load inbox">
+            {loadError}
+          </Alert>
+          <Button variant="secondary" onClick={handleRefresh} className="self-center">
+            <RefreshCw className="mr-2 h-4 w-4" /> Retry
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full w-full overflow-hidden bg-white">
+        <div className="w-[340px] border-r border-neutral-200 flex flex-col p-4 gap-4">
+          <div className="h-10 bg-neutral-100 rounded-lg animate-pulse" />
+          <div className="flex-1 flex flex-col gap-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-20 bg-neutral-100 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center bg-neutral-50 border-l border-neutral-200">
+          <div className="w-64 h-64 bg-neutral-100 rounded-full animate-pulse opacity-50" />
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="page-inbox">
+    <div className="flex h-full w-full overflow-hidden bg-white">
       <ConversationPanel onRefresh={handleRefresh} />
       {activeConversationId ? (
         <>
@@ -153,11 +185,15 @@ export default function InboxPage() {
           <InfoPanel />
         </>
       ) : (
-        <div className="empty-inbox">
-          <i className="fa-solid fa-comments" />
-          <p>Select a conversation to start</p>
+        <div className="flex flex-1 items-center justify-center bg-neutral-50 p-8 border-l border-neutral-200">
+          <EmptyState 
+            title="Your inbox is empty" 
+            description="Select a conversation from the left to start chatting."
+            icon={<MessageCircle />}
+          />
         </div>
       )}
     </div>
   )
 }
+

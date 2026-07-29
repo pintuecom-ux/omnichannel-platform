@@ -6,77 +6,92 @@
  */
 
 import { HTMLAttributes } from 'react'
+import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
-export type BadgeVariant =
-  | 'default'
-  | 'primary'
-  | 'success'
-  | 'warning'
-  | 'danger'
-  | 'info'
-  | 'whatsapp'
-  | 'instagram'
-  | 'facebook'
-  | 'ghost'
+const badgeVariants = cva(
+  'inline-flex items-center justify-center font-medium transition-colors border',
+  {
+    variants: {
+      variant: {
+        default: 'border-transparent bg-neutral-100 text-neutral-800',
+        primary: 'border-transparent bg-primary-100 text-primary-800',
+        success: 'border-transparent bg-success-100 text-success-800',
+        warning: 'border-transparent bg-warning-100 text-warning-800',
+        danger: 'border-transparent bg-danger-100 text-danger-800',
+        info: 'border-transparent bg-blue-100 text-blue-800',
+        whatsapp: 'border-transparent bg-[#25D366]/10 text-[#075E54]',
+        instagram: 'border-transparent bg-[#E1306C]/10 text-[#E1306C]',
+        facebook: 'border-transparent bg-[#1877F2]/10 text-[#1877F2]',
+        ghost: 'border-neutral-200 bg-transparent text-neutral-600',
+      },
+      size: {
+        xs: 'text-[10px] px-1.5 py-0.5',
+        sm: 'text-xs px-2 py-0.5',
+        md: 'text-sm px-2.5 py-1',
+      },
+      pill: {
+        true: 'rounded-full',
+        false: 'rounded-md',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'sm',
+      pill: true,
+    },
+  }
+)
 
-export type BadgeSize = 'xs' | 'sm' | 'md'
-
-interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
-  variant?: BadgeVariant
-  size?:    BadgeSize
-  dot?:     boolean         // show a colored dot before the label
-  icon?:    string          // fa icon class
-  pill?:    boolean         // fully rounded (default true)
+export interface BadgeProps
+  extends HTMLAttributes<HTMLSpanElement>,
+    VariantProps<typeof badgeVariants> {
+  dot?: boolean // show a colored dot before the label
+  icon?: string // fa icon class
 }
 
-const variantStyles: Record<BadgeVariant, string> = {
-  default:   'badge-default',
-  primary:   'badge-primary',
-  success:   'badge-success',
-  warning:   'badge-warning',
-  danger:    'badge-danger',
-  info:      'badge-info',
-  whatsapp:  'badge-wa',
-  instagram: 'badge-ig',
-  facebook:  'badge-fb',
-  ghost:     'badge-ghost',
-}
-
-const sizeStyles: Record<BadgeSize, string> = {
-  xs: 'badge-xs',
-  sm: 'badge-sm',
-  md: 'badge-md',
-}
+const dotVariants = cva('w-1.5 h-1.5 rounded-full mr-1.5 shrink-0', {
+  variants: {
+    variant: {
+      default: 'bg-neutral-500',
+      primary: 'bg-primary-500',
+      success: 'bg-success-500',
+      warning: 'bg-warning-500',
+      danger: 'bg-danger-500',
+      info: 'bg-blue-500',
+      whatsapp: 'bg-[#25D366]',
+      instagram: 'bg-[#E1306C]',
+      facebook: 'bg-[#1877F2]',
+      ghost: 'bg-neutral-400',
+    },
+  },
+  defaultVariants: {
+    variant: 'default',
+  },
+})
 
 export default function Badge({
-  variant = 'default',
-  size    = 'sm',
-  dot     = false,
+  variant,
+  size,
+  pill,
+  dot = false,
   icon,
-  pill    = true,
   children,
   className,
   ...rest
 }: BadgeProps) {
   return (
     <span
-      className={cn(
-        'badge',
-        variantStyles[variant],
-        sizeStyles[size],
-        pill && 'badge-pill',
-        className
-      )}
+      className={cn(badgeVariants({ variant, size, pill, className }))}
       {...rest}
     >
       {dot && (
         <span
-          className="badge-dot"
+          className={dotVariants({ variant })}
           aria-hidden="true"
         />
       )}
-      {icon && <i className={icon} style={{ marginRight: children ? 4 : 0 }} />}
+      {icon && <i className={cn(icon, children ? 'mr-1.5' : '')} />}
       {children}
     </span>
   )
@@ -86,19 +101,19 @@ export default function Badge({
 
 export function PlatformBadge({ platform }: { platform: 'whatsapp' | 'instagram' | 'facebook' }) {
   const map = {
-    whatsapp:  { variant: 'whatsapp'  as BadgeVariant, icon: 'fa-brands fa-whatsapp', label: 'WA' },
-    instagram: { variant: 'instagram' as BadgeVariant, icon: 'fa-brands fa-instagram', label: 'IG' },
-    facebook:  { variant: 'facebook'  as BadgeVariant, icon: 'fa-brands fa-facebook',  label: 'FB' },
+    whatsapp: { variant: 'whatsapp' as const, icon: 'fa-brands fa-whatsapp', label: 'WA' },
+    instagram: { variant: 'instagram' as const, icon: 'fa-brands fa-instagram', label: 'IG' },
+    facebook: { variant: 'facebook' as const, icon: 'fa-brands fa-facebook', label: 'FB' },
   }
   const { variant, icon, label } = map[platform]
   return <Badge variant={variant} icon={icon} size="xs">{label}</Badge>
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, BadgeVariant> = {
-    open:    'success',
+  const map: Record<string, BadgeProps['variant']> = {
+    open: 'success',
     pending: 'warning',
-    closed:  'ghost',
+    closed: 'ghost',
     snoozed: 'info',
   }
   return (
@@ -109,12 +124,12 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 export function TemplateBadge({ status }: { status: string }) {
-  const map: Record<string, BadgeVariant> = {
+  const map: Record<string, BadgeProps['variant']> = {
     approved: 'success',
-    pending:  'warning',
+    pending: 'warning',
     rejected: 'danger',
-    draft:    'ghost',
-    paused:   'info',
+    draft: 'ghost',
+    paused: 'info',
     disabled: 'ghost',
   }
   return (

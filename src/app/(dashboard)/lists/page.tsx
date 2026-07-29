@@ -1,7 +1,12 @@
 'use client'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { List } from '@/types'
+import Button from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
+import Badge from '@/components/ui/Badge'
+import { Modal, ModalContent, ModalHeader, ModalTitle, ModalFooter } from '@/components/ui/Modal'
 
 export default function ListsPage() {
   const supabase = createClient()
@@ -9,6 +14,7 @@ export default function ListsPage() {
   const [workspaceId, setWorkspaceId] = useState('')
   const [modal, setModal] = useState<{ open: boolean; mode: 'new' | 'edit'; list: Partial<List> }>({ open: false, mode: 'new', list: {} })
   const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
 
   useEffect(() => { init() }, [])
 
@@ -46,7 +52,7 @@ export default function ListsPage() {
       const url = '/api/lists'
       const method = modal.mode === 'new' ? 'POST' : 'PUT'
       const body = modal.mode === 'new' 
-        ? { workspace_id: workspaceId, name, description, type: 'static', visibility: 'shared', active_count: 1250 } 
+        ? { workspace_id: workspaceId, name, description, type: 'static', visibility: 'shared', active_count: 0 } 
         : { id, workspace_id: workspaceId, name, description }
       
       const res = await fetch(url, {
@@ -76,86 +82,114 @@ export default function ListsPage() {
     }
   }
 
+  const filteredLists = lists.filter(l => l.name.toLowerCase().includes(search.toLowerCase()))
+
   return (
-    <div className="generic-page">
-      <div className="page-header">
-        <span className="page-title">
-          <i className="fa-solid fa-list-ul" style={{ color: 'var(--accent)', marginRight: 8 }} />
-          Static Lists
-        </span>
-        <button className="btn btn-primary" onClick={() => setModal({ open: true, mode: 'new', list: {} })}>
-          <i className="fa-solid fa-plus" /> Create List
-        </button>
+    <div className="flex h-full w-full flex-col bg-neutral-50 p-6 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Static Lists</h1>
+          <p className="text-sm text-neutral-500 mt-1">Manage static audiences and imported contact lists.</p>
+        </div>
+        <Button icon="fa-solid fa-plus" variant="primary" onClick={() => setModal({ open: true, mode: 'new', list: {} })}>
+          Create List
+        </Button>
       </div>
 
-      <div className="page-body">
-        <div className="data-table">
-          <div className="table-header">
-            <span className="table-title">Your Lists</span>
-          </div>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Description</th>
-                <th>Subscribers</th>
-                <th>Created</th>
-                <th style={{ width: 70 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {lists.map(list => (
-                <tr key={list.id}>
-                  <td><div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{list.name}</div></td>
-                  <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{list.description || '—'}</td>
-                  <td>
-                    <div className="pill green" style={{ padding: '4px 10px' }}>
-                      <i className="fa-solid fa-user" style={{ marginRight: 6 }} />{list.contact_count || 0}
-                    </div>
-                  </td>
-                  <td style={{ fontSize: 12 }}>{new Date(list.created_at).toLocaleDateString()}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="icon-btn" onClick={() => setModal({ open: true, mode: 'edit', list })}><i className="fa-solid fa-pen" style={{ fontSize: 11 }} /></button>
-                      <button className="icon-btn" onClick={() => del(list.id)}><i className="fa-solid fa-trash" style={{ fontSize: 11, color: '#e84040' }} /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {lists.length === 0 && (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No lists created yet.</td></tr>
-              )}
-            </tbody>
-          </table>
+      {/* Toolbar */}
+      <div className="flex items-center justify-between pb-4">
+        <div className="w-[320px]">
+          <Input 
+            placeholder="Search lists..." 
+            icon="fa-solid fa-magnifying-glass"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" icon="fa-solid fa-filter">Filters</Button>
         </div>
       </div>
 
-      {modal.open && (
-        <div className="tpl-modal-overlay open" onClick={() => setModal(m => ({ ...m, open: false }))}>
-          <div className="tpl-modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
-            <div className="tpl-modal-header">
-              <div className="tpl-modal-title">{modal.mode === 'new' ? 'Create New List' : 'Edit List'}</div>
-              <button className="icon-btn" onClick={() => setModal(m => ({ ...m, open: false }))}><i className="fa-solid fa-xmark" /></button>
-            </div>
-            
-            <div className="tpl-modal-body">
-              <div className="form-group">
-                <div className="form-label">List Name</div>
-                <input className="form-input" value={modal.list.name ?? ''} onChange={e => upd('name', e.target.value)} placeholder="e.g. Newsletter Subscribers" />
-              </div>
-              <div className="form-group">
-                <div className="form-label">Description (Optional)</div>
-                <textarea className="form-input" rows={3} value={modal.list.description ?? ''} onChange={e => upd('description', e.target.value)} />
-              </div>
-            </div>
-            
-            <div className="tpl-modal-footer">
-              <button className="btn btn-secondary" onClick={() => setModal(m => ({ ...m, open: false }))}>Cancel</button>
-              <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save List'}</button>
+      {/* Data Table */}
+      <div className="flex-1 overflow-auto bg-white rounded-lg border border-neutral-200">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[300px]">List Name</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Subscribers</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredLists.map(list => (
+              <TableRow key={list.id}>
+                <TableCell>
+                  <div className="font-medium text-neutral-900">{list.name}</div>
+                </TableCell>
+                <TableCell>
+                  <div className="text-sm text-neutral-500">{list.description || '—'}</div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="success" icon="fa-solid fa-user">
+                    {list.contact_count || 0}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="text-sm text-neutral-500">{new Date(list.created_at).toLocaleDateString()}</div>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" size="icon" icon="fa-solid fa-pen" onClick={() => setModal({ open: true, mode: 'edit', list })} />
+                    <Button variant="ghost" size="icon" icon="fa-solid fa-trash" className="text-danger-600 hover:text-danger-700 hover:bg-danger-50" onClick={() => del(list.id)} />
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+            {filteredLists.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-12 text-neutral-500">
+                  {search ? 'No lists found matching your search.' : 'No lists created yet.'}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <Modal open={modal.open} onOpenChange={(open) => !open && setModal(m => ({ ...m, open: false }))}>
+        <ModalContent>
+          <ModalHeader>
+            <ModalTitle>{modal.mode === 'new' ? 'Create New List' : 'Edit List'}</ModalTitle>
+          </ModalHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <Input 
+              label="List Name" 
+              placeholder="e.g. Newsletter Subscribers" 
+              value={modal.list.name ?? ''} 
+              onChange={e => upd('name', e.target.value)} 
+            />
+            <div className="flex flex-col gap-1.5 w-full">
+              <label className="text-sm font-medium text-neutral-900">Description (Optional)</label>
+              <textarea 
+                className="flex min-h-[80px] w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                rows={3} 
+                value={modal.list.description ?? ''} 
+                onChange={e => upd('description', e.target.value)} 
+              />
             </div>
           </div>
-        </div>
-      )}
+          <ModalFooter>
+            <Button variant="secondary" onClick={() => setModal(m => ({ ...m, open: false }))}>Cancel</Button>
+            <Button variant="primary" onClick={save} loading={saving}>
+              {modal.mode === 'new' ? 'Create List' : 'Save Changes'}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   )
 }

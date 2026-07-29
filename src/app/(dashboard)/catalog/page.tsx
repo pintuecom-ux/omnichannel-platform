@@ -207,14 +207,14 @@ export default function MetaCatalogPage() {
       {/* ── Page Header ── */}
       <div className="page-header">
         <span className="page-title">
-          <i className="fa-solid fa-store" style={{ color: '#00A884', marginRight: 10 }} />
+          <i className="fa-solid fa-store" style={{ color: 'var(--primary-500)', marginRight: 10 }} />
           Meta Commerce Catalogs & Products
         </span>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button className="btn btn-secondary" onClick={() => setShowCreateCatalog(true)}>
             <i className="fa-solid fa-folder-plus" style={{ marginRight: 6 }} /> New Catalog
           </button>
-          <button className="btn btn-primary" onClick={() => setShowAddProduct(true)} style={{ background: '#25D366', borderColor: '#25D366', color: '#fff' }}>
+          <button className="btn btn-primary" onClick={() => setShowAddProduct(true)} style={{ background: 'var(--success-500)', borderColor: 'var(--success-500)', color: '#fff' }}>
             <i className="fa-solid fa-plus" style={{ marginRight: 6 }} /> Add Product SKU
           </button>
         </div>
@@ -223,12 +223,12 @@ export default function MetaCatalogPage() {
       {/* ── Status Banner ── */}
       <div style={{ padding: '12px 24px', background: 'rgba(0, 168, 132, 0.08)', borderBottom: '1px solid var(--border)', fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <i className="fa-brands fa-meta" style={{ color: '#0084FF', fontSize: 16 }} />
+          <i className="fa-brands fa-meta" style={{ color: 'var(--info-500)', fontSize: 16 }} />
           <span>
             Real-Time <strong>Meta Commerce Manager v25.0 API</strong>. Each product below lists its assigned <strong>Catalog Name & Catalog ID</strong> and is immediately taggable across Facebook Shops, Instagram Reels/Feed, and Content Planner.
           </span>
         </div>
-        <span style={{ fontSize: 11, fontWeight: 600, color: isMetaConnected ? '#25D366' : 'var(--accent3)', display: 'flex', alignItems: 'center', gap: 5 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: isMetaConnected ? 'var(--success-500)' : 'var(--accent3)', display: 'flex', alignItems: 'center', gap: 5 }}>
           <i className={`fa-solid ${isMetaConnected ? 'fa-circle-check' : 'fa-triangle-exclamation'}`} />
           {isMetaConnected ? 'Meta Live API Connected' : 'Storefront Direct Catalog Mode'}
         </span>
@@ -238,7 +238,7 @@ export default function MetaCatalogPage() {
         {/* ── Metrics Cards Row ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 20 }}>
           <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(0, 168, 132, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#00A884' }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--primary-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--primary-500)' }}>
               <i className="fa-solid fa-boxes-stacked" />
             </div>
             <div>
@@ -248,7 +248,7 @@ export default function MetaCatalogPage() {
           </div>
 
           <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(0, 132, 255, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#0084FF' }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(0, 132, 255, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--info-500)' }}>
               <i className="fa-solid fa-folder-tree" />
             </div>
             <div>
@@ -258,7 +258,7 @@ export default function MetaCatalogPage() {
           </div>
 
           <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(37, 211, 102, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#25D366' }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(37, 211, 102, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--success-500)' }}>
               <i className="fa-solid fa-circle-check" />
             </div>
             <div>
@@ -284,7 +284,7 @@ export default function MetaCatalogPage() {
         <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Catalog Filter Dropdown */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 10, padding: '6px 12px' }}>
-            <i className="fa-solid fa-filter" style={{ color: '#00A884', fontSize: 12 }} />
+            <i className="fa-solid fa-filter" style={{ color: 'var(--primary-500)', fontSize: 12 }} />
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Filter by Catalog:</span>
             <select
               value={selectedCatalogId}
@@ -368,7 +368,7 @@ export default function MetaCatalogPage() {
                         ;(e.currentTarget as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop'
                       }}
                     />
-                    <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, color: '#25D366' }}>
+                    <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, color: 'var(--success-500)' }}>
                       {formattedPrice} {p.currency || 'USD'}
                     </div>
                     <div style={{ position: 'absolute', bottom: 8, left: 8, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', padding: '2px 8px', borderRadius: 6, fontSize: 9, fontWeight: 600, color: 'var(--text-muted)' }}>
@@ -389,14 +389,14 @@ export default function MetaCatalogPage() {
 
                     {/* ── Catalog Name & Catalog ID Badge ── */}
                     <div style={{ background: 'rgba(0, 132, 255, 0.08)', border: '1px solid rgba(0, 132, 255, 0.2)', borderRadius: 8, padding: '5px 8px', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <i className="fa-solid fa-folder-tree" style={{ color: '#0084FF', fontSize: 10, flexShrink: 0 }} />
-                      <div style={{ fontSize: 10, color: '#0084FF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                      <i className="fa-solid fa-folder-tree" style={{ color: 'var(--info-500)', fontSize: 10, flexShrink: 0 }} />
+                      <div style={{ fontSize: 10, color: 'var(--info-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
                         {p.catalog_name} <span style={{ opacity: 0.7, fontWeight: 400 }}>(ID: {p.catalog_id})</span>
                       </div>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                      <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: isInStock ? 'rgba(37,211,102,0.1)' : 'rgba(232,64,64,0.1)', color: isInStock ? '#25D366' : '#e84040', fontWeight: 600 }}>
+                      <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: isInStock ? 'rgba(37,211,102,0.1)' : 'rgba(232,64,64,0.1)', color: isInStock ? 'var(--success-500)' : '#e84040', fontWeight: 600 }}>
                         ● {isInStock ? 'In Stock' : 'Out of Stock'}
                       </span>
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -430,7 +430,7 @@ export default function MetaCatalogPage() {
           <div className="tpl-modal" style={{ width: 680, maxWidth: '92vw' }} onClick={e => e.stopPropagation()}>
             <div className="tpl-modal-header">
               <div className="tpl-modal-title">
-                <i className="fa-solid fa-plus" style={{ color: '#25D366', marginRight: 8 }} />
+                <i className="fa-solid fa-plus" style={{ color: 'var(--success-500)', marginRight: 8 }} />
                 Add Product to Meta Commerce Catalog
               </div>
               <button className="icon-btn" onClick={() => setShowAddProduct(false)}><i className="fa-solid fa-xmark" /></button>
@@ -444,7 +444,7 @@ export default function MetaCatalogPage() {
                   </div>
                 )}
                 {formSuccess && (
-                  <div style={{ gridColumn: '1 / -1', background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#25D366' }}>
+                  <div style={{ gridColumn: '1 / -1', background: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--success-500)' }}>
                     <i className="fa-solid fa-circle-check" style={{ marginRight: 6 }} />{formSuccess}
                   </div>
                 )}
@@ -532,7 +532,7 @@ export default function MetaCatalogPage() {
 
               <div className="tpl-modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddProduct(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={submitting} style={{ background: '#25D366', borderColor: '#25D366', color: '#fff' }}>
+                <button type="submit" className="btn btn-primary" disabled={submitting} style={{ background: 'var(--success-500)', borderColor: 'var(--success-500)', color: '#fff' }}>
                   {submitting ? <><i className="fa-solid fa-spinner fa-spin" style={{ marginRight: 6 }} />Syncing to Meta…</> : <><i className="fa-solid fa-paper-plane" style={{ marginRight: 6 }} />Publish SKU to Meta</>}
                 </button>
               </div>
@@ -547,7 +547,7 @@ export default function MetaCatalogPage() {
           <div className="tpl-modal" style={{ width: 440 }} onClick={e => e.stopPropagation()}>
             <div className="tpl-modal-header">
               <div className="tpl-modal-title">
-                <i className="fa-solid fa-folder-plus" style={{ color: '#00A884', marginRight: 8 }} />
+                <i className="fa-solid fa-folder-plus" style={{ color: 'var(--primary-500)', marginRight: 8 }} />
                 Create New Meta Commerce Catalog
               </div>
               <button className="icon-btn" onClick={() => setShowCreateCatalog(false)}><i className="fa-solid fa-xmark" /></button>

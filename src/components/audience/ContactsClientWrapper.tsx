@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { Contact } from '@/types'
 import { ContactsGrid } from './ContactsGrid'
 import { ContactsToolbar } from './ContactsToolbar'
+import { CreateContactModal } from './CreateContactModal'
 
 interface Props {
   initialContacts: Contact[]
@@ -12,6 +13,7 @@ interface Props {
 export function ContactsClientWrapper({ initialContacts }: Props) {
   const [contacts, setContacts] = useState<Contact[]>(initialContacts)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
 
   const handleSearch = (query: string) => {
     // Basic local filter for demo purposes. 
@@ -26,7 +28,11 @@ export function ContactsClientWrapper({ initialContacts }: Props) {
   }
 
   const handleAction = (action: string) => {
-    console.log(`Action triggered: ${action} on ${selectedIds.length} contacts`)
+    if (action === 'new') {
+      setIsCreateOpen(true)
+    } else {
+      console.log(`Action triggered: ${action} on ${selectedIds.length} contacts`)
+    }
   }
 
   return (
@@ -39,6 +45,14 @@ export function ContactsClientWrapper({ initialContacts }: Props) {
       <ContactsGrid 
         contacts={contacts} 
         onSelectionChange={setSelectedIds} 
+      />
+      <CreateContactModal 
+        open={isCreateOpen} 
+        onOpenChange={setIsCreateOpen}
+        onSuccess={() => {
+          // Ideally refresh contacts list here
+          console.log("Contact created successfully")
+        }}
       />
     </>
   )

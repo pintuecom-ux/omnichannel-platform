@@ -58,8 +58,8 @@ export interface MetaTemplateVariable {
 }
 
 const CHANNEL_CONFIG: Record<string, { label: string; icon: string; color: string; rule: string; badge: string }> = {
-  whatsapp: { label: 'WhatsApp Business API', icon: 'fa-whatsapp', color: '#25D366', rule: 'Requires pre-approved Meta Template, Flow, or Catalog SKU outside 24h window.', badge: 'Meta v25.0 Compliant' },
-  messenger: { label: 'Facebook Messenger', icon: 'fa-facebook-messenger', color: '#0084FF', rule: 'Strict Meta 24-hour promotional window. Inactive users automatically failover.', badge: '24h Window Guard' },
+  whatsapp: { label: 'WhatsApp Business API', icon: 'fa-whatsapp', color: 'var(--success-500)', rule: 'Requires pre-approved Meta Template, Flow, or Catalog SKU outside 24h window.', badge: 'Meta v25.0 Compliant' },
+  messenger: { label: 'Facebook Messenger', icon: 'fa-facebook-messenger', color: 'var(--info-500)', rule: 'Strict Meta 24-hour promotional window. Inactive users automatically failover.', badge: '24h Window Guard' },
   instagram: { label: 'Instagram Direct (DM)', icon: 'fa-instagram', color: '#c084fc', rule: 'Requires prior DM thread or story reaction within last 24h.', badge: 'IG API Safe' },
   sms: { label: 'SMS Text Messaging', icon: 'fa-comment-sms', color: '#3b82f6', rule: 'Requires express written consent under US TCPA & telemarketing laws.', badge: 'TCPA Verified' },
   email: { label: 'Email Marketing', icon: 'fa-envelope', color: '#f59e0b', rule: 'CAN-SPAM & GDPR compliant. Unsubscribe headers injected automatically.', badge: 'GDPR / CAN-SPAM' },
@@ -574,10 +574,10 @@ export default function BroadcastPage() {
       {/* ── Page Header ── */}
       <div className="page-header">
         <span className="page-title">
-          <i className="fa-solid fa-satellite-dish" style={{ color: '#00A884', marginRight: 10 }} />
+          <i className="fa-solid fa-satellite-dish" style={{ color: 'var(--primary-500)', marginRight: 10 }} />
           Universal Multi-Channel Broadcast & Meta Compliance Engine
         </span>
-        <button className="btn btn-primary" onClick={() => { setShowWizard(true); setWizardStep(1) }} style={{ background: '#25D366', borderColor: '#25D366', color: '#fff' }}>
+        <button className="btn btn-primary" onClick={() => { setShowWizard(true); setWizardStep(1) }} style={{ background: 'var(--success-500)', borderColor: 'var(--success-500)', color: '#fff' }}>
           <i className="fa-solid fa-bullhorn" style={{ marginRight: 6 }} /> Create Multi-Channel Broadcast
         </button>
       </div>
@@ -585,10 +585,10 @@ export default function BroadcastPage() {
       {/* ── Meta WABA & Compliance Guard Status Banner ── */}
       <div style={{ padding: '12px 24px', background: 'rgba(0, 168, 132, 0.08)', borderBottom: '1px solid var(--border)', fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <i className="fa-brands fa-whatsapp" style={{ color: '#25D366', fontSize: 18 }} />
+          <i className="fa-brands fa-whatsapp" style={{ color: 'var(--success-500)', fontSize: 18 }} />
           <div>
             <span>
-              WABA Status: <strong style={{ color: '#25D366' }}>{metaWaba.tier}</strong> | Quality Rating: <strong style={{ color: '#25D366' }}>🟢 High Quality</strong>
+              WABA Status: <strong style={{ color: 'var(--success-500)' }}>{metaWaba.tier}</strong> | Quality Rating: <strong style={{ color: 'var(--success-500)' }}>🟢 High Quality</strong>
             </span>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
               Meta Rules Enforcement Active: Approved Template Guards • Dynamic Parameter Extraction • Zero Hardcoded Buttons
@@ -596,7 +596,7 @@ export default function BroadcastPage() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, background: 'rgba(37,211,102,0.15)', color: '#25D366', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, background: 'rgba(37,211,102,0.15)', color: 'var(--success-500)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <i className="fa-solid fa-shield-check" /> Meta Policy v25.0 Compliant
           </span>
         </div>
@@ -606,7 +606,7 @@ export default function BroadcastPage() {
         {/* ── Metrics Cards Row ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginBottom: 20 }}>
           <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(0, 168, 132, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#00A884' }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--primary-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--primary-500)' }}>
               <i className="fa-solid fa-paper-plane" />
             </div>
             <div>
@@ -616,22 +616,22 @@ export default function BroadcastPage() {
           </div>
 
           <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(37, 211, 102, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#25D366' }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(37, 211, 102, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--success-500)' }}>
               <i className="fa-solid fa-shield-cat" />
             </div>
             <div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>Delivery Success Rate</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#25D366', marginTop: 2 }}>{avgDeliveryRate.toFixed(1)}%</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--success-500)', marginTop: 2 }}>{avgDeliveryRate.toFixed(1)}%</div>
             </div>
           </div>
 
           <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(0, 132, 255, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#0084FF' }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(0, 132, 255, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--info-500)' }}>
               <i className="fa-solid fa-arrow-right-arrow-left" />
             </div>
             <div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>Smart Failover Protection</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#0084FF', marginTop: 2 }}>Active</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--info-500)', marginTop: 2 }}>Active</div>
             </div>
           </div>
 
@@ -677,7 +677,7 @@ export default function BroadcastPage() {
           </div>
         ) : filteredCampaigns.length === 0 ? (
           <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 64, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-            <div style={{ width: 64, height: 64, borderRadius: 32, background: 'rgba(0, 168, 132, 0.1)', color: '#00A884', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>
+            <div style={{ width: 64, height: 64, borderRadius: 32, background: 'var(--primary-50)', color: 'var(--primary-500)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>
               <i className="fa-solid fa-bullhorn" />
             </div>
             <div style={{ maxWidth: 440 }}>
@@ -686,7 +686,7 @@ export default function BroadcastPage() {
                 Your Supabase <code>broadcast_campaigns</code> table currently has no recorded broadcasts matching this filter. Launch your first Multi-Channel promotional campaign to start engaging your leads!
               </p>
             </div>
-            <button className="btn btn-primary" onClick={() => { setShowWizard(true); setWizardStep(1) }} style={{ background: '#25D366', borderColor: '#25D366', color: '#fff', padding: '10px 24px', fontWeight: 700 }}>
+            <button className="btn btn-primary" onClick={() => { setShowWizard(true); setWizardStep(1) }} style={{ background: 'var(--success-500)', borderColor: 'var(--success-500)', color: '#fff', padding: '10px 24px', fontWeight: 700 }}>
               <i className="fa-solid fa-plus" style={{ marginRight: 8 }} /> Create First Broadcast Campaign
             </button>
           </div>
@@ -732,7 +732,7 @@ export default function BroadcastPage() {
                           <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 12, fontWeight: 700, background: `${chanConf.color}20`, color: chanConf.color }}>
                             {chanConf.label}
                           </span>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: isDone ? '#25D366' : isDraft ? '#ffc107' : '#0084FF' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: isDone ? 'var(--success-500)' : isDraft ? '#ffc107' : 'var(--info-500)' }}>
                             ● {c.status}
                           </span>
                         </div>
@@ -743,7 +743,7 @@ export default function BroadcastPage() {
                       </td>
                       <td style={{ padding: '16px 16px' }}>
                         {c.fallback_channel ? (
-                          <span style={{ fontSize: 11, background: 'rgba(0, 132, 255, 0.1)', color: '#0084FF', padding: '3px 8px', borderRadius: 6, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          <span style={{ fontSize: 11, background: 'rgba(0, 132, 255, 0.1)', color: 'var(--info-500)', padding: '3px 8px', borderRadius: 6, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                             <i className="fa-solid fa-arrow-turn-down" /> Failover: <strong>{c.fallback_channel.toUpperCase()}</strong>
                           </span>
                         ) : (
@@ -753,10 +753,10 @@ export default function BroadcastPage() {
                       <td style={{ padding: '16px 16px', minWidth: 150 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
                           <span>{c.delivered_count} / {c.total_recipients} delivered</span>
-                          <span style={{ color: isDone ? '#25D366' : 'var(--text-primary)' }}>{deliveryPercent}%</span>
+                          <span style={{ color: isDone ? 'var(--success-500)' : 'var(--text-primary)' }}>{deliveryPercent}%</span>
                         </div>
                         <div style={{ width: '100%', height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-                          <div style={{ width: `${deliveryPercent}%`, height: '100%', background: '#25D366', borderRadius: 3, transition: 'width 0.4s' }} />
+                          <div style={{ width: `${deliveryPercent}%`, height: '100%', background: 'var(--success-500)', borderRadius: 3, transition: 'width 0.4s' }} />
                         </div>
                       </td>
                       <td style={{ padding: '16px 20px', textAlign: 'right' }}>
@@ -765,7 +765,7 @@ export default function BroadcastPage() {
                             <button
                               onClick={() => startLiveExecution(c)}
                               className="btn btn-primary"
-                              style={{ padding: '6px 14px', fontSize: 11, background: '#25D366', borderColor: '#25D366', color: '#fff', fontWeight: 700 }}
+                              style={{ padding: '6px 14px', fontSize: 11, background: 'var(--success-500)', borderColor: 'var(--success-500)', color: '#fff', fontWeight: 700 }}
                             >
                               <i className="fa-solid fa-bolt" style={{ marginRight: 6 }} /> Dispatch Now
                             </button>
@@ -804,7 +804,7 @@ export default function BroadcastPage() {
           <div className="tpl-modal" style={{ width: 860, maxWidth: '96vw', border: '1px solid var(--border-active)' }} onClick={e => e.stopPropagation()}>
             <div className="tpl-modal-header" style={{ background: 'rgba(0,168,132,0.05)', borderBottom: '1px solid var(--border)' }}>
               <div className="tpl-modal-title">
-                <i className="fa-solid fa-bullhorn" style={{ color: '#25D366', marginRight: 10 }} />
+                <i className="fa-solid fa-bullhorn" style={{ color: 'var(--success-500)', marginRight: 10 }} />
                 Universal Multi-Channel Broadcast Creator ({wizardStep}/2)
               </div>
               <button className="icon-btn" onClick={() => setShowWizard(false)}><i className="fa-solid fa-xmark" /></button>
@@ -813,12 +813,12 @@ export default function BroadcastPage() {
             <div className="tpl-modal-body" style={{ padding: 24 }}>
               {/* Progress Tracker Pill */}
               <div style={{ display: 'flex', gap: 10, marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 16 }}>
-                <div style={{ flex: 1, padding: 10, borderRadius: 10, background: wizardStep === 1 ? 'rgba(37,211,102,0.15)' : 'var(--bg-panel)', border: `1px solid ${wizardStep === 1 ? '#25D366' : 'var(--border)'}`, color: wizardStep === 1 ? '#25D366' : 'var(--text-muted)', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ width: 22, height: 22, borderRadius: 11, background: wizardStep === 1 ? '#25D366' : 'var(--border)', color: wizardStep === 1 ? '#fff' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>1</span>
+                <div style={{ flex: 1, padding: 10, borderRadius: 10, background: wizardStep === 1 ? 'rgba(37,211,102,0.15)' : 'var(--bg-panel)', border: `1px solid ${wizardStep === 1 ? 'var(--success-500)' : 'var(--border)'}`, color: wizardStep === 1 ? 'var(--success-500)' : 'var(--text-muted)', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 22, height: 22, borderRadius: 11, background: wizardStep === 1 ? 'var(--success-500)' : 'var(--border)', color: wizardStep === 1 ? '#fff' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>1</span>
                   Target Channels, CRM Audience & Smart Failover
                 </div>
-                <div style={{ flex: 1, padding: 10, borderRadius: 10, background: wizardStep === 2 ? 'rgba(37,211,102,0.15)' : 'var(--bg-panel)', border: `1px solid ${wizardStep === 2 ? '#25D366' : 'var(--border)'}`, color: wizardStep === 2 ? '#25D366' : 'var(--text-muted)', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ width: 22, height: 22, borderRadius: 11, background: wizardStep === 2 ? '#25D366' : 'var(--border)', color: wizardStep === 2 ? '#fff' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>2</span>
+                <div style={{ flex: 1, padding: 10, borderRadius: 10, background: wizardStep === 2 ? 'rgba(37,211,102,0.15)' : 'var(--bg-panel)', border: `1px solid ${wizardStep === 2 ? 'var(--success-500)' : 'var(--border)'}`, color: wizardStep === 2 ? 'var(--success-500)' : 'var(--text-muted)', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 22, height: 22, borderRadius: 11, background: wizardStep === 2 ? 'var(--success-500)' : 'var(--border)', color: wizardStep === 2 ? '#fff' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>2</span>
                   Dynamic Parameter Bindings & Live Preview
                 </div>
               </div>
@@ -941,8 +941,8 @@ export default function BroadcastPage() {
                     <div className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>Universal Message Asset Type *</div>
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       {[
-                        { id: 'TEMPLATE', label: 'Meta Approved Template', icon: 'fa-file-code', color: '#25D366', allowed: ['whatsapp'] },
-                        { id: 'FLOW', label: 'Interactive WA Flow', icon: 'fa-diagram-project', color: '#0084FF', allowed: ['whatsapp'] },
+                        { id: 'TEMPLATE', label: 'Meta Approved Template', icon: 'fa-file-code', color: 'var(--success-500)', allowed: ['whatsapp'] },
+                        { id: 'FLOW', label: 'Interactive WA Flow', icon: 'fa-diagram-project', color: 'var(--info-500)', allowed: ['whatsapp'] },
                         { id: 'CATALOG', label: 'Shoppable SKU Catalog', icon: 'fa-store', color: '#c084fc', allowed: ['whatsapp', 'instagram'] },
                         { id: 'DIRECT_TEXT', label: 'Direct Conversational DM / SMS', icon: 'fa-comment', color: '#3b82f6', allowed: ['instagram', 'messenger', 'sms', 'apple'] },
                         { id: 'HTML_EMAIL', label: 'Rich HTML Newsletter', icon: 'fa-envelope', color: '#f59e0b', allowed: ['email'] },
@@ -970,7 +970,7 @@ export default function BroadcastPage() {
                           >
                             <i className={`fa-solid ${item.icon}`} />
                             {item.label}
-                            {isRecommended && <span style={{ fontSize: 9, background: '#25D366', color: '#fff', padding: '1px 5px', borderRadius: 4, marginLeft: 4 }}>Ideal</span>}
+                            {isRecommended && <span style={{ fontSize: 9, background: 'var(--success-500)', color: '#fff', padding: '1px 5px', borderRadius: 4, marginLeft: 4 }}>Ideal</span>}
                           </button>
                         )
                       })}
@@ -999,7 +999,7 @@ export default function BroadcastPage() {
                           type="button"
                           disabled={syncingAssets}
                           onClick={syncTemplatesFromMeta}
-                          style={{ background: 'none', border: 'none', color: '#25D366', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                          style={{ background: 'none', border: 'none', color: 'var(--success-500)', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                         >
                           <i className={`fa-solid fa-rotate ${syncingAssets ? 'fa-spin' : ''}`} /> Sync Templates from Meta
                         </button>
@@ -1009,7 +1009,7 @@ export default function BroadcastPage() {
                           type="button"
                           disabled={syncingAssets}
                           onClick={syncFlowsFromMeta}
-                          style={{ background: 'none', border: 'none', color: '#0084FF', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                          style={{ background: 'none', border: 'none', color: 'var(--info-500)', fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                         >
                           <i className={`fa-solid fa-rotate ${syncingAssets ? 'fa-spin' : ''}`} /> Sync Flows from Meta
                         </button>
@@ -1089,22 +1089,22 @@ export default function BroadcastPage() {
                   {primaryChannel === 'whatsapp' && (
                     <div style={{ background: 'rgba(37,211,102,0.06)', border: '1px solid rgba(37,211,102,0.25)', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#25D366', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--success-500)', display: 'flex', alignItems: 'center', gap: 8 }}>
                           <i className="fa-solid fa-shield-check" /> Meta Bulk Campaign Rules Enforcement
                         </div>
-                        <span style={{ fontSize: 10, background: '#25D366', color: '#fff', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
+                        <span style={{ fontSize: 10, background: 'var(--success-500)', color: '#fff', padding: '2px 8px', borderRadius: 10, fontWeight: 700 }}>
                           WABA Tier Limit: {metaWaba.daily_limit?.toLocaleString()}/day
                         </span>
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 11, color: 'var(--text-secondary)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <i className="fa-solid fa-check-circle" style={{ color: '#25D366' }} />
+                          <i className="fa-solid fa-check-circle" style={{ color: 'var(--success-500)' }} />
                           <span>Approved Meta Template Category: <strong style={{ color: '#fff' }}>{tplDetails?.category || 'MARKETING'}</strong></span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <i className="fa-solid fa-check-circle" style={{ color: '#25D366' }} />
-                          <span>Meta WABA Quality Rating: <strong style={{ color: '#25D366' }}>🟢 High Quality</strong></span>
+                          <i className="fa-solid fa-check-circle" style={{ color: 'var(--success-500)' }} />
+                          <span>Meta WABA Quality Rating: <strong style={{ color: 'var(--success-500)' }}>🟢 High Quality</strong></span>
                         </div>
                       </div>
                     </div>
@@ -1115,13 +1115,13 @@ export default function BroadcastPage() {
                     
                     {/* LEFT PANEL: DYNAMIC PARAMETER BINDINGS ONLY (NO TEXTAREA) */}
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#25D366', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--success-500)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                         <i className="fa-solid fa-sliders" /> Dynamic Parameter Bindings
                       </div>
 
                       {newCampAssetType === 'TEMPLATE' ? (
                         templateVariables.length === 0 ? (
-                          <div style={{ background: 'rgba(37,211,102,0.08)', border: '1px solid rgba(37,211,102,0.2)', padding: 14, borderRadius: 10, color: '#25D366', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ background: 'rgba(37,211,102,0.08)', border: '1px solid rgba(37,211,102,0.2)', padding: 14, borderRadius: 10, color: 'var(--success-500)', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
                             <i className="fa-solid fa-circle-check" />
                             No variable parameters required for "{selectedTemplateObj?.name || selectedAssetName || 'this template'}". The template content is approved by Meta.
                           </div>
@@ -1129,7 +1129,7 @@ export default function BroadcastPage() {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                             {templateVariables.map((v) => (
                               <div key={v.key}>
-                                <div style={{ fontSize: 11, fontWeight: 700, color: v.component === 'HEADER' ? '#ffc107' : v.component === 'BUTTON' ? '#0084FF' : '#25D366', marginBottom: 4 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: v.component === 'HEADER' ? '#ffc107' : v.component === 'BUTTON' ? 'var(--info-500)' : 'var(--success-500)', marginBottom: 4 }}>
                                   <i className={`fa-solid ${v.component === 'HEADER' ? 'fa-heading' : v.component === 'BUTTON' ? 'fa-link' : 'fa-font'}`} style={{ marginRight: 6 }} />
                                   {v.label}
                                 </div>
@@ -1236,7 +1236,7 @@ export default function BroadcastPage() {
                                   )}
                                   <div style={{ padding: 10 }}>
                                     <div style={{ fontWeight: 800, color: '#fff', fontSize: 13 }}>{selectedCatalogObj.name}</div>
-                                    <div style={{ fontSize: 11, color: '#25D366', fontWeight: 700, marginTop: 2 }}>
+                                    <div style={{ fontSize: 11, color: 'var(--success-500)', fontWeight: 700, marginTop: 2 }}>
                                       ${selectedCatalogObj.price || '0.00'} {selectedCatalogObj.currency || 'USD'}
                                     </div>
                                     <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4 }}>
@@ -1297,7 +1297,7 @@ export default function BroadcastPage() {
                       {primaryChannel === 'messenger' && (
                         <div style={{ padding: 12, background: '#18191a', borderRadius: 14, border: '1px solid #242526' }}>
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
-                            <div style={{ background: '#0084FF', color: '#fff', padding: '10px 16px', borderRadius: 20, borderBottomRightRadius: 4, fontSize: 13, lineHeight: 1.4, whiteSpace: 'pre-line' }}>
+                            <div style={{ background: 'var(--info-500)', color: '#fff', padding: '10px 16px', borderRadius: 20, borderBottomRightRadius: 4, fontSize: 13, lineHeight: 1.4, whiteSpace: 'pre-line' }}>
                               {previewBodyText}
                             </div>
                           </div>
@@ -1342,11 +1342,11 @@ export default function BroadcastPage() {
                   <i className="fa-solid fa-floppy-disk" style={{ marginRight: 6 }} /> Save Draft
                 </button>
                 {wizardStep === 1 ? (
-                  <button type="button" className="btn btn-primary" onClick={() => setWizardStep(2)} disabled={!newCampName.trim()} style={{ background: '#25D366', borderColor: '#25D366', color: '#fff', fontWeight: 700 }}>
+                  <button type="button" className="btn btn-primary" onClick={() => setWizardStep(2)} disabled={!newCampName.trim()} style={{ background: 'var(--success-500)', borderColor: 'var(--success-500)', color: '#fff', fontWeight: 700 }}>
                     Next: Configure Asset & Preview <i className="fa-solid fa-arrow-right" style={{ marginLeft: 6 }} />
                   </button>
                 ) : (
-                  <button type="button" className="btn btn-primary" onClick={() => handleCreateCampaign('READY')} disabled={submittingWizard || (newCampAssetType === 'TEMPLATE' && templates.length === 0)} style={{ background: '#25D366', borderColor: '#25D366', color: '#fff', fontWeight: 700 }}>
+                  <button type="button" className="btn btn-primary" onClick={() => handleCreateCampaign('READY')} disabled={submittingWizard || (newCampAssetType === 'TEMPLATE' && templates.length === 0)} style={{ background: 'var(--success-500)', borderColor: 'var(--success-500)', color: '#fff', fontWeight: 700 }}>
                     {submittingWizard ? 'Saving…' : <><i className="fa-solid fa-check" style={{ marginRight: 6 }} /> Register Campaign & Open Dispatch Room</>}
                   </button>
                 )}
@@ -1359,10 +1359,10 @@ export default function BroadcastPage() {
       {/* ── Modal: Live Batch Execution Monitor & Compliance Dispatch Room ── */}
       {executingCampaign && (
         <div className="tpl-modal-overlay open" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}>
-          <div className="tpl-modal" style={{ width: 840, maxWidth: '96vw', border: '1px solid #25D366', background: '#0b141a' }}>
+          <div className="tpl-modal" style={{ width: 840, maxWidth: '96vw', border: '1px solid var(--success-500)', background: '#0b141a' }}>
             <div className="tpl-modal-header" style={{ borderBottom: '1px solid #1f2c34', background: '#111b21' }}>
               <div className="tpl-modal-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ width: 12, height: 12, borderRadius: 6, background: isExecuting ? '#25D366' : '#00A884', display: 'inline-block', boxShadow: isExecuting ? '0 0 10px #25D366' : 'none' }} />
+                <span style={{ width: 12, height: 12, borderRadius: 6, background: isExecuting ? 'var(--success-500)' : 'var(--primary-500)', display: 'inline-block', boxShadow: isExecuting ? '0 0 10px var(--success-500)' : 'none' }} />
                 <span>Multi-Channel Dispatch Room: <strong style={{ color: '#fff' }}>{executingCampaign.name}</strong> ({executingCampaign.channel.toUpperCase()})</span>
               </div>
               {!isExecuting && (
@@ -1379,18 +1379,18 @@ export default function BroadcastPage() {
                       {isExecuting ? '⚡ Executing Automated Compliance Engine & Batch Message Transmission...' : '✅ Campaign Batch Delivery Completed Successfully!'}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                      Primary Channel: <strong style={{ color: '#25D366' }}>{executingCampaign.channel.toUpperCase()}</strong> | Failover Routing: <strong style={{ color: '#0084FF' }}>{executingCampaign.fallback_channel ? executingCampaign.fallback_channel.toUpperCase() : 'ACTIVE'}</strong>
+                      Primary Channel: <strong style={{ color: 'var(--success-500)' }}>{executingCampaign.channel.toUpperCase()}</strong> | Failover Routing: <strong style={{ color: 'var(--info-500)' }}>{executingCampaign.fallback_channel ? executingCampaign.fallback_channel.toUpperCase() : 'ACTIVE'}</strong>
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 26, fontWeight: 800, color: '#25D366' }}>{progressPercent}%</div>
+                    <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--success-500)' }}>{progressPercent}%</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{processedCount} recipients evaluated</div>
                   </div>
                 </div>
 
                 {/* Animated Progress Bar */}
                 <div style={{ width: '100%', height: 10, background: '#1f2c34', borderRadius: 5, overflow: 'hidden' }}>
-                  <div style={{ width: `${progressPercent}%`, height: '100%', background: 'linear-gradient(90deg, #00A884, #25D366, #0084FF)', borderRadius: 5, transition: 'width 0.3s ease-out' }} />
+                  <div style={{ width: `${progressPercent}%`, height: '100%', background: 'linear-gradient(90deg, var(--primary-500), var(--success-500), var(--info-500))', borderRadius: 5, transition: 'width 0.3s ease-out' }} />
                 </div>
               </div>
 
@@ -1406,19 +1406,19 @@ export default function BroadcastPage() {
                     </button>
                     <button
                       onClick={() => setActiveTab('COMPLIANT')}
-                      style={{ background: activeTab === 'COMPLIANT' ? 'rgba(37,211,102,0.2)' : 'var(--bg-panel)', border: 'none', color: '#25D366', padding: '4px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                      style={{ background: activeTab === 'COMPLIANT' ? 'rgba(37,211,102,0.2)' : 'var(--bg-panel)', border: 'none', color: 'var(--success-500)', padding: '4px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                     >
                       ✔ Primary Delivered ({dispatchLogs.filter(l => l.status === 'DELIVERED').length})
                     </button>
                     <button
                       onClick={() => setActiveTab('FAILOVER')}
-                      style={{ background: activeTab === 'FAILOVER' ? 'rgba(0,132,255,0.2)' : 'var(--bg-panel)', border: 'none', color: '#0084FF', padding: '4px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                      style={{ background: activeTab === 'FAILOVER' ? 'rgba(0,132,255,0.2)' : 'var(--bg-panel)', border: 'none', color: 'var(--info-500)', padding: '4px 12px', borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                     >
                       ⚡ Smart Failover ({dispatchLogs.filter(l => l.status === 'DELIVERED_FAILOVER').length})
                     </button>
                   </div>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    <i className="fa-solid fa-server" style={{ marginRight: 6, color: '#00A884' }} />Supabase Live Stream
+                    <i className="fa-solid fa-server" style={{ marginRight: 6, color: 'var(--primary-500)' }} />Supabase Live Stream
                   </span>
                 </div>
 
@@ -1432,7 +1432,7 @@ export default function BroadcastPage() {
                         <div>
                           <span style={{ color: '#526b7a', marginRight: 10 }}>[{new Date(log.timestamp).toLocaleTimeString()}]</span>
                           <span style={{
-                            color: isFailover ? '#0084FF' : isBlocked ? '#ffc107' : '#25D366',
+                            color: isFailover ? 'var(--info-500)' : isBlocked ? '#ffc107' : 'var(--success-500)',
                             fontWeight: 700,
                             marginRight: 8,
                             background: isFailover ? 'rgba(0,132,255,0.1)' : isBlocked ? 'rgba(255,193,7,0.1)' : 'rgba(37,211,102,0.1)',
@@ -1452,7 +1452,7 @@ export default function BroadcastPage() {
                     )
                   })}
                   {isExecuting && (
-                    <div style={{ color: '#00A884', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <div style={{ color: 'var(--primary-500)', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                       <i className="fa-solid fa-circle-notch fa-spin" /> Verifying Meta 24-hour conversational window for next batch chunk...
                     </div>
                   )}
@@ -1463,12 +1463,12 @@ export default function BroadcastPage() {
 
             <div className="tpl-modal-footer" style={{ borderTop: '1px solid #1f2c34', background: '#111b21', justifyContent: 'space-between' }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                <i className="fa-solid fa-lock" style={{ color: '#25D366', marginRight: 6 }} />
+                <i className="fa-solid fa-lock" style={{ color: 'var(--success-500)', marginRight: 6 }} />
                 Meta 24h & TCPA rules verified. All messages automatically mirrored into your <code>/inbox</code>.
               </div>
               <div>
                 {!isExecuting ? (
-                  <button type="button" className="btn btn-primary" onClick={() => setExecutingCampaign(null)} style={{ background: '#25D366', borderColor: '#25D366', color: '#fff', padding: '8px 24px', fontWeight: 700 }}>
+                  <button type="button" className="btn btn-primary" onClick={() => setExecutingCampaign(null)} style={{ background: 'var(--success-500)', borderColor: 'var(--success-500)', color: '#fff', padding: '8px 24px', fontWeight: 700 }}>
                     <i className="fa-solid fa-check-double" style={{ marginRight: 6 }} /> Done & Return to Dashboard
                   </button>
                 ) : (

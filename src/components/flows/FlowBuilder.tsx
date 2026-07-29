@@ -147,11 +147,11 @@ const PALETTE: { type: ComponentType; icon: string; label: string; desc: string 
 ]
 
 const TYPE_COLOR: Record<ComponentType, string> = {
-  heading:  '#00A884',
-  text:     '#00A884',
-  input:    '#25D366',
-  email:    '#25D366',
-  phone:    '#25D366',
+  heading:  'var(--primary-500)',
+  text:     'var(--primary-500)',
+  input:    'var(--success-500)',
+  email:    'var(--success-500)',
+  phone:    'var(--success-500)',
   dropdown: '#128C7E',
   date:     '#128C7E',
   button:   '#075E54',
@@ -160,7 +160,7 @@ const TYPE_COLOR: Record<ComponentType, string> = {
 // ── Phone Preview ──────────────────────────────────────────────────────────────
 function BlockPreview({ b }: { b: Block }) {
   const mb = { marginBottom: 7 }
-  const lbl: React.CSSProperties = { fontSize: 9, color: '#00A884', marginBottom: 3 }
+  const lbl: React.CSSProperties = { fontSize: 9, color: 'var(--primary-500)', marginBottom: 3 }
   const inp: React.CSSProperties = {
     background: '#2A3942', borderRadius: 5, padding: '5px 7px',
     fontSize: 10, color: '#8696A0', border: '1px solid #374045',
@@ -174,7 +174,7 @@ function BlockPreview({ b }: { b: Block }) {
     case 'phone':    return <div style={mb}><div style={lbl}>{b.label}</div><div style={inp}>+91 99999 99999</div></div>
     case 'dropdown': return <div style={mb}><div style={lbl}>{b.label}</div><div style={inp}><span>Select...</span><span>▾</span></div></div>
     case 'date':     return <div style={mb}><div style={lbl}>{b.label}</div><div style={inp}><span>DD / MM / YYYY</span><span style={{ fontSize: 9 }}>⬚</span></div></div>
-    case 'button':   return <div style={{ background: '#00A884', borderRadius: 16, padding: '7px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#fff', marginTop: 8 }}>{b.label || 'Submit'}</div>
+    case 'button':   return <div style={{ background: 'var(--primary-500)', borderRadius: 16, padding: '7px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#fff', marginTop: 8 }}>{b.label || 'Submit'}</div>
     default:         return null
   }
 }
@@ -192,7 +192,7 @@ function PhonePreview({ screen }: { screen: Screen }) {
         <div style={{ background: '#0B141A', borderRadius: 14, overflow: 'hidden', minHeight: 300 }}>
           <div style={{ background: '#202C33', padding: '7px 9px', display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{
-              width: 22, height: 22, borderRadius: '50%', background: '#00A884',
+              width: 22, height: 22, borderRadius: '50%', background: 'var(--primary-500)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 9, fontWeight: 700, color: '#fff', flexShrink: 0,
             }}>B</div>
@@ -213,6 +213,8 @@ function PhonePreview({ screen }: { screen: Screen }) {
     </div>
   )
 }
+
+import { WorkflowCanvas } from '@/components/ui/WorkflowCanvas'
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function FlowBuilder({
@@ -349,19 +351,19 @@ export default function FlowBuilder({
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '5px 7px', borderRadius: 6, cursor: 'pointer', marginBottom: 2,
                 background: selectedScreen === i ? 'var(--bg-active, #005C4B22)' : 'transparent',
-                border: `1px solid ${selectedScreen === i ? '#00A884' : 'transparent'}`,
+                border: `1px solid ${selectedScreen === i ? 'var(--primary-500)' : 'transparent'}`,
                 transition: '.12s',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden', minWidth: 0 }}>
                 {i === 0 && (
-                  <span style={{ fontSize: 7, background: '#00A884', color: '#fff', padding: '1px 4px', borderRadius: 3, flexShrink: 0, fontWeight: 700 }}>
+                  <span style={{ fontSize: 7, background: 'var(--primary-500)', color: '#fff', padding: '1px 4px', borderRadius: 3, flexShrink: 0, fontWeight: 700 }}>
                     START
                   </span>
                 )}
                 <span style={{
                   fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  color: selectedScreen === i ? '#00A884' : 'var(--text, #E9EDEF)',
+                  color: selectedScreen === i ? 'var(--primary-500)' : 'var(--text, #E9EDEF)',
                 }}>
                   {s.title}
                 </span>
@@ -447,7 +449,7 @@ export default function FlowBuilder({
               padding: '3px 7px', color: 'var(--text, #E9EDEF)',
               fontSize: 12, fontWeight: 600, outline: 'none',
             }}
-            onFocus={e => (e.target.style.borderColor = '#00A884')}
+            onFocus={e => (e.target.style.borderColor = 'var(--primary-500)')}
             onBlur={e => (e.target.style.borderColor = 'transparent')}
             placeholder="Screen title"
           />
@@ -457,66 +459,68 @@ export default function FlowBuilder({
         </div>
 
         {/* Block list */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
-          {screen.blocks.length === 0 && (
-            <div style={{
-              textAlign: 'center', padding: '36px 16px',
-              color: 'var(--text-muted, #8696A0)', fontSize: 11,
-              border: '1px dashed var(--border, #2A3942)', borderRadius: 8,
-            }}>
-              Click a component on the left to add it to this screen
-            </div>
-          )}
+        <WorkflowCanvas className="flex-1 rounded-none border-x-0 border-y-0 h-full w-full !p-0">
+          <div style={{ padding: '10px 12px', height: '100%', width: '100%' }}>
+            {screen.blocks.length === 0 && (
+              <div style={{
+                textAlign: 'center', padding: '36px 16px',
+                color: 'var(--text-muted, #8696A0)', fontSize: 11,
+                border: '1px dashed var(--border, #2A3942)', borderRadius: 8,
+              }}>
+                Click a component on the left to add it to this screen
+              </div>
+            )}
 
-          {screen.blocks.map((b, idx) => {
-            const pal = PALETTE.find(p => p.type === b.type)!
-            const isSel = selectedBlockId === b.id
-            return (
-              <div
-                key={b.id}
-                onClick={() => setSelectedBlockId(isSel ? null : b.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '7px 9px', borderRadius: 7, cursor: 'pointer', marginBottom: 4,
-                  background: isSel ? 'var(--bg-active, #005C4B1A)' : 'var(--bg-surface, #161b22)',
-                  border: `1px solid ${isSel ? '#00A884' : 'var(--border, #2A3942)'}`,
-                  transition: '.12s',
-                }}
-              >
-                <div style={{
-                  width: 26, height: 26, borderRadius: 5, flexShrink: 0,
-                  background: TYPE_COLOR[b.type] + '1A',
-                  border: `1px solid ${TYPE_COLOR[b.type]}44`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 8, fontWeight: 700, color: TYPE_COLOR[b.type],
-                }}>{pal?.icon}</div>
+            {screen.blocks.map((b, idx) => {
+              const pal = PALETTE.find(p => p.type === b.type)!
+              const isSel = selectedBlockId === b.id
+              return (
+                <div
+                  key={b.id}
+                  onClick={() => setSelectedBlockId(isSel ? null : b.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '7px 9px', borderRadius: 7, cursor: 'pointer', marginBottom: 4,
+                    background: isSel ? 'var(--bg-active, #005C4B1A)' : 'var(--bg-surface, #161b22)',
+                    border: `1px solid ${isSel ? 'var(--primary-500)' : 'var(--border, #2A3942)'}`,
+                    transition: '.12s',
+                  }}
+                >
+                  <div style={{
+                    width: 26, height: 26, borderRadius: 5, flexShrink: 0,
+                    background: TYPE_COLOR[b.type] + '1A',
+                    border: `1px solid ${TYPE_COLOR[b.type]}44`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 8, fontWeight: 700, color: TYPE_COLOR[b.type],
+                  }}>{pal?.icon}</div>
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 9, color: TYPE_COLOR[b.type], marginBottom: 1 }}>{pal?.label}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text, #E9EDEF)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {b.label || '(unlabeled)'}
-                    {b.required && <span style={{ fontSize: 9, color: '#E74C3C', marginLeft: 4 }}>*</span>}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 9, color: TYPE_COLOR[b.type], marginBottom: 1 }}>{pal?.label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text, #E9EDEF)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {b.label || '(unlabeled)'}
+                      {b.required && <span style={{ fontSize: 9, color: '#E74C3C', marginLeft: 4 }}>*</span>}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 2, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={() => moveBlock(b.id, -1)} disabled={idx === 0}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--text-muted, #8696A0)', cursor: idx === 0 ? 'not-allowed' : 'pointer', fontSize: 11, padding: '2px 3px', opacity: idx === 0 ? 0.3 : 0.7 }}
+                    >↑</button>
+                    <button
+                      onClick={() => moveBlock(b.id, 1)} disabled={idx === screen.blocks.length - 1}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--text-muted, #8696A0)', cursor: idx === screen.blocks.length - 1 ? 'not-allowed' : 'pointer', fontSize: 11, padding: '2px 3px', opacity: idx === screen.blocks.length - 1 ? 0.3 : 0.7 }}
+                    >↓</button>
+                    <button
+                      onClick={() => removeBlock(b.id)}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--text-muted, #8696A0)', cursor: 'pointer', fontSize: 14, padding: '2px 3px' }}
+                    >×</button>
                   </div>
                 </div>
-
-                <div style={{ display: 'flex', gap: 2, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                  <button
-                    onClick={() => moveBlock(b.id, -1)} disabled={idx === 0}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--text-muted, #8696A0)', cursor: idx === 0 ? 'not-allowed' : 'pointer', fontSize: 11, padding: '2px 3px', opacity: idx === 0 ? 0.3 : 0.7 }}
-                  >↑</button>
-                  <button
-                    onClick={() => moveBlock(b.id, 1)} disabled={idx === screen.blocks.length - 1}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--text-muted, #8696A0)', cursor: idx === screen.blocks.length - 1 ? 'not-allowed' : 'pointer', fontSize: 11, padding: '2px 3px', opacity: idx === screen.blocks.length - 1 ? 0.3 : 0.7 }}
-                  >↓</button>
-                  <button
-                    onClick={() => removeBlock(b.id)}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--text-muted, #8696A0)', cursor: 'pointer', fontSize: 14, padding: '2px 3px' }}
-                  >×</button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        </WorkflowCanvas>
 
         {/* Property editor dock — appears when a block is selected */}
         {selectedBlock && (
@@ -612,7 +616,7 @@ export default function FlowBuilder({
                     id={`req-${selectedBlock.id}`}
                     checked={selectedBlock.required ?? false}
                     onChange={e => updateBlock(selectedBlock.id, { required: e.target.checked })}
-                    style={{ accentColor: '#00A884', cursor: 'pointer', width: 13, height: 13 }}
+                    style={{ accentColor: 'var(--primary-500)', cursor: 'pointer', width: 13, height: 13 }}
                   />
                   <label htmlFor={`req-${selectedBlock.id}`} style={{ ...fieldLabel, cursor: 'pointer', marginBottom: 0, userSelect: 'none' }}>
                     Required field
