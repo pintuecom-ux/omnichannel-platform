@@ -4,11 +4,8 @@ import { createClient } from '@/lib/supabase/client'
 import type { Segment, ConditionSet } from '@/types'
 import Button from '@/components/ui/Button'
 import { Input, Select } from '@/components/ui/Input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/Table'
-import Badge from '@/components/ui/Badge'
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalFooter } from '@/components/ui/Modal'
-import { EmptyState } from '@/components/ui/EmptyState'
-import { Filter } from 'lucide-react'
+import { Filter, Search, Plus, Play, Edit2, Trash2, Users, X } from 'lucide-react'
 
 const FIELD_OPTIONS = [
   { value: 'tags', label: 'Tags' },
@@ -30,7 +27,6 @@ export default function SegmentsPage() {
   const [workspaceId, setWorkspaceId] = useState('')
   const [modal, setModal] = useState<{ open: boolean; mode: 'new' | 'edit'; segment: Partial<Segment> }>({ open: false, mode: 'new', segment: {} })
   const [saving, setSaving] = useState(false)
-  const [evaluating, setEvaluating] = useState(false)
   const [estimatedCount, setEstimatedCount] = useState<number | null>(null)
   const [search, setSearch] = useState('')
 
@@ -147,127 +143,154 @@ export default function SegmentsPage() {
   const filteredSegments = segments.filter(s => s.name.toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <div className="flex h-full w-full flex-col p-6 overflow-hidden">
-      <div className="flex items-center justify-between pb-6">
+    <div className="flex-1 flex flex-col h-full relative">
+      {/* Decorative Background Glow */}
+      <div className="absolute top-0 right-1/4 w-[400px] h-[400px] bg-warning-500/10 rounded-full blur-[100px] pointer-events-none -translate-y-1/2 -z-10"></div>
+
+      <header className="h-20 px-8 flex items-center justify-between flex-none z-10 border-b border-border/50 glass-panel">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-text-primary">Dynamic Segments</h1>
-          <p className="text-sm text-text-secondary mt-1">Rule-based audiences that update in real-time.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-white drop-shadow-sm flex items-center gap-3">
+            <Filter className="text-warning-400 w-6 h-6" /> Dynamic Segments
+          </h1>
+          <p className="text-sm text-text-secondary mt-1">Rule-based audiences that update in real-time</p>
         </div>
-        <Button icon="fa-solid fa-plus" variant="primary" onClick={() => openModal('new')}>
-          Create Segment
-        </Button>
-      </div>
+        <button 
+          onClick={() => openModal('new')}
+          className="bg-gradient-to-r from-warning-500 to-orange-500 hover:from-warning-400 hover:to-warning-500 text-white px-5 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-[0_0_25px_rgba(245,158,11,0.5)] border border-warning-400/50"
+        >
+          <Plus className="w-4 h-4" /> Create Segment
+        </button>
+      </header>
 
-      <div className="flex items-center justify-between pb-4">
-        <div className="w-[320px]">
-          <Input 
-            placeholder="Search segments..." 
-            icon="fa-solid fa-magnifying-glass"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+      <div className="flex-1 p-8 flex flex-col gap-6 z-10 overflow-hidden">
+        <div className="flex items-center justify-between flex-none">
+          <div className="relative w-[380px]">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input 
+              type="text" 
+              placeholder="Search segments..." 
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full bg-surface border border-border rounded-lg pl-10 pr-4 py-2.5 text-sm text-white placeholder-text-muted focus:outline-none focus:border-warning-500 focus:ring-1 focus:ring-warning-500 transition-all shadow-inner"
+            />
+          </div>
         </div>
-      </div>
 
-      <div className="flex-1 overflow-auto rounded-xl border border-border bg-surface">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[300px]">Segment Name</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Matching Contacts</TableHead>
-              <TableHead>Last Evaluated</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredSegments.map(seg => (
-              <TableRow key={seg.id}>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-text-primary">{seg.name}</span>
-                    <Badge variant="ghost" size="xs">{seg.condition_set?.conditions?.length || 0} rules</Badge>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="text-sm text-text-secondary">{seg.description || '—'}</div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="info" icon="fa-solid fa-users">
-                    {seg.cached_count || 0}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="text-sm text-text-secondary">
-                    {seg.last_calculated_at ? new Date(seg.last_calculated_at).toLocaleString() : 'Never'}
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" icon="fa-solid fa-rotate-right" onClick={() => refreshCount(seg.id)} title="Refresh Count" />
-                    <Button variant="ghost" size="icon" icon="fa-solid fa-pen" onClick={() => openModal('edit', seg)} />
-                    <Button variant="ghost" size="icon" icon="fa-solid fa-trash" className="text-danger-500 hover:text-danger-600 hover:bg-danger-500/10" onClick={() => del(seg.id)} />
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-            {filteredSegments.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-12">
-                  <EmptyState 
-                    title={search ? 'No segments found' : 'No segments yet'} 
-                    description={search ? 'Adjust your search query.' : 'Create your first dynamic segment to organize contacts.'}
-                    icon={<Filter />}
-                    action={!search ? <Button variant="primary" onClick={() => openModal('new')}>Create Segment</Button> : undefined}
-                  />
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+        <div className="flex-1 glass-panel rounded-xl shadow-2xl overflow-hidden flex flex-col border border-border relative min-h-0">
+          <div className="overflow-auto flex-1">
+            <table className="w-full text-left border-collapse whitespace-nowrap">
+              <thead className="bg-panel/80 sticky top-0 z-20 backdrop-blur-md shadow-sm border-b border-border">
+                <tr>
+                  <th className="py-3 px-5 text-xs font-semibold text-text-muted uppercase tracking-wider border-b border-border w-[300px]">Segment Name</th>
+                  <th className="py-3 px-5 text-xs font-semibold text-text-muted uppercase tracking-wider border-b border-border">Rules</th>
+                  <th className="py-3 px-5 text-xs font-semibold text-text-muted uppercase tracking-wider border-b border-border">Matching Contacts</th>
+                  <th className="py-3 px-5 text-xs font-semibold text-text-muted uppercase tracking-wider border-b border-border">Created</th>
+                  <th className="py-3 px-5 text-xs font-semibold text-text-muted uppercase tracking-wider border-b border-border text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm divide-y divide-border/50">
+                {filteredSegments.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-text-secondary">
+                      {search ? 'No segments found matching your search.' : 'No segments created yet.'}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredSegments.map(seg => (
+                    <tr key={seg.id} className="table-row-hover group cursor-pointer border-b border-white/5">
+                      <td className="py-4 px-5 font-semibold text-white">{seg.name}</td>
+                      <td className="py-4 px-5">
+                        <div className="flex items-center gap-2 text-xs flex-wrap">
+                          {seg.condition_set?.conditions?.map((cond: any, idx: number) => (
+                            <React.Fragment key={idx}>
+                              {idx > 0 && <span className="text-text-muted font-medium">{seg.condition_set.operator}</span>}
+                              <span className="px-2 py-1 bg-surface border border-border rounded text-gray-300">
+                                {cond.field} {cond.operator} '{cond.value}'
+                              </span>
+                            </React.Fragment>
+                          ))}
+                          {!seg.condition_set?.conditions?.length && <span className="text-text-muted italic">No rules defined</span>}
+                        </div>
+                      </td>
+                      <td className="py-4 px-5">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+                          <Users className="w-3 h-3" /> {seg.cached_count || 0}
+                        </span>
+                      </td>
+                      <td className="py-4 px-5 text-text-secondary">
+                        {seg.created_at ? new Date(seg.created_at).toLocaleDateString() : '—'}
+                      </td>
+                      <td className="py-4 px-5 text-right">
+                        <div className="row-actions flex justify-end gap-1">
+                          <button onClick={() => refreshCount(seg.id)} className="p-1.5 text-text-secondary hover:text-white hover:bg-white/10 rounded-md transition-colors" title="Refresh Count">
+                            <Play className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => openModal('edit', seg)} className="p-1.5 text-text-secondary hover:text-white hover:bg-white/10 rounded-md transition-colors">
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => del(seg.id)} className="p-1.5 text-text-secondary hover:text-danger-500 hover:bg-danger-500/10 rounded-md transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <Modal open={modal.open} onOpenChange={(open) => !open && setModal(m => ({ ...m, open: false }))}>
-        <ModalContent className="max-w-2xl">
+        <ModalContent className="sm:max-w-2xl">
           <ModalHeader>
             <ModalTitle>{modal.mode === 'new' ? 'Create New Segment' : 'Edit Segment'}</ModalTitle>
           </ModalHeader>
           <div className="flex flex-col gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
-            <Input 
-              label="Segment Name" 
-              placeholder="e.g. Active VIP Customers" 
-              value={modal.segment.name ?? ''} 
-              onChange={e => setModal(m => ({ ...m, segment: { ...m.segment, name: e.target.value } }))} 
-            />
-            <div className="flex flex-col gap-1.5 w-full">
-              <label className="text-sm font-medium text-text-primary">Description (Optional)</label>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">Segment Name</label>
+              <input 
+                type="text" 
+                className="w-full bg-surface border border-border focus:border-warning-500 focus:ring-1 focus:ring-warning-500 rounded-lg px-3 py-2.5 text-sm text-white placeholder-text-muted outline-none transition-all shadow-inner"
+                placeholder="e.g. Active VIP Customers"
+                value={modal.segment.name ?? ''} 
+                onChange={e => setModal(m => ({ ...m, segment: { ...m.segment, name: e.target.value } }))}
+              />
+            </div>
+            
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">Description (Optional)</label>
               <textarea 
-                className="flex min-h-[60px] w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="flex min-h-[60px] w-full bg-surface border border-border focus:border-warning-500 focus:ring-1 focus:ring-warning-500 rounded-lg px-3 py-2 text-sm text-white shadow-inner transition-all outline-none"
                 rows={2} 
+                placeholder="What is this segment for?"
                 value={modal.segment.description ?? ''} 
                 onChange={e => setModal(m => ({ ...m, segment: { ...m.segment, description: e.target.value } }))} 
               />
             </div>
 
-            <div className="mt-4 flex items-center justify-between border-b border-border pb-2">
-              <div className="flex items-center gap-2">
+            <div className="mt-4 flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="flex items-center gap-3">
                 <span className="text-xs font-bold text-text-muted uppercase tracking-wider">Filter Rules</span>
-                <Select 
-                  className="h-7 py-0 px-2 text-xs w-24"
+                <select 
+                  className="bg-surface border border-border rounded px-2 py-1 text-xs text-white outline-none focus:border-warning-500"
                   value={logic} 
                   onChange={e => setLogic(e.target.value as 'AND' | 'OR')}
-                  options={[
-                    { value: 'AND', label: 'Match ALL' },
-                    { value: 'OR', label: 'Match ANY' }
-                  ]}
-                />
+                >
+                  <option value="AND">Match ALL</option>
+                  <option value="OR">Match ANY</option>
+                </select>
               </div>
-              <Button variant="secondary" size="sm" icon="fa-solid fa-plus" onClick={addRule}>
-                Add Rule
-              </Button>
+              <button 
+                onClick={addRule}
+                className="bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors text-xs font-medium"
+              >
+                <Plus className="w-3 h-3" /> Add Rule
+              </button>
             </div>
 
-            <div className="rounded-lg border border-border bg-surface p-4">
+            <div className="rounded-xl border border-border bg-surface/50 p-4 shadow-inner">
               {conditions.length === 0 ? (
                 <div className="text-center text-sm text-text-muted py-4">
                   No rules defined. This segment will include ALL contacts.
@@ -275,33 +298,37 @@ export default function SegmentsPage() {
               ) : (
                 <div className="flex flex-col gap-3">
                   {conditions.map((rule, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-text-muted w-12 text-center">
+                    <div key={idx} className="flex items-center gap-3">
+                      <span className="text-xs font-semibold text-text-muted w-12 text-center uppercase tracking-wider">
                         {idx === 0 ? 'Where' : logic}
                       </span>
                       
-                      <Select 
-                        className="flex-1"
+                      <select 
+                        className="flex-1 bg-panel border border-border rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-warning-500"
                         value={rule.field} 
                         onChange={e => updateRule(idx, 'field', e.target.value)}
-                        options={FIELD_OPTIONS}
-                      />
+                      >
+                        {FIELD_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                      </select>
                       
-                      <Select 
-                        className="flex-1"
+                      <select 
+                        className="flex-1 bg-panel border border-border rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-warning-500"
                         value={rule.operator} 
                         onChange={e => updateRule(idx, 'operator', e.target.value)}
-                        options={OPERATOR_OPTIONS}
-                      />
+                      >
+                        {OPERATOR_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                      </select>
 
-                      <Input 
-                        className="flex-[1.5]"
+                      <input 
+                        className="flex-[1.5] bg-panel border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-muted outline-none focus:border-warning-500 shadow-inner"
                         value={rule.value} 
                         onChange={e => updateRule(idx, 'value', e.target.value)} 
                         placeholder="Value..." 
                       />
                       
-                      <Button variant="ghost" size="icon" icon="fa-solid fa-xmark" onClick={() => removeRule(idx)} className="text-text-muted hover:text-danger-500 shrink-0" />
+                      <button onClick={() => removeRule(idx)} className="p-2 text-text-muted hover:text-danger-500 hover:bg-danger-500/10 rounded-lg transition-colors shrink-0">
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -309,19 +336,23 @@ export default function SegmentsPage() {
             </div>
           </div>
           
-          <ModalFooter className="flex justify-between items-center w-full">
+          <ModalFooter className="flex justify-between items-center w-full bg-surface/30 border-t border-white/5 py-4">
             <div>
               {estimatedCount !== null && (
-                <span className="text-sm text-neutral-500">
-                  Estimated matches: <strong className="text-neutral-900">{estimatedCount}</strong>
+                <span className="text-sm text-text-secondary">
+                  Estimated matches: <strong className="text-white bg-white/10 px-2 py-0.5 rounded-md ml-1">{estimatedCount}</strong>
                 </span>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <Button variant="secondary" onClick={() => setModal(m => ({ ...m, open: false }))}>Cancel</Button>
-              <Button variant="primary" onClick={save} loading={saving}>
+              <button 
+                onClick={save}
+                disabled={saving}
+                className="bg-gradient-to-r from-warning-500 to-orange-500 hover:from-warning-400 hover:to-warning-500 text-white px-5 py-2.5 rounded-lg text-sm font-medium shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:shadow-[0_0_20px_rgba(245,158,11,0.5)] border border-warning-400/50 transition-all disabled:opacity-50"
+              >
                 {modal.mode === 'new' ? 'Create Segment' : 'Save Changes'}
-              </Button>
+              </button>
             </div>
           </ModalFooter>
         </ModalContent>
