@@ -49,6 +49,13 @@ export interface DispatchLogItem {
   latency: number
 }
 
+export interface MetaTemplateVariable {
+  key: string
+  component: 'HEADER' | 'BODY' | 'BUTTON'
+  label: string
+  placeholderNum: string
+}
+
 const CHANNEL_CONFIG: Record<string, { label: string; icon: string; color: string; rule: string; badge: string }> = {
   whatsapp: { label: 'WhatsApp Business API', icon: 'fa-whatsapp', color: '#25D366', rule: 'Requires pre-approved Meta Template, Flow, or Catalog SKU outside 24h window.', badge: 'Meta v25.0 Compliant' },
   messenger: { label: 'Facebook Messenger', icon: 'fa-facebook-messenger', color: '#0084FF', rule: 'Strict Meta 24-hour promotional window. Inactive users automatically failover.', badge: '24h Window Guard' },
@@ -59,7 +66,7 @@ const CHANNEL_CONFIG: Record<string, { label: string; icon: string; color: strin
   apple: { label: 'Apple Messages for Business', icon: 'fa-apple', color: '#a855f7', rule: 'Strictly relationship-based or transactional business updates.', badge: 'AMB Protected' },
 }
 
-/** Helper to extract components from Meta template object */
+/** Parse full components from Meta Template object */
 function parseTemplateDetails(t: any) {
   if (!t) return { headerText: '', bodyText: '', footerText: '', buttons: [], category: 'MARKETING', status: 'APPROVED' }
 
@@ -85,6 +92,60 @@ function parseTemplateDetails(t: any) {
   }
 
   return { headerText, bodyText, footerText, buttons, category, status }
+}
+
+/** Extract Header, Body, and Button variables strictly according to Meta Rules */
+function extractTemplateVariables(selectedTpl: any): MetaTemplateVariable[] {
+  if (!selectedTpl) return []
+  const vars: MetaTemplateVariable[] = []
+  const details = parseTemplateDetails(selectedTpl)
+
+  // 1. Header Variables
+  if (details.headerText) {
+    const matches = Array.from(new Set(details.headerText.match(/\{\{(\d+)\}\}/g) || [])) as string[]
+    matches.forEach(m => {
+      const num = m.replace(/[\{\}]/g, '')
+      vars.push({
+        key: `HEADER_${num}`,
+        component: 'HEADER',
+        label: `Header Parameter {{${num}}}`,
+        placeholderNum: num,
+      })
+    })
+  }
+
+  // 2. Body Variables
+  if (details.bodyText) {
+    const matches = Array.from(new Set(details.bodyText.match(/\{\{(\d+)\}\}/g) || [])) as string[]
+    matches.forEach(m => {
+      const num = m.replace(/[\{\}]/g, '')
+      vars.push({
+        key: `BODY_${num}`,
+        component: 'BODY',
+        label: `Body Parameter {{${num}}}`,
+        placeholderNum: num,
+      })
+    })
+  }
+
+  // 3. Button Variables
+  if (Array.isArray(details.buttons)) {
+    details.buttons.forEach((b: any, bIdx: number) => {
+      const urlStr = b.url || b.url_example || ''
+      const matches = Array.from(new Set(urlStr.match(/\{\{(\d+)\}\}/g) || [])) as string[]
+      matches.forEach(m => {
+        const num = m.replace(/[\{\}]/g, '')
+        vars.push({
+          key: `BUTTON_${bIdx + 1}_${num}`,
+          component: 'BUTTON',
+          label: `Button "${b.text || 'URL'}" Suffix {{${num}}}`,
+          placeholderNum: num,
+        })
+      })
+    })
+  }
+
+  return vars
 }
 
 export default function BroadcastPage() {
@@ -124,13 +185,19 @@ export default function BroadcastPage() {
   const [selectedFlowObj, setSelectedFlowObj] = useState<any>(null)
   const [selectedCatalogObj, setSelectedCatalogObj] = useState<any>(null)
 
-  // Message & Parameter Control State
-  const [messagePreviewText, setMessagePreviewText] = useState<string>('')
+  // Dynamic Parameter Values Map (Key -> Value)
+  const [paramValues, setParamValues] = useState<Record<string, string>>({
+    BODY_1: 'Sarah Jenkins',
+    BODY_2: 'VIP2026',
+    BODY_3: 'ORDER-1092',
+    HEADER_1: 'Summer Offer',
+    BUTTON_1_1: 'claim-offer',
+  })
+
+  // Direct DM / Email / Push Message Text State
+  const [directMessageText, setDirectMessageText] = useState<string>('')
   const [subjectText, setSubjectText] = useState<string>('')
   const [includeOptOut, setIncludeOptOut] = useState<boolean>(true)
-  const [param1Val, setParam1Val] = useState<string>('Sarah Jenkins')
-  const [param2Val, setParam2Val] = useState<string>('VIP2026')
-  const [param3Val, setParam3Val] = useState<string>('ORDER-1092')
   const [submittingWizard, setSubmittingWizard] = useState<boolean>(false)
 
   // Live Batch Execution Room State
@@ -155,7 +222,6 @@ export default function BroadcastPage() {
         if (data.meta_waba_status) setMetaWaba(data.meta_waba_status)
       }
 
-      // Fetch live assets from Meta & DB
       await fetchAssets()
     } catch (e) {
       console.error('Error loading broadcast dashboard:', e)
@@ -234,7 +300,6 @@ export default function BroadcastPage() {
     }
   }, [dispatchLogs])
 
-  // Automatically adjust default asset type & options when switching primary channels
   useEffect(() => {
     if (primaryChannel === 'whatsapp') {
       setNewCampAssetType('TEMPLATE')
@@ -251,7 +316,6 @@ export default function BroadcastPage() {
     }
   }, [primaryChannel])
 
-  // Automatically sync selectedAssetName when switching asset type
   useEffect(() => {
     if (newCampAssetType === 'TEMPLATE') {
       if (templates.length > 0) {
@@ -259,7 +323,6 @@ export default function BroadcastPage() {
       } else {
         setSelectedAssetName('')
         setSelectedTemplateObj(null)
-        setMessagePreviewText('')
       }
     } else if (newCampAssetType === 'FLOW') {
       if (flows.length > 0) {
@@ -267,7 +330,6 @@ export default function BroadcastPage() {
       } else {
         setSelectedAssetName('')
         setSelectedFlowObj(null)
-        setMessagePreviewText('')
       }
     } else if (newCampAssetType === 'CATALOG') {
       if (catalogItems.length > 0) {
@@ -275,12 +337,11 @@ export default function BroadcastPage() {
       } else {
         setSelectedAssetName('')
         setSelectedCatalogObj(null)
-        setMessagePreviewText('')
       }
     }
   }, [newCampAssetType, templates, flows, catalogItems])
 
-  // ── DYNAMIC ASSET RESOLUTION & REAL PREVIEW SYNCHRONIZATION ──
+  // ── RESOLVE SELECTED ASSET OBJECT ──
   useEffect(() => {
     if (!selectedAssetName) {
       if (newCampAssetType === 'TEMPLATE') setSelectedTemplateObj(null)
@@ -291,30 +352,13 @@ export default function BroadcastPage() {
 
     if (newCampAssetType === 'TEMPLATE') {
       const found = templates.find((t: any) => t.name === selectedAssetName || t.id === selectedAssetName)
-      if (found) {
-        setSelectedTemplateObj(found)
-        const details = parseTemplateDetails(found)
-        setMessagePreviewText(details.bodyText || found.body_text || '')
-      } else {
-        setSelectedTemplateObj(null)
-      }
+      setSelectedTemplateObj(found || null)
     } else if (newCampAssetType === 'FLOW') {
       const found = flows.find((f: any) => f.name === selectedAssetName || f.id === selectedAssetName)
-      if (found) {
-        setSelectedFlowObj(found)
-        const flowName = found.name || selectedAssetName
-        setMessagePreviewText(`Hi {{1}}! 👋 Please complete our interactive "${flowName}" flow in WhatsApp.`)
-      } else {
-        setSelectedFlowObj(null)
-      }
+      setSelectedFlowObj(found || null)
     } else if (newCampAssetType === 'CATALOG') {
       const found = catalogItems.find((c: any) => c.name === selectedAssetName || c.id === selectedAssetName || c.retailer_id === selectedAssetName)
-      if (found) {
-        setSelectedCatalogObj(found)
-        setMessagePreviewText(`Hi {{1}}! Check out our featured product: ${found.name} (${found.price || ''} ${found.currency || 'USD'}). Tap below to view in WhatsApp!`)
-      } else {
-        setSelectedCatalogObj(null)
-      }
+      setSelectedCatalogObj(found || null)
     }
   }, [selectedAssetName, newCampAssetType, templates, flows, catalogItems])
 
@@ -325,6 +369,11 @@ export default function BroadcastPage() {
     const targetCount = newCampSegment.startsWith('Tag:')
       ? contacts.filter(c => c.tags?.includes(newCampSegment.replace('Tag: ', ''))).length || 0
       : contacts.length || 0
+
+    const templateDetails = parseTemplateDetails(selectedTemplateObj)
+    const contentPayload = newCampAssetType === 'TEMPLATE'
+      ? templateDetails.bodyText
+      : directMessageText || `Hi {{1}}! Notification from ReactCommerce.`
 
     try {
       const res = await fetch('/api/broadcast', {
@@ -342,7 +391,7 @@ export default function BroadcastPage() {
           retailer_id: selectedCatalogObj?.retailer_id || null,
           target_segment: newCampSegment,
           total_recipients: targetCount > 0 ? targetCount : contacts.length || 1,
-          message_content: messagePreviewText,
+          message_content: contentPayload,
           subject: subjectText,
           include_opt_out: includeOptOut,
         }),
@@ -375,7 +424,7 @@ export default function BroadcastPage() {
     }
   }
 
-  // ── Launch Live Batch Execution Room with Automated Compliance & Smart Failover ──
+  // ── Launch Live Batch Execution Room ──
   const startLiveExecution = async (camp: CampaignItem) => {
     setExecutingCampaign(camp)
     setIsExecuting(true)
@@ -475,12 +524,26 @@ export default function BroadcastPage() {
 
   // Extract parsed template details for active selectedTemplateObj
   const tplDetails = parseTemplateDetails(selectedTemplateObj)
+  const templateVariables = extractTemplateVariables(selectedTemplateObj)
 
-  // Dynamically replace {{1}}, {{2}}, {{3}} in preview text
-  const renderedPersonalizedText = (messagePreviewText || tplDetails.bodyText || '')
-    .replace(/\{\{1\}\}/g, param1Val || 'Sarah Jenkins')
-    .replace(/\{\{2\}\}/g, param2Val || 'VIP2026')
-    .replace(/\{\{3\}\}/g, param3Val || 'ORDER-1092')
+  // Dynamically substitute Header & Body parameters strictly according to Meta Rules
+  let previewHeaderText = tplDetails.headerText || ''
+  if (previewHeaderText) {
+    previewHeaderText = previewHeaderText.replace(/\{\{(\d+)\}\}/g, (_: string, num: string) => {
+      return paramValues[`HEADER_${num}`] || `{{${num}}}`
+    })
+  }
+
+  let previewBodyText = tplDetails.bodyText || ''
+  if (previewBodyText) {
+    previewBodyText = previewBodyText.replace(/\{\{(\d+)\}\}/g, (_: string, num: string) => {
+      return paramValues[`BODY_${num}`] || `{{${num}}}`
+    })
+  } else if (newCampAssetType === 'DIRECT_TEXT' || newCampAssetType === 'HTML_EMAIL' || newCampAssetType === 'PUSH_ALERT') {
+    previewBodyText = (directMessageText || 'Hi {{1}}! Special update from ReactCommerce.')
+      .replace(/\{\{1\}\}/g, paramValues['BODY_1'] || 'Sarah Jenkins')
+      .replace(/\{\{2\}\}/g, paramValues['BODY_2'] || 'VIP2026')
+  }
 
   return (
     <div className="generic-page">
@@ -504,7 +567,7 @@ export default function BroadcastPage() {
               WABA Status: <strong style={{ color: '#25D366' }}>{metaWaba.tier}</strong> | Quality Rating: <strong style={{ color: '#25D366' }}>🟢 High Quality</strong>
             </span>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-              Meta Rules Enforcement Active: 24h Window Guard • Template Category Check • Opt-Out Quick Reply Included
+              Meta Rules Enforcement Active: Approved Template Guards • Dynamic Parameter Extraction • Zero Hardcoded Buttons
             </div>
           </div>
         </div>
@@ -714,7 +777,7 @@ export default function BroadcastPage() {
       {/* ── Modal: Universal Multi-Channel Campaign Wizard ── */}
       {showWizard && (
         <div className="tpl-modal-overlay open" onClick={() => setShowWizard(false)}>
-          <div className="tpl-modal" style={{ width: 840, maxWidth: '96vw', border: '1px solid var(--border-active)' }} onClick={e => e.stopPropagation()}>
+          <div className="tpl-modal" style={{ width: 860, maxWidth: '96vw', border: '1px solid var(--border-active)' }} onClick={e => e.stopPropagation()}>
             <div className="tpl-modal-header" style={{ background: 'rgba(0,168,132,0.05)', borderBottom: '1px solid var(--border)' }}>
               <div className="tpl-modal-title">
                 <i className="fa-solid fa-bullhorn" style={{ color: '#25D366', marginRight: 10 }} />
@@ -732,7 +795,7 @@ export default function BroadcastPage() {
                 </div>
                 <div style={{ flex: 1, padding: 10, borderRadius: 10, background: wizardStep === 2 ? 'rgba(37,211,102,0.15)' : 'var(--bg-panel)', border: `1px solid ${wizardStep === 2 ? '#25D366' : 'var(--border)'}`, color: wizardStep === 2 ? '#25D366' : 'var(--text-muted)', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ width: 22, height: 22, borderRadius: 11, background: wizardStep === 2 ? '#25D366' : 'var(--border)', color: wizardStep === 2 ? '#fff' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }}>2</span>
-                  Universal Asset Content & Compliance Preview
+                  Dynamic Parameter Bindings & Live Preview
                 </div>
               </div>
 
@@ -877,7 +940,7 @@ export default function BroadcastPage() {
                     </div>
                   </div>
 
-                  {/* Subject or Title input for Email/Push */}
+                  {/* Subject Line for Email / Push */}
                   {(primaryChannel === 'email' || primaryChannel === 'push') && (
                     <div>
                       <div className="form-label" style={{ fontWeight: 700, fontSize: 13 }}>{primaryChannel === 'email' ? 'Email Subject Line *' : 'Notification Title *'}</div>
@@ -890,7 +953,7 @@ export default function BroadcastPage() {
                     </div>
                   )}
 
-                  {/* STRICT ZERO-DUMMY ASSET DROPDOWN (ONLY SHOWS REAL METADATA FROM META/SUPABASE) */}
+                  {/* STRICT ZERO-DUMMY ASSET DROPDOWN */}
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                       <div className="form-label" style={{ fontWeight: 700, fontSize: 13, margin: 0 }}>Select Existing Asset or Reference SKU *</div>
@@ -966,7 +1029,7 @@ export default function BroadcastPage() {
                       )}
                     </select>
 
-                    {/* Zero-Asset Sync Warning Banner */}
+                    {/* Zero-Asset Warning Banner */}
                     {newCampAssetType === 'TEMPLATE' && templates.length === 0 && (
                       <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', padding: 12, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
                         <div style={{ fontSize: 12, color: '#f87171' }}>
@@ -1007,75 +1070,61 @@ export default function BroadcastPage() {
                           <span>Meta WABA Quality Rating: <strong style={{ color: '#25D366' }}>🟢 High Quality</strong></span>
                         </div>
                       </div>
-
-                      {/* Opt-Out Button Toggle */}
-                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>
-                            Mandatory Meta Opt-Out / Unsubscribe Button (Reply STOP)
-                          </div>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                            Meta requires offering an explicit unsubscribe button on marketing broadcasts to maintain Green Quality Rating.
-                          </div>
-                        </div>
-                        <label style={{ position: 'relative', display: 'inline-block', width: 44, height: 24, cursor: 'pointer' }}>
-                          <input
-                            type="checkbox"
-                            checked={includeOptOut}
-                            onChange={e => setIncludeOptOut(e.target.checked)}
-                            style={{ opacity: 0, width: 0, height: 0 }}
-                          />
-                          <span style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: includeOptOut ? '#25D366' : '#3a3a3c', borderRadius: 24, transition: '.3s' }}>
-                            <span style={{ position: 'absolute', content: '""', height: 18, width: 18, left: includeOptOut ? 22 : 3, bottom: 3, backgroundColor: 'white', borderRadius: '50%', transition: '.3s' }} />
-                          </span>
-                        </label>
-                      </div>
                     </div>
                   )}
 
-                  {/* Universal Variable Editor & DYNAMIC LIVE PREVIEW SUITE */}
+                  {/* DYNAMIC PARAMETER BINDINGS PANEL & REAL LIVE PREVIEW */}
                   <div style={{ background: '#0b141a', border: '1px solid #1f2c34', borderRadius: 14, padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+                    
+                    {/* LEFT PANEL: DYNAMIC PARAMETER BINDINGS ONLY (NO TEXTAREA) */}
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-                        💬 Edit Message Body & Variable Parameters
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#25D366', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <i className="fa-solid fa-sliders" /> Dynamic Parameter Bindings
                       </div>
-                      <textarea
-                        className="form-input"
-                        rows={5}
-                        value={messagePreviewText}
-                        onChange={e => setMessagePreviewText(e.target.value)}
-                        style={{ background: '#111b21', color: '#fff', border: '1px solid #2a3942', resize: 'none', fontSize: 12, lineHeight: 1.5 }}
-                      />
 
-                      {/* Variable Input Mapping */}
-                      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: '#25D366' }}>
-                          <i className="fa-solid fa-sliders" style={{ marginRight: 6 }} /> Dynamic Parameter Bindings
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                          <div>
-                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Variable {"{{1}}"} (Customer Name):</span>
-                            <input
-                              className="form-input"
-                              style={{ padding: '5px 10px', fontSize: 11 }}
-                              value={param1Val}
-                              onChange={e => setParam1Val(e.target.value)}
-                            />
+                      {newCampAssetType === 'TEMPLATE' ? (
+                        templateVariables.length === 0 ? (
+                          <div style={{ background: 'rgba(37,211,102,0.08)', border: '1px solid rgba(37,211,102,0.2)', padding: 14, borderRadius: 10, color: '#25D366', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <i className="fa-solid fa-circle-check" />
+                            No variable parameters required for "{selectedTemplateObj?.name || selectedAssetName || 'this template'}". The template content is approved by Meta.
                           </div>
-                          <div>
-                            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Variable {"{{2}}"} (Offer Code / Tag):</span>
-                            <input
-                              className="form-input"
-                              style={{ padding: '5px 10px', fontSize: 11 }}
-                              value={param2Val}
-                              onChange={e => setParam2Val(e.target.value)}
-                            />
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            {templateVariables.map((v) => (
+                              <div key={v.key}>
+                                <div style={{ fontSize: 11, fontWeight: 700, color: v.component === 'HEADER' ? '#ffc107' : v.component === 'BUTTON' ? '#0084FF' : '#25D366', marginBottom: 4 }}>
+                                  <i className={`fa-solid ${v.component === 'HEADER' ? 'fa-heading' : v.component === 'BUTTON' ? 'fa-link' : 'fa-font'}`} style={{ marginRight: 6 }} />
+                                  {v.label}
+                                </div>
+                                <input
+                                  className="form-input"
+                                  style={{ padding: '7px 12px', fontSize: 12 }}
+                                  placeholder={`Enter parameter value...`}
+                                  value={paramValues[v.key] ?? (v.key.includes('1') ? 'Sarah Jenkins' : v.key.includes('2') ? 'VIP2026' : 'ORDER-1092')}
+                                  onChange={e => setParamValues(prev => ({ ...prev, [v.key]: e.target.value }))}
+                                />
+                              </div>
+                            ))}
                           </div>
+                        )
+                      ) : (
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>
+                            Message Body & Text Content
+                          </div>
+                          <textarea
+                            className="form-input"
+                            rows={6}
+                            value={directMessageText}
+                            placeholder="Type direct message payload..."
+                            onChange={e => setDirectMessageText(e.target.value)}
+                            style={{ background: '#111b21', color: '#fff', border: '1px solid #2a3942', resize: 'none', fontSize: 12 }}
+                          />
                         </div>
-                      </div>
+                      )}
                     </div>
 
-                    {/* ── REAL-TIME ASSET PREVIEW SUITE ── */}
+                    {/* RIGHT PANEL: REAL LIVE SELECTED ASSET DM PREVIEW */}
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
                         <span>📱 Live Selected Asset DM Preview</span>
@@ -1084,29 +1133,29 @@ export default function BroadcastPage() {
                         </span>
                       </div>
 
-                      {/* 1. WHATSAPP LIVE PREVIEW (DYNAMICALY HANDLES TEMPLATES, FLOWS, & CATALOG SKUS) */}
+                      {/* WHATSAPP LIVE PREVIEW */}
                       {primaryChannel === 'whatsapp' && (
                         <div>
                           {/* A. META APPROVED TEMPLATE PREVIEW */}
                           {newCampAssetType === 'TEMPLATE' && (
                             <div style={{ background: '#005c4b', borderRadius: 12, borderTopRightRadius: 2, padding: '14px', color: '#e9edef', fontSize: 12, boxShadow: '0 2px 4px rgba(0,0,0,0.4)', position: 'relative', lineHeight: 1.4 }}>
-                              {/* Header Component if present */}
-                              {tplDetails?.headerText && (
+                              {/* Header Component */}
+                              {previewHeaderText && (
                                 <div style={{ fontWeight: 800, fontSize: 13, color: '#fff', marginBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 4 }}>
-                                  {tplDetails.headerText}
+                                  {previewHeaderText}
                                 </div>
                               )}
                               
-                              {/* Rendered Body Text with dynamic parameters */}
+                              {/* Body Component */}
                               <div style={{ whiteSpace: 'pre-line' }}>
-                                {renderedPersonalizedText || (
+                                {previewBodyText || (
                                   <span style={{ color: 'rgba(255,255,255,0.5)', fontStyle: 'italic' }}>
                                     Select a Meta Approved Template above to view body text preview.
                                   </span>
                                 )}
                               </div>
 
-                              {/* Footer Text if present */}
+                              {/* Footer Component */}
                               {tplDetails?.footerText && (
                                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 8, fontStyle: 'italic' }}>
                                   {tplDetails.footerText}
@@ -1131,7 +1180,7 @@ export default function BroadcastPage() {
                                 </div>
                               </div>
                               <div style={{ whiteSpace: 'pre-line' }}>
-                                {renderedPersonalizedText || 'Select a published flow to preview message content.'}
+                                {previewBodyText || 'Select a published flow to preview message content.'}
                               </div>
                               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 4, marginTop: 8, fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>
                                 <span>12:45 PM</span>
@@ -1159,11 +1208,11 @@ export default function BroadcastPage() {
                                   </div>
                                 </div>
                               ) : null}
-                              <div style={{ whiteSpace: 'pre-line' }}>{renderedPersonalizedText || 'Select a Meta Catalog product to preview.'}</div>
+                              <div style={{ whiteSpace: 'pre-line' }}>{previewBodyText || 'Select a Meta Catalog product to preview.'}</div>
                             </div>
                           )}
 
-                          {/* WHATSAPP ACTION BUTTON CHIPS */}
+                          {/* BUTTONS FETCHED STRICTLY FROM THE TEMPLATE (ZERO HARDCODED BUTTONS) */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
                             {newCampAssetType === 'FLOW' ? (
                               <div style={{ background: '#1f2c34', border: '1px solid #2a3942', borderRadius: 8, padding: '9px 0', textAlign: 'center', fontSize: 12, color: '#53bdeb', fontWeight: 800, cursor: 'pointer' }}>
@@ -1175,28 +1224,25 @@ export default function BroadcastPage() {
                               </div>
                             ) : (
                               <>
-                                {tplDetails?.buttons?.map((b: any, idx: number) => (
-                                  <div key={idx} style={{ background: '#1f2c34', border: '1px solid #2a3942', borderRadius: 8, padding: '9px 0', textAlign: 'center', fontSize: 12, color: '#53bdeb', fontWeight: 800, cursor: 'pointer' }}>
-                                    <i className={`fa-solid ${b.type === 'URL' ? 'fa-external-link' : 'fa-reply'}`} style={{ marginRight: 6 }} /> {b.text || 'Action Button'}
-                                  </div>
-                                ))}
-                                {(!tplDetails?.buttons || tplDetails.buttons.length === 0) && (
-                                  <div style={{ background: '#1f2c34', border: '1px solid #2a3942', borderRadius: 8, padding: '9px 0', textAlign: 'center', fontSize: 12, color: '#53bdeb', fontWeight: 800, cursor: 'pointer' }}>
-                                    <i className="fa-solid fa-external-link" style={{ marginRight: 6 }} /> Claim VIP Offer Now
-                                  </div>
-                                )}
-                                {includeOptOut && (
-                                  <div style={{ background: '#1f2c34', border: '1px solid #2a3942', borderRadius: 8, padding: '8px 0', textAlign: 'center', fontSize: 11, color: '#e84040', fontWeight: 700, cursor: 'pointer' }}>
-                                    🛑 Stop Promotions / Unsubscribe
-                                  </div>
-                                )}
+                                {tplDetails?.buttons?.map((b: any, idx: number) => {
+                                  let btnUrl = b.url || ''
+                                  if (btnUrl) {
+                                    btnUrl = btnUrl.replace(/\{\{(\d+)\}\}/g, (_: any, num: string) => paramValues[`BUTTON_${idx + 1}_${num}`] || `{{${num}}}`)
+                                  }
+                                  return (
+                                    <div key={idx} style={{ background: '#1f2c34', border: '1px solid #2a3942', borderRadius: 8, padding: '9px 0', textAlign: 'center', fontSize: 12, color: '#53bdeb', fontWeight: 800, cursor: 'pointer' }}>
+                                      <i className={`fa-solid ${b.type === 'URL' ? 'fa-external-link' : b.type === 'PHONE_NUMBER' ? 'fa-phone' : 'fa-reply'}`} style={{ marginRight: 6 }} />
+                                      {b.text || 'Action Button'} {btnUrl ? `(${btnUrl})` : ''}
+                                    </div>
+                                  )
+                                })}
                               </>
                             )}
                           </div>
                         </div>
                       )}
 
-                      {/* 2. INSTAGRAM DIRECT DM PREVIEW */}
+                      {/* OTHER CHANNELS */}
                       {primaryChannel === 'instagram' && (
                         <div style={{ background: '#000', border: '1px solid #262626', borderRadius: 14, overflow: 'hidden' }}>
                           <div style={{ padding: '8px 12px', borderBottom: '1px solid #262626', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#fff', fontWeight: 700, background: '#121212' }}>
@@ -1205,31 +1251,29 @@ export default function BroadcastPage() {
                           </div>
                           <div style={{ padding: 14, background: '#000', color: '#fff' }}>
                             <div style={{ background: '#262626', padding: '10px 14px', borderRadius: 18, borderBottomRightRadius: 4, fontSize: 12, lineHeight: 1.4, display: 'inline-block', maxWidth: '90%', whiteSpace: 'pre-line' }}>
-                              {renderedPersonalizedText}
+                              {previewBodyText}
                             </div>
                           </div>
                         </div>
                       )}
 
-                      {/* 3. FACEBOOK MESSENGER BLUE BUBBLE PREVIEW */}
                       {primaryChannel === 'messenger' && (
                         <div style={{ padding: 12, background: '#18191a', borderRadius: 14, border: '1px solid #242526' }}>
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
                             <div style={{ background: '#0084FF', color: '#fff', padding: '10px 16px', borderRadius: 20, borderBottomRightRadius: 4, fontSize: 13, lineHeight: 1.4, whiteSpace: 'pre-line' }}>
-                              {renderedPersonalizedText}
+                              {previewBodyText}
                             </div>
                           </div>
                         </div>
                       )}
 
-                      {/* 4. SMS / EMAIL / PUSH / APPLE PREVIEW */}
                       {(primaryChannel === 'sms' || primaryChannel === 'apple') && (
                         <div style={{ background: '#1c1c1e', border: '1px solid #2c2c2e', borderRadius: 16, padding: 14, color: '#fff' }}>
                           <div style={{ fontSize: 11, color: '#8e8e93', textAlign: 'center', marginBottom: 8, fontWeight: 600 }}>
                             {primaryChannel === 'apple' ? ' Apple Messages for Business' : '💬 Text Message (SMS)'}
                           </div>
                           <div style={{ background: primaryChannel === 'apple' ? '#1f3c2b' : '#3a3a3c', padding: '10px 14px', borderRadius: 16, fontSize: 13, lineHeight: 1.4, color: '#fff', whiteSpace: 'pre-line' }}>
-                            {renderedPersonalizedText}
+                            {previewBodyText}
                           </div>
                         </div>
                       )}
@@ -1240,7 +1284,7 @@ export default function BroadcastPage() {
                             {subjectText || 'Notification Title'}
                           </div>
                           <div style={{ color: '#4b5563', lineHeight: 1.5, whiteSpace: 'pre-line' }}>
-                            {renderedPersonalizedText}
+                            {previewBodyText}
                           </div>
                         </div>
                       )}
