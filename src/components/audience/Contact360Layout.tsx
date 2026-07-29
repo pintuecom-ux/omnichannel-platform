@@ -16,9 +16,9 @@ export function Contact360Layout({ contact, children }: Contact360LayoutProps) {
   const router = useRouter()
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-background">
+    <div className="flex flex-col h-full overflow-hidden bg-base">
       {/* Header */}
-      <header className="flex-none border-b border-border/50 bg-card p-4 flex items-center justify-between shadow-sm z-10">
+      <header className="flex-none border-b border-border/50 bg-surface p-4 flex items-center justify-between shadow-sm z-10">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => router.push('/audience/contacts')}>
             <ArrowLeft className="h-5 w-5" />
