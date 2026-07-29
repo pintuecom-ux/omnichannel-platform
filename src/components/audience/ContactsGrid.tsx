@@ -52,7 +52,7 @@ export function ContactsGrid({ contacts, onSelectionChange }: ContactsGridProps)
   }
 
   return (
-    <div className="rounded-md border border-border bg-surface shadow-sm overflow-hidden">
+    <div className="rounded-md border border-border bg-surface shadow-sm overflow-auto flex-1 min-h-0">
       <Table>
         <TableHeader className="bg-panel">
           <TableRow>
