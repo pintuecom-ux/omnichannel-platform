@@ -43,14 +43,15 @@ function buildConditionString(node: any, level: number = 0): string {
   return `${field}.${opStr}.${parsedValue}`
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
+  const { id } = await params
   
   // 1. Fetch Segment Definition
   const { data: segment, error: segmentError } = await supabase
     .from('segments')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
     
   if (segmentError || !segment) {
