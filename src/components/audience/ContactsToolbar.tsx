@@ -1,22 +1,79 @@
 'use client'
 
-import React, { useState } from 'react'
-import { Download, Plus, Filter, Columns, Search, Tags, Users, GitMerge, Trash } from 'lucide-react'
-import Button from '@/components/ui/Button'
+import React, { useState, useRef, useEffect } from 'react'
+import { Download, Plus, Filter, Columns, Search, Tags, Users, GitMerge, Trash, Settings, ChevronDown, Check, Save, X } from 'lucide-react'
+import { SavedView } from '@/types'
 import { cn } from '@/lib/utils'
 
 interface ContactsToolbarProps {
   selectedCount: number
   onSearch: (query: string) => void
   onAction: (action: string) => void
+  allColumns: { key: string; label: string; type: string }[]
+  visibleColumns: string[]
+  setVisibleColumns: React.Dispatch<React.SetStateAction<string[]>>
+  savedViews: SavedView[]
+  onSaveView: (name: string) => void
+  onDeleteView: (id: string) => void
+  onApplyView: (view: SavedView) => void
 }
 
-export function ContactsToolbar({ selectedCount, onSearch, onAction }: ContactsToolbarProps) {
+export function ContactsToolbar({ 
+  selectedCount, 
+  onSearch, 
+  onAction, 
+  allColumns, 
+  visibleColumns, 
+  setVisibleColumns,
+  savedViews,
+  onSaveView,
+  onDeleteView,
+  onApplyView
+}: ContactsToolbarProps) {
   const [searchQuery, setSearchQuery] = useState('')
+  const [showColumnConfig, setShowColumnConfig] = useState(false)
+  const [showSavedViews, setShowSavedViews] = useState(false)
+  
+  // Save view state
+  const [isSavingView, setIsSavingView] = useState(false)
+  const [newViewName, setNewViewName] = useState('')
+
+  const colRef = useRef<HTMLDivElement>(null)
+  const viewsRef = useRef<HTMLDivElement>(null)
+
+  // Click outside handlers
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (colRef.current && !colRef.current.contains(event.target as Node)) {
+        setShowColumnConfig(false)
+      }
+      if (viewsRef.current && !viewsRef.current.contains(event.target as Node)) {
+        setShowSavedViews(false)
+        setIsSavingView(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
     onSearch(e.target.value)
+  }
+
+  const toggleColumn = (colKey: string) => {
+    setVisibleColumns(prev => {
+      if (prev.includes(colKey)) return prev.filter(k => k !== colKey)
+      if (prev.length >= 50) return prev
+      return [...prev, colKey]
+    })
+  }
+
+  const handleSaveSubmit = async () => {
+    if (!newViewName.trim()) return
+    await onSaveView(newViewName)
+    setNewViewName('')
+    setIsSavingView(false)
   }
 
   return (
@@ -88,14 +145,124 @@ export function ContactsToolbar({ selectedCount, onSearch, onAction }: ContactsT
             </div>
           ) : (
             <>
+              {/* Filter Attributes Button */}
               <button className="bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-text-primary px-4 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium">
                 <Filter className="w-4 h-4" />
                 Filter Attributes
               </button>
-              <button className="bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-text-primary px-4 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium">
-                <Columns className="w-4 h-4" />
-                View
-              </button>
+              
+              {/* Saved Views Dropdown */}
+              <div className="relative" ref={viewsRef}>
+                <button 
+                  onClick={() => setShowSavedViews(!showSavedViews)}
+                  className="bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-text-primary px-4 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium"
+                >
+                  <Columns className="w-4 h-4" />
+                  View
+                </button>
+                {showSavedViews && (
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-panel border border-border rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col">
+                    <div className="p-3 border-b border-border bg-surface/50 text-xs font-semibold text-white flex justify-between items-center">
+                      <span>Saved Views</span>
+                      {!isSavingView && (
+                        <button onClick={() => setIsSavingView(true)} className="flex items-center gap-1 text-primary-400 hover:text-primary-300">
+                          <Plus className="w-3.5 h-3.5" /> Save Current
+                        </button>
+                      )}
+                    </div>
+                    
+                    {isSavingView && (
+                      <div className="p-3 border-b border-border bg-surface flex items-center gap-2">
+                        <input 
+                          type="text" 
+                          autoFocus
+                          placeholder="Name this view..."
+                          value={newViewName}
+                          onChange={e => setNewViewName(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleSaveSubmit()}
+                          className="flex-1 bg-panel border border-primary-500 rounded px-2 py-1.5 text-xs text-white focus:outline-none"
+                        />
+                        <button onClick={handleSaveSubmit} className="p-1.5 bg-primary-500 text-white rounded hover:bg-primary-600">
+                          <Save className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => setIsSavingView(false)} className="p-1.5 text-text-muted hover:text-white">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="p-1 flex flex-col max-h-60 overflow-y-auto">
+                      {savedViews.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-text-muted italic">No saved views yet.</div>
+                      ) : (
+                        savedViews.map(view => {
+                          const isActive = JSON.stringify(visibleColumns) === JSON.stringify(view.columns)
+                          return (
+                            <div key={view.id} className="flex items-center justify-between group/view hover:bg-white/5 rounded-md px-2 py-1">
+                              <button 
+                                onClick={() => {
+                                  onApplyView(view)
+                                  setShowSavedViews(false)
+                                }}
+                                className="flex-1 flex items-center gap-2 py-1 text-left text-sm text-gray-300 truncate"
+                              >
+                                <Check className={cn("w-4 h-4 flex-none text-primary-500", isActive ? "opacity-100" : "opacity-0")} />
+                                <span className="truncate">{view.name}</span>
+                              </button>
+                              <button 
+                                onClick={() => onDeleteView(view.id)}
+                                className="opacity-0 group-hover/view:opacity-100 p-1 text-text-muted hover:text-danger-400 transition-opacity flex-none"
+                              >
+                                <Trash className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Columns Config Dropdown */}
+              <div className="relative" ref={colRef}>
+                <button 
+                  onClick={() => setShowColumnConfig(!showColumnConfig)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  <Settings className="w-4 h-4" />
+                  Columns ({visibleColumns.length}/50)
+                </button>
+                {showColumnConfig && (
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-panel border border-border rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[500px]">
+                    <div className="p-3 border-b border-border bg-surface/50 text-xs font-semibold text-white">Configure Columns</div>
+                    <div className="p-2 overflow-y-auto flex-1 flex flex-col gap-1">
+                      {allColumns.map(col => (
+                        <label key={col.key} className="flex items-center gap-2 p-2 hover:bg-white/5 rounded-md cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            className="w-4 h-4 rounded border-gray-600 bg-surface accent-primary-500"
+                            checked={visibleColumns.includes(col.key)}
+                            onChange={() => toggleColumn(col.key)}
+                            disabled={visibleColumns.length >= 50 && !visibleColumns.includes(col.key)}
+                          />
+                          <span className="text-sm text-gray-300">
+                            {col.label} {col.type === 'custom' && <span className="text-xs text-primary-500/70 ml-1">(Custom)</span>}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="p-3 border-t border-border bg-surface/50">
+                      <button 
+                        onClick={() => setShowColumnConfig(false)}
+                        className="w-full py-1.5 bg-primary-500/20 text-primary-400 rounded-md text-xs font-medium hover:bg-primary-500/30 transition-colors"
+                      >
+                        Apply View
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
