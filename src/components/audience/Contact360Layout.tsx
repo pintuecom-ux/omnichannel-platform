@@ -26,8 +26,9 @@ export function Contact360Layout({ contact, children }: Contact360LayoutProps) {
       <header className="flex-none bg-surface border-b border-border p-4 flex items-center justify-between shadow-md z-20">
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => router.push('/audience/contacts')}
-            className="p-2 rounded-md hover:bg-white/5 text-text-secondary transition-colors"
+            onClick={() => router.push('/contacts')}
+            className="p-2 rounded-md hover:bg-white/5 text-text-secondary hover:text-white transition-colors"
+            title="Back to Contacts"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
