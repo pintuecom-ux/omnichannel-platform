@@ -96,6 +96,45 @@ export interface Contact {
   meta: Record<string, any>
   created_at: string
   updated_at: string
+  // New Standard Fields
+  gender?: string | null
+  date_of_birth?: string | null
+  secondary_phone?: string | null
+  secondary_email?: string | null
+  facebook_url?: string | null
+  instagram_url?: string | null
+  linkedin_url?: string | null
+  department?: string | null
+  designation?: string | null
+  job_title?: string | null
+  state?: string | null
+  area?: string | null
+  landmark?: string | null
+  pin_code?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  owner_id?: string | null
+  lifecycle_stage?: string | null
+  status?: string | null
+  last_whatsapp_message_at?: string | null
+  last_email_at?: string | null
+  last_sms_at?: string | null
+  last_channel_used?: string | null
+  preferred_channel?: string | null
+  last_activity_at?: string | null
+  last_login_at?: string | null
+  last_contacted_at?: string | null
+  ai_score?: number | null
+  churn_risk?: number | null
+  campaign?: string | null
+  medium?: string | null
+  utm_source?: string | null
+  utm_medium?: string | null
+  utm_campaign?: string | null
+  utm_content?: string | null
+  utm_term?: string | null
+  referrer?: string | null
+  custom_fields?: Record<string, any>
 }
 
 export interface Conversation {
@@ -620,4 +659,19 @@ export interface PlatformEvent {
   correlation_id?: string
   schema_version: number
   created_at: string
+}
+
+export interface SavedView {
+  id: string
+  workspace_id: string
+  user_id?: string
+  entity_type: string
+  name: string
+  is_default: boolean
+  is_shared: boolean
+  columns: string[]
+  filters?: any[]
+  sorts?: any[]
+  created_at: string
+  updated_at: string
 }
