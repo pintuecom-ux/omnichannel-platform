@@ -77,32 +77,34 @@ export function ContactsToolbar({
   }
 
   return (
-    <div className="flex flex-col mb-5 relative z-30">
-      
-      {/* Top Header & Integrated Actions */}
-      <header className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800/80 mb-4">
+    <div className="flex flex-col mb-6 relative z-30">
+      {/* Background Decorative Glow */}
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary-500/10 rounded-full blur-[120px] pointer-events-none -translate-y-1/2 -z-10"></div>
+
+      {/* Top Header Row: Title on Left, Action Controls on Right */}
+      <header className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-border/60">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white drop-shadow-sm flex items-center gap-2">
             Contacts
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">Manage and organize your centralized audience</p>
+          <p className="text-sm text-text-secondary mt-1">Manage and organize your centralized audience</p>
         </div>
 
-        {/* Header Control Panel: Import, Filter, View, Columns, New Contact */}
-        <div className="flex items-center flex-wrap gap-2.5">
+        {/* Top Header Buttons */}
+        <div className="flex items-center flex-wrap gap-3">
           <button 
             onClick={() => onAction('import')}
-            className="bg-slate-800/90 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white px-3.5 py-2 rounded-lg flex items-center gap-2 transition-all text-xs font-medium shadow-sm hover:bg-slate-800"
+            className="bg-surface border border-border hover:border-text-secondary text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-xs font-medium shadow-sm hover:bg-surface2"
           >
-            <Download className="w-3.5 h-3.5 text-slate-400" />
+            <Download className="w-4 h-4 text-text-muted" />
             Import
           </button>
 
           <button 
             onClick={() => onAction('filter')}
-            className="bg-slate-800/90 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white px-3.5 py-2 rounded-lg flex items-center gap-2 transition-all text-xs font-medium shadow-sm hover:bg-slate-800"
+            className="bg-surface border border-border hover:border-text-secondary text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-xs font-medium shadow-sm hover:bg-surface2"
           >
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
+            <Filter className="w-4 h-4 text-text-muted" />
             Filter Attributes
           </button>
           
@@ -113,14 +115,14 @@ export function ContactsToolbar({
                 setShowSavedViews(!showSavedViews)
                 setShowColumnConfig(false)
               }}
-              className="bg-slate-800/90 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white px-3.5 py-2 rounded-lg flex items-center gap-2 transition-all text-xs font-medium shadow-sm hover:bg-slate-800"
+              className="bg-surface border border-border hover:border-text-secondary text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-xs font-medium shadow-sm hover:bg-surface2"
             >
-              <Layers className="w-3.5 h-3.5 text-slate-400" />
+              <Layers className="w-4 h-4 text-text-muted" />
               View
             </button>
             {showSavedViews && (
-              <div className="absolute right-0 top-full mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-50 overflow-hidden flex flex-col text-xs">
-                <div className="p-3 border-b border-slate-800 bg-slate-950/80 text-white font-semibold flex justify-between items-center">
+              <div className="absolute right-0 top-full mt-2 w-72 bg-panel border border-border rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col text-xs backdrop-blur-xl">
+                <div className="p-3 border-b border-border bg-surface/80 text-white font-semibold flex justify-between items-center">
                   <span>Saved Views</span>
                   {!isSavingView && (
                     <button onClick={() => setIsSavingView(true)} className="flex items-center gap-1 text-primary-400 hover:text-primary-300 font-medium">
@@ -130,7 +132,7 @@ export function ContactsToolbar({
                 </div>
                 
                 {isSavingView && (
-                  <div className="p-2.5 border-b border-slate-800 bg-slate-850 flex items-center gap-2">
+                  <div className="p-3 border-b border-border bg-surface flex items-center gap-2">
                     <input 
                       type="text" 
                       autoFocus
@@ -138,38 +140,38 @@ export function ContactsToolbar({
                       value={newViewName}
                       onChange={e => setNewViewName(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleSaveSubmit()}
-                      className="flex-1 bg-slate-950 border border-primary-500/80 rounded px-2.5 py-1 text-xs text-white focus:outline-none placeholder:text-slate-500"
+                      className="flex-1 bg-panel border border-primary-500 rounded px-3 py-1.5 text-xs text-white focus:outline-none placeholder:text-text-muted"
                     />
                     <button onClick={handleSaveSubmit} className="p-1.5 bg-primary-500 text-white rounded hover:bg-primary-600">
-                      <Save className="w-3.5 h-3.5" />
+                      <Save className="w-4 h-4" />
                     </button>
-                    <button onClick={() => setIsSavingView(false)} className="p-1 text-slate-400 hover:text-white">
-                      <X className="w-3.5 h-3.5" />
+                    <button onClick={() => setIsSavingView(false)} className="p-1 text-text-muted hover:text-white">
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 )}
 
-                <div className="p-1.5 flex flex-col max-h-64 overflow-y-auto divide-y divide-slate-800/40">
+                <div className="p-2 flex flex-col max-h-64 overflow-y-auto divide-y divide-border/30">
                   {savedViews.length === 0 ? (
-                    <div className="p-4 text-center text-slate-500 italic">No saved views yet.</div>
+                    <div className="p-4 text-center text-text-muted italic">No saved views yet.</div>
                   ) : (
                     savedViews.map(view => {
                       const isActive = JSON.stringify(visibleColumns) === JSON.stringify(view.columns)
                       return (
-                        <div key={view.id} className="flex items-center justify-between group/view hover:bg-slate-800/60 rounded-md px-2 py-1.5">
+                        <div key={view.id} className="flex items-center justify-between group/view hover:bg-white/5 rounded-md px-2 py-1.5">
                           <button 
                             onClick={() => {
                               onApplyView(view)
                               setShowSavedViews(false)
                             }}
-                            className="flex-1 flex items-center gap-2 text-left text-slate-200 hover:text-white truncate"
+                            className="flex-1 flex items-center gap-2 text-left text-gray-200 hover:text-white truncate"
                           >
-                            <Check className={cn("w-3.5 h-3.5 flex-none text-primary-400", isActive ? "opacity-100" : "opacity-0")} />
+                            <Check className={cn("w-4 h-4 flex-none text-primary-400", isActive ? "opacity-100" : "opacity-0")} />
                             <span className="truncate font-medium">{view.name}</span>
                           </button>
                           <button 
                             onClick={() => onDeleteView(view.id)}
-                            className="opacity-0 group-hover/view:opacity-100 p-1 text-slate-500 hover:text-rose-400 transition-opacity flex-none"
+                            className="opacity-0 group-hover/view:opacity-100 p-1 text-text-muted hover:text-danger-400 transition-opacity flex-none"
                             title="Delete View"
                           >
                             <Trash className="w-3.5 h-3.5" />
@@ -190,18 +192,18 @@ export function ContactsToolbar({
                 setShowColumnConfig(!showColumnConfig)
                 setShowSavedViews(false)
               }}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium bg-slate-800/90 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white transition-all shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-surface border border-border hover:border-text-secondary text-white transition-all shadow-sm"
             >
-              <Settings className="w-3.5 h-3.5 text-slate-400" />
+              <Settings className="w-4 h-4 text-text-muted" />
               Columns ({visibleColumns.length}/50)
             </button>
             {showColumnConfig && (
-              <div className="absolute right-0 top-full mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-50 overflow-hidden flex flex-col max-h-[480px] text-xs">
-                <div className="p-3 border-b border-slate-800 bg-slate-950/80 font-semibold text-white flex justify-between items-center">
+              <div className="absolute right-0 top-full mt-2 w-72 bg-panel border border-border rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[480px] text-xs backdrop-blur-xl">
+                <div className="p-3 border-b border-border bg-surface/80 font-semibold text-white flex justify-between items-center">
                   <span>Configure Columns</span>
-                  <span className="text-[10px] text-slate-400">{visibleColumns.length} / 50 selected</span>
+                  <span className="text-[10px] text-text-muted">{visibleColumns.length} / 50 selected</span>
                 </div>
-                <div className="p-2 overflow-y-auto flex-1 flex flex-col gap-0.5">
+                <div className="p-2 overflow-y-auto flex-1 flex flex-col gap-1">
                   {allColumns.map(col => {
                     const checked = visibleColumns.includes(col.key)
                     return (
@@ -209,12 +211,12 @@ export function ContactsToolbar({
                         key={col.key} 
                         className={cn(
                           "flex items-center gap-2.5 p-2 rounded-md cursor-pointer transition-colors",
-                          checked ? "bg-primary-500/10 text-white font-medium" : "hover:bg-slate-800/50 text-slate-300"
+                          checked ? "bg-primary-500/10 text-white font-medium" : "hover:bg-white/5 text-gray-300"
                         )}
                       >
                         <input 
                           type="checkbox" 
-                          className="w-4 h-4 rounded border-slate-700 bg-slate-950 accent-primary-500 cursor-pointer"
+                          className="w-4 h-4 rounded border-gray-600 bg-surface accent-primary-500 cursor-pointer"
                           checked={checked}
                           onChange={() => toggleColumn(col.key)}
                           disabled={visibleColumns.length >= 50 && !checked}
@@ -229,7 +231,7 @@ export function ContactsToolbar({
                     )
                   })}
                 </div>
-                <div className="p-2.5 border-t border-slate-800 bg-slate-950/80">
+                <div className="p-3 border-t border-border bg-surface/80">
                   <button 
                     onClick={() => setShowColumnConfig(false)}
                     className="w-full py-1.5 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition-colors shadow-md"
@@ -243,7 +245,7 @@ export function ContactsToolbar({
 
           <button 
             onClick={() => onAction('new')}
-            className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-400 hover:to-primary-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-xs font-semibold shadow-[0_0_20px_rgba(14,165,233,0.3)] hover:shadow-[0_0_25px_rgba(14,165,233,0.5)] border border-primary-400/50 ml-1"
+            className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-400 hover:to-primary-500 text-white px-5 py-2 rounded-lg flex items-center gap-2 transition-all text-xs font-semibold shadow-[0_0_20px_rgba(14,165,233,0.3)] hover:shadow-[0_0_25px_rgba(14,165,233,0.5)] border border-primary-400/50"
           >
             <Plus className="w-4 h-4" />
             New Contact
@@ -251,38 +253,38 @@ export function ContactsToolbar({
         </div>
       </header>
 
-      {/* Second Row: Search & Selection Actions */}
-      <div className="flex items-center justify-between">
-        {/* Search Input */}
-        <div className="relative w-[360px]">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      {/* Middle Row: Dedicated Search Bar with Generous Spacing Above Table */}
+      <div className="flex items-center justify-between py-4">
+        {/* Search Input with Padding & Margin */}
+        <div className="relative w-[380px]">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
           <input 
             type="text" 
             placeholder="Search by name, phone, or email..." 
             value={searchQuery}
             onChange={handleSearchChange}
-            className="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-all shadow-inner"
+            className="w-full bg-surface border border-border rounded-lg pl-10 pr-4 py-2.5 text-xs text-white placeholder-text-muted focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-all shadow-inner"
           />
         </div>
 
         {/* Batch Selection Action Bar */}
         {selectedCount > 0 && (
           <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4">
-            <span className="text-xs text-primary-300 font-semibold px-2.5 py-1 bg-primary-500/10 rounded-md border border-primary-500/30">
+            <span className="text-xs text-primary-300 font-semibold px-2.5 py-1 bg-primary-500/10 rounded-md border border-primary-500/20">
               {selectedCount} selected
             </span>
-            <button onClick={() => onAction('bulk-tag')} className="bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors">
+            <button onClick={() => onAction('bulk-tag')} className="bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-white px-3.5 py-2 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors">
               <Tags className="w-3.5 h-3.5" /> Tag
             </button>
-            <button onClick={() => onAction('bulk-list')} className="bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors">
+            <button onClick={() => onAction('bulk-list')} className="bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-white px-3.5 py-2 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors">
               <Users className="w-3.5 h-3.5" /> List
             </button>
             {selectedCount === 2 && (
-              <button onClick={() => onAction('merge')} className="bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors">
+              <button onClick={() => onAction('merge')} className="bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-white px-3.5 py-2 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors">
                 <GitMerge className="w-3.5 h-3.5" /> Merge
               </button>
             )}
-            <button onClick={() => onAction('bulk-delete')} className="bg-rose-500/10 border border-rose-500/30 hover:border-rose-500 text-rose-400 hover:bg-rose-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors">
+            <button onClick={() => onAction('bulk-delete')} className="bg-surface border border-danger-500/30 hover:border-danger-500 text-danger-400 hover:bg-danger-500/10 px-3.5 py-2 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors">
               <Trash className="w-3.5 h-3.5" /> Delete
             </button>
           </div>

@@ -108,7 +108,7 @@ export function ContactsGrid({
         <input 
           type={inputType}
           autoFocus
-          className="w-full bg-slate-950 border border-primary-500 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary-500 shadow-inner"
+          className="w-full bg-panel border border-primary-500 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary-500 shadow-inner"
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={(e) => {
@@ -122,7 +122,7 @@ export function ContactsGrid({
         <button onClick={saveEditing} className="p-1 bg-primary-500 text-white rounded hover:bg-primary-600 transition-colors flex-none shadow">
           <Check className="w-3.5 h-3.5" />
         </button>
-        <button onClick={cancelEditing} className="p-1 bg-slate-800 text-slate-400 rounded hover:text-white transition-colors flex-none">
+        <button onClick={cancelEditing} className="p-1 bg-surface2 text-text-muted rounded hover:text-white transition-colors flex-none">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -143,26 +143,43 @@ export function ContactsGrid({
     let displayContent = null
 
     if (col.key === 'name') {
+      const avatarUrl = contact.avatar_url || contact.avatar
       displayContent = (
         <div className="flex items-center gap-3">
-          <div className={`w-8 h-8 rounded-full ${getAvatarGradient(contact.id)} flex items-center justify-center text-white text-xs font-bold shadow-md shadow-blue-500/20 flex-none`}>
-            {contact.name?.substring(0, 2).toUpperCase() || 'NA'}
-          </div>
+          {avatarUrl ? (
+            <img 
+              src={avatarUrl} 
+              alt={contact.name || 'Avatar'} 
+              className="w-8 h-8 rounded-full object-cover shadow-md flex-none border border-white/10"
+              onError={(e) => {
+                // Fallback to initials if image fails to load
+                (e.target as HTMLElement).style.display = 'none'
+              }}
+            />
+          ) : (
+            <div className={`w-8 h-8 rounded-full ${getAvatarGradient(contact.id)} flex items-center justify-center text-white text-xs font-bold shadow-md shadow-blue-500/20 flex-none`}>
+              {contact.name?.substring(0, 2).toUpperCase() || 'NA'}
+            </div>
+          )}
           <div className="min-w-0">
             <div className="font-semibold text-white truncate text-xs">{contact.name || 'Unknown Contact'}</div>
-            <div className="text-[10px] text-slate-400 truncate">Added {contact.created_at ? new Date(contact.created_at).toLocaleDateString() : 'Recently'}</div>
+            <div className="text-[10px] text-text-muted truncate">Added {contact.created_at ? new Date(contact.created_at).toLocaleDateString() : 'Recently'}</div>
           </div>
         </div>
       )
+    } else if (col.type === 'image' || col.key === 'avatar_url') {
+      displayContent = val ? (
+        <img src={val} alt="Avatar" className="w-8 h-8 rounded-full object-cover border border-border shadow-sm" />
+      ) : <span className="text-text-muted opacity-50">-</span>
     } else if (col.key === 'wa_opt_in_status') {
       const isSubbed = val === 'subscribed' || (contact.phone && val !== 'unsubscribed')
       displayContent = isSubbed ? (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
           WhatsApp
         </span>
       ) : (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-400 border border-slate-700">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-surface text-text-secondary border border-border">
           WhatsApp
         </span>
       )
@@ -172,30 +189,30 @@ export function ContactsGrid({
         <div className="flex gap-1.5 items-center">
           {tags.length > 0 ? (
             tags.slice(0, 2).map((tag: string) => (
-              <span key={tag} className="px-2 py-0.5 rounded text-[10px] bg-slate-800 border border-slate-700 text-slate-300 font-medium">{tag}</span>
+              <span key={tag} className="px-2 py-0.5 rounded text-[10px] bg-surface border border-border text-gray-300 font-medium">{tag}</span>
             ))
           ) : (
-            <span className="text-slate-500 italic text-[10px]">None</span>
+            <span className="text-text-muted italic text-[10px]">None</span>
           )}
           {tags.length > 2 && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 border border-slate-700 text-slate-400">+{tags.length - 2}</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-surface border border-border text-text-muted">+{tags.length - 2}</span>
           )}
         </div>
       )
     } else if (col.type === 'date' || col.type === 'datetime') {
       displayContent = val ? new Date(val).toLocaleDateString() : '-'
     } else {
-      displayContent = val ? String(val) : <span className="text-slate-600 opacity-60">-</span>
+      displayContent = val ? String(val) : <span className="text-text-muted opacity-50">-</span>
     }
 
     return (
       <div className="flex items-center justify-between group/cell relative min-h-[26px]">
-        <div className={cn("truncate pr-6 text-xs", typeof val === 'number' ? 'text-primary-300 font-medium' : 'text-slate-300')}>
+        <div className={cn("truncate pr-6 text-xs", typeof val === 'number' ? 'text-primary-300 font-medium' : 'text-gray-300')}>
           {displayContent}
         </div>
         <button 
           onClick={(e) => startEditing(contact, col.key, isCustom, e)}
-          className="opacity-0 group-hover/cell:opacity-100 p-1 text-slate-400 hover:text-primary-400 hover:bg-slate-800/80 rounded transition-all absolute right-0"
+          className="opacity-0 group-hover/cell:opacity-100 p-1 text-text-muted hover:text-primary-400 hover:bg-surface rounded transition-all absolute right-0"
           title="Edit Cell"
         >
           <Edit2 className="w-3 h-3" />
@@ -207,13 +224,13 @@ export function ContactsGrid({
   const isFrozen = (key: string) => key === 'name'
 
   return (
-    <div className="flex-1 bg-slate-900/90 rounded-xl shadow-2xl flex flex-col border border-slate-800/80 relative z-10 min-h-0 overflow-hidden backdrop-blur-md">
+    <div className="flex-1 glass-panel rounded-xl shadow-2xl flex flex-col border border-border relative z-10 min-h-0 overflow-hidden backdrop-blur-md">
       <div className="overflow-auto flex-1 w-full relative">
         <table className="w-full text-left border-collapse whitespace-nowrap min-w-max">
-          <thead className="bg-slate-950/90 sticky top-0 z-30 backdrop-blur-md border-b border-slate-800">
+          <thead className="bg-panel/90 sticky top-0 z-30 backdrop-blur-md border-b border-border">
             <tr>
               {/* Checkbox Column - Frozen Left 0 */}
-              <th className="py-3 px-4 w-12 border-b border-slate-800 sticky left-0 z-40 bg-slate-950 border-r border-slate-800/60 shadow-[2px_0_8px_rgba(0,0,0,0.5)]">
+              <th className="py-3 px-4 w-12 border-b border-border sticky left-0 z-40 bg-panel border-r border-border/60 shadow-[2px_0_8px_rgba(0,0,0,0.5)]">
                 <Checkbox 
                   checked={selectedSet.size === contacts.length && contacts.length > 0} 
                   onCheckedChange={handleSelectAll} 
@@ -231,8 +248,8 @@ export function ContactsGrid({
                   <th 
                     key={colKey} 
                     className={cn(
-                      "py-3 px-4 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 group relative select-none",
-                      frozen ? "sticky left-[48px] z-40 bg-slate-950 shadow-[4px_0_12px_rgba(0,0,0,0.6)] border-r border-slate-800" : ""
+                      "py-3 px-4 text-[11px] font-semibold text-text-muted uppercase tracking-wider border-b border-border group relative select-none",
+                      frozen ? "sticky left-[48px] z-40 bg-panel shadow-[4px_0_12px_rgba(0,0,0,0.6)] border-r border-border" : ""
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -247,7 +264,7 @@ export function ContactsGrid({
                             {sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
                           </button>
                         ) : (
-                          <button onClick={() => onSort(colKey)} className="text-slate-500 hover:text-slate-200 transition-colors">
+                          <button onClick={() => onSort(colKey)} className="text-text-muted hover:text-white transition-colors">
                             <ArrowUpDown className="w-3 h-3" />
                           </button>
                         )}
@@ -256,14 +273,14 @@ export function ContactsGrid({
                         <div className="relative flex items-center">
                           <button 
                             onClick={() => setActiveFilterCol(activeFilterCol === colKey ? null : colKey)} 
-                            className={cn("p-0.5 rounded transition-colors", isFilteredHere ? "text-primary-400 bg-primary-500/10 border border-primary-500/20" : "text-slate-500 hover:text-slate-200")}
+                            className={cn("p-0.5 rounded transition-colors", isFilteredHere ? "text-primary-400 bg-primary-500/10 border border-primary-500/20" : "text-text-muted hover:text-white")}
                           >
                             <Filter className="w-3 h-3" />
                           </button>
                           
                           {activeFilterCol === colKey && (
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] p-2 z-50 flex items-center gap-1 text-xs">
-                              <Search className="w-3.5 h-3.5 text-slate-400 flex-none ml-1" />
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-52 bg-panel border border-border rounded-xl shadow-2xl p-2 z-50 flex items-center gap-1 text-xs">
+                              <Search className="w-3.5 h-3.5 text-text-muted flex-none ml-1" />
                               <input 
                                 ref={filterInputRef}
                                 type="text" 
@@ -271,9 +288,9 @@ export function ContactsGrid({
                                 value={filterConfig[colKey] || ''}
                                 onChange={e => onFilter(colKey, e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && setActiveFilterCol(null)}
-                                className="flex-1 bg-transparent text-xs text-white border-none focus:outline-none focus:ring-0 placeholder:text-slate-500"
+                                className="flex-1 bg-transparent text-xs text-white border-none focus:outline-none focus:ring-0 placeholder:text-text-muted"
                               />
-                              <button onClick={() => setActiveFilterCol(null)} className="p-1 text-slate-400 hover:text-white flex-none">
+                              <button onClick={() => setActiveFilterCol(null)} className="p-1 text-text-muted hover:text-white flex-none">
                                 <Check className="w-3.5 h-3.5" />
                               </button>
                             </div>
@@ -286,10 +303,10 @@ export function ContactsGrid({
               })}
             </tr>
           </thead>
-          <tbody className="text-xs divide-y divide-slate-800/60">
+          <tbody className="text-xs divide-y divide-border/40">
             {contacts.length === 0 ? (
               <tr>
-                <td colSpan={visibleColumns.length + 1} className="h-48 text-center text-slate-400 italic">
+                <td colSpan={visibleColumns.length + 1} className="h-48 text-center text-text-secondary italic">
                   No contacts found matching your view/filters.
                 </td>
               </tr>
@@ -297,12 +314,12 @@ export function ContactsGrid({
               contacts.map((contact) => (
                 <tr 
                   key={contact.id} 
-                  className={`group cursor-pointer hover:bg-slate-800/50 transition-colors ${selectedSet.has(contact.id) ? 'bg-primary-500/10' : ''}`}
+                  className={`group cursor-pointer hover:bg-surface2/50 transition-colors ${selectedSet.has(contact.id) ? 'bg-primary-500/10' : ''}`}
                   onClick={() => handleRowClick(contact.id)}
                 >
                   {/* Frozen Checkbox Column */}
                   <td 
-                    className="py-3 px-4 sticky left-0 z-20 bg-slate-900 group-hover:bg-slate-850 transition-colors border-r border-slate-800/60 shadow-[2px_0_8px_rgba(0,0,0,0.4)]" 
+                    className="py-3 px-4 sticky left-0 z-20 bg-panel group-hover:bg-surface transition-colors border-r border-border/60 shadow-[2px_0_8px_rgba(0,0,0,0.4)]" 
                     onClick={(e: React.MouseEvent) => e.stopPropagation()}
                   >
                     <Checkbox 
@@ -321,7 +338,7 @@ export function ContactsGrid({
                         key={colKey} 
                         className={cn(
                           "py-3 px-4 transition-colors",
-                          frozen ? "sticky left-[48px] z-20 bg-slate-900 shadow-[4px_0_12px_rgba(0,0,0,0.5)] border-r border-slate-800 group-hover:bg-slate-850" : ""
+                          frozen ? "sticky left-[48px] z-20 bg-panel shadow-[4px_0_12px_rgba(0,0,0,0.5)] border-r border-border group-hover:bg-surface" : ""
                         )}
                       >
                         {renderCellValue(contact, colDef)}
@@ -336,8 +353,8 @@ export function ContactsGrid({
       </div>
       
       {/* Pagination Footer */}
-      <div className="flex-none border-t border-slate-800 bg-slate-950 px-6 py-3 flex items-center justify-between text-xs z-10">
-        <span className="text-slate-400">Showing 1 to {contacts.length} of {contacts.length} contacts</span>
+      <div className="flex-none border-t border-border bg-surface px-6 py-3 flex items-center justify-between text-xs z-10">
+        <span className="text-text-muted">Showing 1 to {contacts.length} of {contacts.length} contacts</span>
         <div className="flex items-center gap-2">
           <button className="px-3 py-1 rounded-md bg-primary-500/20 text-primary-400 font-semibold border border-primary-500/30">1</button>
         </div>

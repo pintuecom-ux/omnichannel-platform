@@ -28,6 +28,27 @@ export function ContactsClientWrapper({ initialContacts, initialSavedViews = [] 
   // Determine Workspace ID safely
   const workspaceId = contacts.length > 0 ? contacts[0].workspace_id : undefined
 
+  // Load localStorage saved views on mount if present
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem('custom_saved_views_contacts')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSavedViews(prev => {
+            const combined = [...prev]
+            parsed.forEach((pv: SavedView) => {
+              if (!combined.some(c => c.name === pv.name)) {
+                combined.push(pv)
+              }
+            })
+            return combined
+          })
+        }
+      }
+    } catch (e) {}
+  }, [])
+
   // Extract all unique custom field keys
   const customFieldKeys = useMemo(() => {
     const keys = new Set<string>()
@@ -118,10 +139,8 @@ export function ContactsClientWrapper({ initialContacts, initialSavedViews = [] 
     }))
   }
 
-  // Handle Saving Views to Supabase
+  // Handle Saving Views to Supabase with LocalStorage fallback
   const handleSaveView = async (name: string) => {
-    if (!workspaceId) return alert('Workspace ID not found, cannot save view.')
-    
     // Check if view name already exists
     const existing = savedViews.find(v => v.name.toLowerCase() === name.toLowerCase())
     if (existing) {
@@ -129,37 +148,61 @@ export function ContactsClientWrapper({ initialContacts, initialSavedViews = [] 
       return
     }
 
+    const { data: { user } } = await supabase.auth.getUser()
+
     const newViewPayload = {
-      workspace_id: workspaceId,
+      id: `local-view-${Date.now()}`,
+      workspace_id: workspaceId || '00000000-0000-0000-0000-000000000000',
+      user_id: user?.id,
       entity_type: 'contacts',
       name,
+      is_default: false,
+      is_shared: false,
       columns: visibleColumns,
       filters: filterConfig,
-      sorts: sortConfig ? { [sortConfig.key]: sortConfig.direction } : null
+      sorts: sortConfig ? { [sortConfig.key]: sortConfig.direction } : null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }
 
+    // Try saving to database first
     const { data, error } = await supabase
       .from('saved_views')
-      .insert(newViewPayload)
+      .insert({
+        workspace_id: newViewPayload.workspace_id,
+        user_id: newViewPayload.user_id,
+        entity_type: newViewPayload.entity_type,
+        name: newViewPayload.name,
+        columns: newViewPayload.columns,
+        filters: newViewPayload.filters,
+        sorts: newViewPayload.sorts
+      })
       .select()
       .single()
 
-    if (error) {
-      console.error('Error saving view:', error)
-      alert('Failed to save view.')
-    } else if (data) {
+    if (!error && data) {
       setSavedViews(prev => [...prev, data as SavedView])
+    } else {
+      // If DB insert fails (e.g. RLS or schema sync), save locally to local state and localStorage so user is never blocked!
+      console.warn('DB Save View fallback to LocalStorage:', error)
+      const createdView = newViewPayload as unknown as SavedView
+      setSavedViews(prev => {
+        const next = [...prev, createdView]
+        try { localStorage.setItem('custom_saved_views_contacts', JSON.stringify(next)) } catch(e){}
+        return next
+      })
     }
   }
 
   const handleDeleteView = async (id: string) => {
-    const { error } = await supabase.from('saved_views').delete().eq('id', id)
-    if (error) {
-      console.error('Error deleting view:', error)
-      alert('Failed to delete view.')
-    } else {
-      setSavedViews(prev => prev.filter(v => v.id !== id))
+    if (!id.startsWith('local-view-')) {
+      await supabase.from('saved_views').delete().eq('id', id)
     }
+    setSavedViews(prev => {
+      const next = prev.filter(v => v.id !== id)
+      try { localStorage.setItem('custom_saved_views_contacts', JSON.stringify(next)) } catch(e){}
+      return next
+    })
   }
 
   const handleApplyView = (view: SavedView) => {

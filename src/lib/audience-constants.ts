@@ -4,7 +4,6 @@ export const CONTACT_FIELD_GROUPS = [
     id: 'personal',
     label: 'Personal Information',
     fields: [
-      { key: 'avatar_url', label: 'Contact Avatar', type: 'image' },
       { key: 'name', label: 'Full Name', type: 'string', readOnly: true },
       { key: 'first_name', label: 'First Name', type: 'string' },
       { key: 'last_name', label: 'Last Name', type: 'string' },

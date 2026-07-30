@@ -131,8 +131,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
     if (field.type === 'image') {
       return (
         <div className="flex items-center gap-3">
-          <img src={val} alt="Avatar" className="w-10 h-10 rounded-full object-cover bg-surface border border-border" />
-          <span className="text-xs text-text-muted break-all">{val}</span>
+          <img src={val} alt="Avatar" className="w-12 h-12 rounded-full object-cover bg-surface border border-border shadow-md" />
         </div>
       )
     }
