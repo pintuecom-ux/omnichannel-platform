@@ -2,23 +2,24 @@
 
 import React, { useState } from 'react'
 import { Contact } from '@/types'
-import { Activity, Clock, MessageCircle, BarChart3, Settings, Edit2, Check, X } from 'lucide-react'
+import { Activity, Clock, MessageCircle, BarChart3, Settings, Edit2, Check, X, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Contact360MainWorkspaceProps {
   contact: Contact
 }
 
-// Field Group Configuration
+// Exhaustive Field Group Configuration
 const FIELD_GROUPS = [
   {
     id: 'personal',
     label: 'Personal Information',
     fields: [
-      { key: 'name', label: 'Full Name' },
-      { key: 'first_name', label: 'First Name' },
-      { key: 'last_name', label: 'Last Name' },
-      { key: 'gender', label: 'Gender' },
+      { key: 'avatar_url', label: 'Contact Avatar', type: 'image' },
+      { key: 'name', label: 'Full Name', type: 'string', readOnly: true },
+      { key: 'first_name', label: 'First Name', type: 'string' },
+      { key: 'last_name', label: 'Last Name', type: 'string' },
+      { key: 'gender', label: 'Gender', type: 'dropdown', options: ['Male', 'Female', 'Other', 'Prefer not to say'] },
       { key: 'date_of_birth', label: 'Date of Birth', type: 'date' },
     ]
   },
@@ -26,79 +27,228 @@ const FIELD_GROUPS = [
     id: 'communication',
     label: 'Communication',
     fields: [
-      { key: 'phone', label: 'Primary Phone' },
-      { key: 'secondary_phone', label: 'Secondary Phone' },
-      { key: 'email', label: 'Primary Email' },
-      { key: 'secondary_email', label: 'Secondary Email' },
-      { key: 'preferred_channel', label: 'Preferred Channel' },
-    ]
-  },
-  {
-    id: 'business',
-    label: 'Business',
-    fields: [
-      { key: 'company_name', label: 'Company Name' },
-      { key: 'department', label: 'Department' },
-      { key: 'designation', label: 'Designation' },
-      { key: 'job_title', label: 'Job Title' },
-    ]
-  },
-  {
-    id: 'location',
-    label: 'Location',
-    fields: [
-      { key: 'country', label: 'Country' },
-      { key: 'state', label: 'State' },
-      { key: 'city', label: 'City' },
-      { key: 'area', label: 'Area' },
-      { key: 'landmark', label: 'Landmark' },
-      { key: 'pin_code', label: 'PIN Code' },
+      { key: 'phone', label: 'Primary Phone', type: 'string' },
+      { key: 'secondary_phone', label: 'Secondary Phone', type: 'string' },
+      { key: 'email', label: 'Email', type: 'string' },
+      { key: 'secondary_email', label: 'Secondary Email', type: 'string' },
+      { key: 'preferred_channel', label: 'Preferred Channel', type: 'dropdown', options: ['WhatsApp', 'Email', 'SMS', 'Instagram', 'Facebook', 'Phone'] },
     ]
   },
   {
     id: 'social',
     label: 'Social Profiles',
     fields: [
-      { key: 'facebook_url', label: 'Facebook URL' },
-      { key: 'instagram_url', label: 'Instagram URL' },
-      { key: 'linkedin_url', label: 'LinkedIn URL' },
-      { key: 'instagram_username', label: 'Instagram Username' },
+      { key: 'facebook_url', label: 'Facebook Profile Link', type: 'url' },
+      { key: 'instagram_url', label: 'Instagram Profile Link', type: 'url' },
+      { key: 'linkedin_url', label: 'LinkedIn Profile Link', type: 'url' },
     ]
   },
   {
-    id: 'system',
-    label: 'System & CRM',
+    id: 'business',
+    label: 'Business',
     fields: [
-      { key: 'lifecycle_stage', label: 'Lifecycle Stage' },
-      { key: 'status', label: 'Status' },
-      { key: 'owner_id', label: 'Owner ID' },
-      { key: 'source', label: 'Source' },
-      { key: 'campaign', label: 'Campaign' },
-      { key: 'referrer', label: 'Referrer' },
+      { key: 'company_name', label: 'Company', type: 'string' },
+      { key: 'department', label: 'Department', type: 'string' },
+      { key: 'designation', label: 'Designation', type: 'string' },
+      { key: 'job_title', label: 'Job Title', type: 'string' },
+    ]
+  },
+  {
+    id: 'location',
+    label: 'Location',
+    fields: [
+      { key: 'country', label: 'Country', type: 'dropdown', options: ['United States', 'United Kingdom', 'Canada', 'Australia', 'India', 'Other'] },
+      { key: 'state', label: 'State', type: 'dropdown', options: ['California', 'New York', 'Texas', 'London', 'Ontario', 'Other'] },
+      { key: 'city', label: 'City', type: 'string' },
+      { key: 'area', label: 'Area', type: 'string' },
+      { key: 'landmark', label: 'Landmark', type: 'string' },
+      { key: 'pin_code', label: 'PIN Code', type: 'string' },
+      { key: 'latitude', label: 'Latitude', type: 'number' },
+      { key: 'longitude', label: 'Longitude', type: 'number' },
+    ]
+  },
+  {
+    id: 'crm',
+    label: 'CRM & Ownership',
+    fields: [
+      { key: 'owner_id', label: 'Contact Owner', type: 'dropdown', options: ['Unassigned', 'John Doe', 'Jane Smith'] },
+      { key: 'lifecycle_stage', label: 'Lifecycle Stage', type: 'dropdown', options: ['Subscriber', 'Lead', 'MQL', 'SQL', 'Opportunity', 'Customer', 'Evangelist', 'Other'] },
+      { key: 'status', label: 'Status', type: 'dropdown', options: ['New', 'Open', 'In Progress', 'Unqualified', 'Attempted to Contact', 'Connected', 'Bad Timing'] },
+      { key: 'lists', label: 'Lists', type: 'multiselect', options: ['Newsletter', 'VIP', 'Churned'] },
+      { key: 'segments', label: 'Segments', type: 'multiselect', options: ['High Value', 'Engaged Last 30 Days'] },
+      { key: 'tags', label: 'Tags', type: 'multiselect', options: ['urgent', 'b2b', 'enterprise'] },
+      { key: 'notes', label: 'Notes', type: 'paragraph' },
+    ]
+  },
+  {
+    id: 'marketing',
+    label: 'Marketing & Source',
+    fields: [
+      { key: 'source', label: 'Source', type: 'dropdown', options: ['Organic Search', 'Direct Traffic', 'Social Media', 'Referral', 'Paid Search', 'Email Marketing', 'Offline'] },
+      { key: 'campaign', label: 'Campaign', type: 'string' },
+      { key: 'medium', label: 'Medium', type: 'string' },
+      { key: 'utm_source', label: 'UTM Source', type: 'string' },
+      { key: 'utm_medium', label: 'UTM Medium', type: 'string' },
+      { key: 'utm_campaign', label: 'UTM Campaign', type: 'string' },
+      { key: 'utm_term', label: 'UTM Term', type: 'string' },
+      { key: 'utm_content', label: 'UTM Content', type: 'string' },
+      { key: 'referrer', label: 'Referrer', type: 'url' },
+    ]
+  },
+  {
+    id: 'activity_metrics',
+    label: 'Activity & Metrics (System)',
+    fields: [
+      { key: 'last_whatsapp_message_at', label: 'Last WhatsApp Message', type: 'datetime', readOnly: true },
+      { key: 'last_email_at', label: 'Last Email', type: 'datetime', readOnly: true },
+      { key: 'last_sms_at', label: 'Last SMS', type: 'datetime', readOnly: true },
+      { key: 'last_channel_used', label: 'Last Channel Used', type: 'string', readOnly: true },
+      { key: 'last_seen_at', label: 'Last Seen', type: 'datetime', readOnly: true },
+      { key: 'last_activity_at', label: 'Last Activity', type: 'datetime', readOnly: true },
+      { key: 'last_login_at', label: 'Last Login', type: 'datetime', readOnly: true },
+      { key: 'last_contacted_at', label: 'Last Contacted', type: 'datetime', readOnly: true },
+      { key: 'ai_score', label: 'AI Score', type: 'number', readOnly: true },
+      { key: 'churn_risk', label: 'Churn Risk (%)', type: 'number', readOnly: true },
+      { key: 'created_at', label: 'Created Date', type: 'datetime', readOnly: true },
+      { key: 'updated_at', label: 'Updated Date', type: 'datetime', readOnly: true },
+      { key: 'created_by', label: 'Created By', type: 'string', readOnly: true },
+      { key: 'updated_by', label: 'Updated By', type: 'string', readOnly: true },
+      { key: 'subscription_channels', label: 'Subscription Channels & Types', type: 'paragraph', readOnly: true },
     ]
   }
 ]
 
 export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState('fields') // Defaulting to fields so user sees it right away
   const [editingField, setEditingField] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState<string>('')
+  const [editValue, setEditValue] = useState<any>('')
   
   // Local state to simulate updates
-  const [localContact, setLocalContact] = useState<Contact>(contact)
+  const [localContact, setLocalContact] = useState<Contact & Record<string, any>>({
+    ...contact,
+    custom_fields: contact.custom_fields || {}
+  })
 
-  const handleEditClick = (key: string, value: any) => {
+  // Custom Field Creation Modal State
+  const [showAddCustomField, setShowAddCustomField] = useState(false)
+  const [newCustomField, setNewCustomField] = useState({ name: '', system_name: '', type: 'Text' })
+
+  const handleEditClick = (key: string, value: any, isCustom = false) => {
     setEditingField(key)
-    setEditValue(value === null || value === undefined ? '' : String(value))
+    if (isCustom) {
+      setEditValue(localContact.custom_fields?.[key] || '')
+    } else {
+      setEditValue(value === null || value === undefined ? '' : value)
+    }
   }
 
-  const handleSaveField = (key: string) => {
-    setLocalContact(prev => ({ ...prev, [key]: editValue }))
+  const handleSaveField = (key: string, isCustom = false) => {
+    if (isCustom) {
+      setLocalContact(prev => ({ 
+        ...prev, 
+        custom_fields: { ...(prev.custom_fields || {}), [key]: editValue } 
+      }))
+    } else {
+      setLocalContact(prev => ({ ...prev, [key]: editValue }))
+    }
     setEditingField(null)
   }
 
   const handleCancelEdit = () => {
     setEditingField(null)
+  }
+
+  const handleAddCustomField = () => {
+    if (!newCustomField.system_name) return
+    setLocalContact(prev => ({
+      ...prev,
+      custom_fields: {
+        ...(prev.custom_fields || {}),
+        [newCustomField.system_name]: '' // Initialize empty
+      }
+    }))
+    setShowAddCustomField(false)
+    setNewCustomField({ name: '', system_name: '', type: 'Text' })
+  }
+
+  const renderEditInput = (field: any, isCustom = false) => {
+    const type = field.type || 'string'
+    
+    if (type === 'dropdown') {
+      return (
+        <select 
+          className="flex-1 bg-panel border border-primary-500 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+        >
+          <option value="">Select an option...</option>
+          {field.options?.map((opt: string) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
+      )
+    }
+    
+    if (type === 'multiselect') {
+      // Very basic string representation for multiselect in this prototype
+      return (
+        <input 
+          type="text"
+          placeholder="Comma separated values"
+          className="flex-1 bg-panel border border-primary-500 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+        />
+      )
+    }
+    
+    if (type === 'paragraph') {
+      return (
+        <textarea 
+          className="flex-1 bg-panel border border-primary-500 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none min-h-[80px]"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+        />
+      )
+    }
+    
+    let inputType = 'text'
+    if (type === 'number') inputType = 'number'
+    if (type === 'date') inputType = 'date'
+    if (type === 'datetime') inputType = 'datetime-local'
+    if (type === 'url') inputType = 'url'
+    if (type === 'image') inputType = 'url'
+
+    return (
+      <input 
+        type={inputType}
+        className="flex-1 bg-panel border border-primary-500 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500 w-full"
+        value={editValue}
+        placeholder={type === 'image' ? 'https://...' : ''}
+        onChange={(e) => setEditValue(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && handleSaveField(field.key, isCustom)}
+      />
+    )
+  }
+
+  const renderFieldValue = (field: any, val: any) => {
+    if (val === null || val === undefined || val === '') return <span className="text-text-muted italic">Empty</span>
+    
+    if (field.type === 'image') {
+      return (
+        <div className="flex items-center gap-3">
+          <img src={val} alt="Avatar" className="w-10 h-10 rounded-full object-cover bg-surface border border-border" />
+          <span className="text-xs text-text-muted break-all">{val}</span>
+        </div>
+      )
+    }
+    if (field.type === 'url') {
+      return <a href={val} target="_blank" rel="noreferrer" className="text-primary-400 hover:underline">{val}</a>
+    }
+    if (field.type === 'date') return new Date(val).toLocaleDateString()
+    if (field.type === 'datetime') return new Date(val).toLocaleString()
+    
+    return <span className="whitespace-pre-wrap break-words">{String(val)}</span>
   }
 
   return (
@@ -109,37 +259,25 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
         <div className="flex space-x-8 overflow-x-auto no-scrollbar">
           <button 
             onClick={() => setActiveTab('overview')}
-            className={cn(
-              "pb-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap", 
-              activeTab === 'overview' ? "border-primary-500 text-primary-400" : "border-transparent text-gray-400 hover:text-white"
-            )}
+            className={cn("pb-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap", activeTab === 'overview' ? "border-primary-500 text-primary-400" : "border-transparent text-gray-400 hover:text-white")}
           >
             Overview
           </button>
           <button 
             onClick={() => setActiveTab('fields')}
-            className={cn(
-              "pb-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap", 
-              activeTab === 'fields' ? "border-primary-500 text-primary-400" : "border-transparent text-gray-400 hover:text-white"
-            )}
+            className={cn("pb-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap", activeTab === 'fields' ? "border-primary-500 text-primary-400" : "border-transparent text-gray-400 hover:text-white")}
           >
             All Fields & Properties
           </button>
           <button 
             onClick={() => setActiveTab('timeline')}
-            className={cn(
-              "pb-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap", 
-              activeTab === 'timeline' ? "border-primary-500 text-primary-400" : "border-transparent text-gray-400 hover:text-white"
-            )}
+            className={cn("pb-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap", activeTab === 'timeline' ? "border-primary-500 text-primary-400" : "border-transparent text-gray-400 hover:text-white")}
           >
             Timeline
           </button>
           <button 
             onClick={() => setActiveTab('conversations')}
-            className={cn(
-              "pb-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap", 
-              activeTab === 'conversations' ? "border-primary-500 text-primary-400" : "border-transparent text-gray-400 hover:text-white"
-            )}
+            className={cn("pb-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap", activeTab === 'conversations' ? "border-primary-500 text-primary-400" : "border-transparent text-gray-400 hover:text-white")}
           >
             Conversations
           </button>
@@ -152,8 +290,6 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="grid grid-cols-2 gap-6 h-full items-start">
-            
-            {/* Recent Activity Mini */}
             <div className="bg-surface border border-border rounded-xl p-6 shadow-sm">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 rounded-lg bg-blue-500/10">
@@ -161,7 +297,6 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
                 </div>
                 <h3 className="font-semibold text-white">Recent Activity</h3>
               </div>
-              
               <div className="flex flex-col gap-4 relative before:absolute before:inset-0 before:ml-[15px] before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
                 <div className="relative flex items-start gap-4">
                   <div className="flex items-center justify-center w-8 h-8 rounded-full border border-white/10 bg-surface shadow shrink-0 z-10">
@@ -175,22 +310,9 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
                     <div className="text-text-secondary text-xs">System sent automated greeting via WhatsApp.</div>
                   </div>
                 </div>
-                <div className="relative flex items-start gap-4">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full border border-white/10 bg-surface shadow shrink-0 z-10">
-                    <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
-                  </div>
-                  <div className="flex-1 p-4 rounded-lg border border-border bg-panel shadow-sm">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="font-bold text-white text-sm">Message Read</div>
-                      <time className="text-xs font-medium text-text-secondary">3 hours ago</time>
-                    </div>
-                    <div className="text-text-secondary text-xs">User read the pricing update broadcast.</div>
-                  </div>
-                </div>
               </div>
             </div>
 
-            {/* CRM Insights */}
             <div className="bg-surface border border-border rounded-xl p-6 shadow-sm">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 rounded-lg bg-purple-500/10">
@@ -207,69 +329,52 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
                   <div className="text-xs text-text-muted mb-2 uppercase tracking-wide">Churn Risk</div>
                   <div className="text-2xl font-semibold text-white">{localContact.churn_risk ? `${localContact.churn_risk}%` : '-'}</div>
                 </div>
-                <div className="bg-panel p-4 rounded-lg border border-border">
-                  <div className="text-xs text-text-muted mb-2 uppercase tracking-wide">Last Contacted</div>
-                  <div className="text-sm font-semibold text-white truncate">
-                    {localContact.last_contacted_at ? new Date(localContact.last_contacted_at).toLocaleDateString() : '—'}
-                  </div>
-                </div>
-                <div className="bg-panel p-4 rounded-lg border border-border">
-                  <div className="text-xs text-text-muted mb-2 uppercase tracking-wide">Active Since</div>
-                  <div className="text-sm font-semibold text-white truncate">
-                    {localContact.created_at ? new Date(localContact.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : '—'}
-                  </div>
-                </div>
               </div>
             </div>
-
           </div>
         )}
 
-        {/* FIELDS TAB (The enormous list of all fields) */}
+        {/* FIELDS TAB (The exhaustive list of all fields) */}
         {activeTab === 'fields' && (
-          <div className="max-w-4xl mx-auto space-y-6 pb-20">
+          <div className="max-w-5xl mx-auto space-y-6 pb-20">
             {FIELD_GROUPS.map(group => (
               <div key={group.id} className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
                 <div className="bg-panel/50 px-6 py-4 border-b border-border">
                   <h3 className="font-semibold text-white">{group.label}</h3>
                 </div>
-                <div className="p-6 grid grid-cols-2 gap-x-8 gap-y-6">
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
                   {group.fields.map(field => {
-                    const value = localContact[field.key as keyof Contact]
+                    const value = localContact[field.key]
                     const isEditing = editingField === field.key
+                    const isReadOnly = field.readOnly
 
                     return (
                       <div key={field.key} className="flex flex-col gap-1.5 group/field">
                         <label className="text-xs font-medium text-text-muted uppercase tracking-wide">{field.label}</label>
                         
-                        {isEditing ? (
-                          <div className="flex items-center gap-2">
-                            <input 
-                              type={field.type === 'date' ? 'date' : 'text'}
-                              className="flex-1 bg-panel border border-primary-500 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              autoFocus
-                              onKeyDown={(e) => e.key === 'Enter' && handleSaveField(field.key)}
-                            />
-                            <button onClick={() => handleSaveField(field.key)} className="p-1.5 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors">
+                        {isEditing && !isReadOnly ? (
+                          <div className="flex items-start gap-2">
+                            {renderEditInput(field)}
+                            <button onClick={() => handleSaveField(field.key)} className="p-1.5 mt-0.5 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors">
                               <Check className="w-4 h-4" />
                             </button>
-                            <button onClick={handleCancelEdit} className="p-1.5 bg-surface2 text-text-muted rounded-md hover:text-white transition-colors">
+                            <button onClick={handleCancelEdit} className="p-1.5 mt-0.5 bg-surface2 text-text-muted rounded-md hover:text-white transition-colors">
                               <X className="w-4 h-4" />
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center justify-between px-3 py-1.5 -ml-3 rounded-md border border-transparent hover:border-border hover:bg-white/5 transition-colors">
-                            <span className={cn("text-sm", !value && "text-text-muted italic")}>
-                              {value ? (field.type === 'date' ? new Date(value as string).toLocaleDateString() : String(value)) : 'Empty'}
-                            </span>
-                            <button 
-                              onClick={() => handleEditClick(field.key, value)}
-                              className="opacity-0 group-hover/field:opacity-100 p-1 text-text-muted hover:text-primary-400 transition-all"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
+                          <div className="flex items-start justify-between px-3 py-2 -ml-3 rounded-md border border-transparent hover:border-border hover:bg-white/5 transition-colors">
+                            <div className={cn("text-sm text-white")}>
+                              {renderFieldValue(field, value)}
+                            </div>
+                            {!isReadOnly && (
+                              <button 
+                                onClick={() => handleEditClick(field.key, value)}
+                                className="opacity-0 group-hover/field:opacity-100 p-1 mt-0.5 text-text-muted hover:text-primary-400 transition-all flex-none"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -279,27 +384,109 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
               </div>
             ))}
 
-            {/* Custom Fields section could be dynamically generated here by iterating over custom_fields jsonb */}
+            {/* CUSTOM FIELDS SECTION */}
             <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
-              <div className="bg-panel/50 px-6 py-4 border-b border-border">
+              <div className="bg-panel/50 px-6 py-4 border-b border-border flex items-center justify-between">
                 <h3 className="font-semibold text-white">Custom Fields</h3>
+                <button 
+                  onClick={() => setShowAddCustomField(true)}
+                  className="flex items-center gap-1.5 text-xs font-medium bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Field
+                </button>
               </div>
+              
               <div className="p-6">
-                {localContact.custom_fields && Object.keys(localContact.custom_fields).length > 0 ? (
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-6">
-                    {Object.entries(localContact.custom_fields).map(([key, val]) => (
-                      <div key={key} className="flex flex-col gap-1.5">
-                        <label className="text-xs font-medium text-text-muted uppercase tracking-wide">{key}</label>
-                        <div className="px-3 py-1.5 -ml-3">
-                          <span className="text-sm text-white">{String(val)}</span>
-                        </div>
+                {showAddCustomField && (
+                  <div className="mb-8 p-4 bg-panel border border-primary-500/30 rounded-lg shadow-inner">
+                    <h4 className="text-sm font-semibold text-white mb-4">Define New Custom Field</h4>
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      <div>
+                        <label className="block text-xs text-text-muted mb-1">Field Label</label>
+                        <input 
+                          type="text" 
+                          className="w-full bg-surface border border-border rounded-md px-3 py-1.5 text-sm text-white"
+                          value={newCustomField.name}
+                          onChange={e => setNewCustomField({...newCustomField, name: e.target.value, system_name: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '_')})}
+                          placeholder="e.g. Loyalty Tier"
+                        />
                       </div>
-                    ))}
+                      <div>
+                        <label className="block text-xs text-text-muted mb-1">System Name</label>
+                        <input 
+                          type="text" 
+                          className="w-full bg-surface border border-border rounded-md px-3 py-1.5 text-sm text-gray-400"
+                          value={newCustomField.system_name}
+                          readOnly
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-text-muted mb-1">Field Type</label>
+                        <select 
+                          className="w-full bg-surface border border-border rounded-md px-3 py-1.5 text-sm text-white"
+                          value={newCustomField.type}
+                          onChange={e => setNewCustomField({...newCustomField, type: e.target.value})}
+                        >
+                          <option>Text</option>
+                          <option>Paragraph</option>
+                          <option>Number</option>
+                          <option>Date</option>
+                          <option>Dropdown</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={handleAddCustomField} className="px-4 py-1.5 bg-primary-500 text-white text-sm font-medium rounded-md hover:bg-primary-600">Create Field</button>
+                      <button onClick={() => setShowAddCustomField(false)} className="px-4 py-1.5 bg-surface text-text-secondary text-sm font-medium rounded-md border border-border hover:text-white">Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {localContact.custom_fields && Object.keys(localContact.custom_fields).length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                    {Object.entries(localContact.custom_fields).map(([key, val]) => {
+                      const isEditing = editingField === key
+                      // We don't have the type metadata stored cleanly in this raw JSONB mock, so we guess text/paragraph
+                      // A real app would join with `custom_field_definitions`
+                      const fieldType = String(val).length > 50 ? 'paragraph' : 'string'
+
+                      return (
+                        <div key={key} className="flex flex-col gap-1.5 group/field">
+                          <label className="text-xs font-medium text-text-muted uppercase tracking-wide">{key}</label>
+                          
+                          {isEditing ? (
+                            <div className="flex items-start gap-2">
+                              {renderEditInput({ key, type: fieldType }, true)}
+                              <button onClick={() => handleSaveField(key, true)} className="p-1.5 mt-0.5 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors">
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button onClick={handleCancelEdit} className="p-1.5 mt-0.5 bg-surface2 text-text-muted rounded-md hover:text-white transition-colors">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-start justify-between px-3 py-2 -ml-3 rounded-md border border-transparent hover:border-border hover:bg-white/5 transition-colors">
+                              <div className={cn("text-sm text-white")}>
+                                {renderFieldValue({ type: fieldType }, val)}
+                              </div>
+                              <button 
+                                onClick={() => handleEditClick(key, val, true)}
+                                className="opacity-0 group-hover/field:opacity-100 p-1 mt-0.5 text-text-muted hover:text-primary-400 transition-all flex-none"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : (
-                  <div className="text-center py-4 text-sm text-text-secondary italic">
-                    No custom fields found for this contact.
-                  </div>
+                  !showAddCustomField && (
+                    <div className="text-center py-10 text-sm text-text-secondary italic bg-panel rounded-lg border border-border">
+                      No custom fields found for this contact.
+                    </div>
+                  )
                 )}
               </div>
             </div>
