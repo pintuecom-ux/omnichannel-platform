@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import Sidebar from '@/components/sidebar/Sidebar'
+import GlobalSidebar from '@/components/sidebar/GlobalSidebar'
+import ModuleSidebar from '@/components/sidebar/ModuleSidebar'
 import InboundCallWatcher from '@/components/InboundCallWatcher'
 import { GlobalCommandPalette } from '@/components/ui/GlobalCommandPalette'
 
@@ -12,7 +13,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div id="app">
-      <Sidebar />
+      <GlobalSidebar />
+      <ModuleSidebar />
       <InboundCallWatcher />
       <GlobalCommandPalette />
       <div id="content">
