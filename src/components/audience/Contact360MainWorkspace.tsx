@@ -16,7 +16,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
     <div className="h-full flex flex-col bg-base relative z-10">
       
       {/* Sticky Tab Header */}
-      <div className="flex-none border-b border-border bg-base px-8 pt-6 sticky top-0 z-10 shrink-0">
+      <div className="flex-none border-b border-border bg-base px-6 pt-6 sticky top-0 z-10 shrink-0">
         <div className="flex space-x-8 overflow-x-auto no-scrollbar">
           <button 
             onClick={() => setActiveTab('overview')}
@@ -58,7 +58,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
       </div>
 
       {/* Tab Content Area */}
-      <div className="flex-1 overflow-y-auto p-8">
+      <div className="flex-1 overflow-y-auto p-6">
         
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (

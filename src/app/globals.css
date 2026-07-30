@@ -171,7 +171,7 @@
 /* RESET */
 * {
   margin: 0;
-  padding: 0;
+  /* padding: 0; */
   box-sizing: border-box;
 }
 
@@ -3445,6 +3445,11 @@ textarea.form-input {
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(55, 65, 81, 0.5);
+    margin-top: 20px;
+}
+
+.p-6 {
+    padding: var(--spacing-6) !important;
 }
 
 .table-row-hover {

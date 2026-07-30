@@ -87,7 +87,7 @@ export default function ListsPage() {
       {/* Decorative Background Glow */}
       <div className="absolute top-0 right-1/4 w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[100px] pointer-events-none -translate-y-1/2 -z-10"></div>
 
-      <header className="h-20 px-8 flex items-center justify-between flex-none z-10 border-b border-border/50 glass-panel">
+      <header className="h-20 px-6 flex items-center justify-between flex-none z-10 border-b border-border/50 glass-panel">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white drop-shadow-sm flex items-center gap-3">
             <ListIcon className="text-purple-400 w-6 h-6" /> Static Lists
@@ -102,7 +102,7 @@ export default function ListsPage() {
         </button>
       </header>
 
-      <div className="flex-1 p-8 flex flex-col gap-6 z-10 overflow-hidden">
+      <div className="flex-1 p-6 flex flex-col gap-6 z-10 overflow-hidden">
         <div className="flex items-center justify-between flex-none">
           <div className="relative w-[380px]">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
