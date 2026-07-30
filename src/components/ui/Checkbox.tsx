@@ -1,22 +1,36 @@
+'use client'
+
 import React from 'react'
+import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'checked' | 'onChange'> {
+export interface CheckboxProps {
   checked?: boolean
   onCheckedChange?: (checked: boolean) => void
+  className?: string
+  id?: string
 }
 
-export function Checkbox({ checked, onCheckedChange, className, ...props }: CheckboxProps) {
+export function Checkbox({ checked = false, onCheckedChange, className, id }: CheckboxProps) {
   return (
-    <input 
-      type="checkbox" 
-      checked={checked} 
-      onChange={(e) => onCheckedChange?.(e.target.checked)}
+    <button
+      type="button"
+      id={id}
+      role="checkbox"
+      aria-checked={checked}
+      onClick={(e) => {
+        e.stopPropagation()
+        onCheckedChange?.(!checked)
+      }}
       className={cn(
-        "peer h-4 w-4 shrink-0 rounded-md border border-border bg-surface shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50 accent-accent cursor-pointer",
+        "w-4 h-4 rounded border flex items-center justify-center transition-all duration-150 flex-none",
+        checked 
+          ? "bg-primary-500 border-primary-500 text-white shadow-[0_0_10px_rgba(14,165,233,0.4)]" 
+          : "bg-slate-800/80 border-slate-600 hover:border-slate-400 text-transparent",
         className
       )}
-      {...props} 
-    />
+    >
+      <Check className={cn("w-3 h-3 stroke-[3]", checked ? "opacity-100 scale-100" : "opacity-0 scale-75", "transition-all duration-150")} />
+    </button>
   )
 }

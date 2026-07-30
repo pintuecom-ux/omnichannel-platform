@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
-import { Download, Plus, Filter, Columns, Search, Tags, Users, GitMerge, Trash, Settings, ChevronDown, Check, Save, X } from 'lucide-react'
+import { Download, Plus, Filter, Columns, Search, Tags, Users, GitMerge, Trash, Settings, Check, Save, X, Layers } from 'lucide-react'
 import { SavedView } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -77,28 +77,173 @@ export function ContactsToolbar({
   }
 
   return (
-    <div className="flex flex-col mb-6 relative">
+    <div className="flex flex-col mb-5 relative z-30">
       
-      {/* Decorative Background Glow */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary-500/20 rounded-full blur-[120px] pointer-events-none -translate-y-1/2 -z-10"></div>
-
-      {/* Top Header */}
-      <header className="h-20 flex items-center justify-between flex-none z-10 border-b border-border/50 mb-6">
+      {/* Top Header & Integrated Actions */}
+      <header className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800/80 mb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-text-primary drop-shadow-sm">Contacts</h1>
-          <p className="text-sm text-text-secondary mt-1">Manage your centralized audience</p>
+          <h1 className="text-2xl font-bold tracking-tight text-white drop-shadow-sm flex items-center gap-2">
+            Contacts
+          </h1>
+          <p className="text-xs text-slate-400 mt-0.5">Manage and organize your centralized audience</p>
         </div>
-        <div className="flex items-center gap-4">
+
+        {/* Header Control Panel: Import, Filter, View, Columns, New Contact */}
+        <div className="flex items-center flex-wrap gap-2.5">
           <button 
             onClick={() => onAction('import')}
-            className="bg-surface border border-border hover:border-text-secondary text-text-primary px-4 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium shadow-sm"
+            className="bg-slate-800/90 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white px-3.5 py-2 rounded-lg flex items-center gap-2 transition-all text-xs font-medium shadow-sm hover:bg-slate-800"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3.5 h-3.5 text-slate-400" />
             Import
           </button>
+
+          <button 
+            onClick={() => onAction('filter')}
+            className="bg-slate-800/90 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white px-3.5 py-2 rounded-lg flex items-center gap-2 transition-all text-xs font-medium shadow-sm hover:bg-slate-800"
+          >
+            <Filter className="w-3.5 h-3.5 text-slate-400" />
+            Filter Attributes
+          </button>
+          
+          {/* Saved Views Dropdown */}
+          <div className="relative" ref={viewsRef}>
+            <button 
+              onClick={() => {
+                setShowSavedViews(!showSavedViews)
+                setShowColumnConfig(false)
+              }}
+              className="bg-slate-800/90 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white px-3.5 py-2 rounded-lg flex items-center gap-2 transition-all text-xs font-medium shadow-sm hover:bg-slate-800"
+            >
+              <Layers className="w-3.5 h-3.5 text-slate-400" />
+              View
+            </button>
+            {showSavedViews && (
+              <div className="absolute right-0 top-full mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-50 overflow-hidden flex flex-col text-xs">
+                <div className="p-3 border-b border-slate-800 bg-slate-950/80 text-white font-semibold flex justify-between items-center">
+                  <span>Saved Views</span>
+                  {!isSavingView && (
+                    <button onClick={() => setIsSavingView(true)} className="flex items-center gap-1 text-primary-400 hover:text-primary-300 font-medium">
+                      <Plus className="w-3.5 h-3.5" /> Save Current
+                    </button>
+                  )}
+                </div>
+                
+                {isSavingView && (
+                  <div className="p-2.5 border-b border-slate-800 bg-slate-850 flex items-center gap-2">
+                    <input 
+                      type="text" 
+                      autoFocus
+                      placeholder="Name this view..."
+                      value={newViewName}
+                      onChange={e => setNewViewName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSaveSubmit()}
+                      className="flex-1 bg-slate-950 border border-primary-500/80 rounded px-2.5 py-1 text-xs text-white focus:outline-none placeholder:text-slate-500"
+                    />
+                    <button onClick={handleSaveSubmit} className="p-1.5 bg-primary-500 text-white rounded hover:bg-primary-600">
+                      <Save className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => setIsSavingView(false)} className="p-1 text-slate-400 hover:text-white">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                <div className="p-1.5 flex flex-col max-h-64 overflow-y-auto divide-y divide-slate-800/40">
+                  {savedViews.length === 0 ? (
+                    <div className="p-4 text-center text-slate-500 italic">No saved views yet.</div>
+                  ) : (
+                    savedViews.map(view => {
+                      const isActive = JSON.stringify(visibleColumns) === JSON.stringify(view.columns)
+                      return (
+                        <div key={view.id} className="flex items-center justify-between group/view hover:bg-slate-800/60 rounded-md px-2 py-1.5">
+                          <button 
+                            onClick={() => {
+                              onApplyView(view)
+                              setShowSavedViews(false)
+                            }}
+                            className="flex-1 flex items-center gap-2 text-left text-slate-200 hover:text-white truncate"
+                          >
+                            <Check className={cn("w-3.5 h-3.5 flex-none text-primary-400", isActive ? "opacity-100" : "opacity-0")} />
+                            <span className="truncate font-medium">{view.name}</span>
+                          </button>
+                          <button 
+                            onClick={() => onDeleteView(view.id)}
+                            className="opacity-0 group-hover/view:opacity-100 p-1 text-slate-500 hover:text-rose-400 transition-opacity flex-none"
+                            title="Delete View"
+                          >
+                            <Trash className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Columns Config Dropdown */}
+          <div className="relative" ref={colRef}>
+            <button 
+              onClick={() => {
+                setShowColumnConfig(!showColumnConfig)
+                setShowSavedViews(false)
+              }}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium bg-slate-800/90 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white transition-all shadow-sm"
+            >
+              <Settings className="w-3.5 h-3.5 text-slate-400" />
+              Columns ({visibleColumns.length}/50)
+            </button>
+            {showColumnConfig && (
+              <div className="absolute right-0 top-full mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-50 overflow-hidden flex flex-col max-h-[480px] text-xs">
+                <div className="p-3 border-b border-slate-800 bg-slate-950/80 font-semibold text-white flex justify-between items-center">
+                  <span>Configure Columns</span>
+                  <span className="text-[10px] text-slate-400">{visibleColumns.length} / 50 selected</span>
+                </div>
+                <div className="p-2 overflow-y-auto flex-1 flex flex-col gap-0.5">
+                  {allColumns.map(col => {
+                    const checked = visibleColumns.includes(col.key)
+                    return (
+                      <label 
+                        key={col.key} 
+                        className={cn(
+                          "flex items-center gap-2.5 p-2 rounded-md cursor-pointer transition-colors",
+                          checked ? "bg-primary-500/10 text-white font-medium" : "hover:bg-slate-800/50 text-slate-300"
+                        )}
+                      >
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-slate-700 bg-slate-950 accent-primary-500 cursor-pointer"
+                          checked={checked}
+                          onChange={() => toggleColumn(col.key)}
+                          disabled={visibleColumns.length >= 50 && !checked}
+                        />
+                        <span className="truncate flex-1">
+                          {col.label}
+                        </span>
+                        {col.type === 'custom' && (
+                          <span className="text-[10px] bg-primary-500/20 text-primary-300 px-1.5 py-0.5 rounded border border-primary-500/30 flex-none">Custom</span>
+                        )}
+                      </label>
+                    )
+                  })}
+                </div>
+                <div className="p-2.5 border-t border-slate-800 bg-slate-950/80">
+                  <button 
+                    onClick={() => setShowColumnConfig(false)}
+                    className="w-full py-1.5 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium transition-colors shadow-md"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button 
             onClick={() => onAction('new')}
-            className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-400 hover:to-primary-500 text-white px-5 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-medium shadow-[0_0_20px_rgba(14,165,233,0.3)] hover:shadow-[0_0_25px_rgba(14,165,233,0.5)] border border-primary-400/50"
+            className="bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-400 hover:to-primary-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-xs font-semibold shadow-[0_0_20px_rgba(14,165,233,0.3)] hover:shadow-[0_0_25px_rgba(14,165,233,0.5)] border border-primary-400/50 ml-1"
           >
             <Plus className="w-4 h-4" />
             New Contact
@@ -106,166 +251,42 @@ export function ContactsToolbar({
         </div>
       </header>
 
-      {/* Workspace Toolbar */}
-      <div className="flex items-center justify-between z-10">
-        
-        {/* Search */}
-        <div className="relative w-[380px]">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+      {/* Second Row: Search & Selection Actions */}
+      <div className="flex items-center justify-between">
+        {/* Search Input */}
+        <div className="relative w-[360px]">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
             type="text" 
             placeholder="Search by name, phone, or email..." 
             value={searchQuery}
             onChange={handleSearchChange}
-            className="w-full bg-surface border border-border rounded-lg pl-10 pr-4 py-2.5 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-all shadow-inner"
+            className="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-all shadow-inner"
           />
         </div>
-        
-        {/* Filters and Actions */}
-        <div className="flex gap-3">
-          {selectedCount > 0 ? (
-            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4">
-              <span className="text-sm text-text-secondary font-medium px-2 bg-primary/10 rounded-md py-1 border border-primary/20">
-                {selectedCount} selected
-              </span>
-              <button onClick={() => onAction('bulk-tag')} className="bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-text-primary px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium">
-                <Tags className="w-4 h-4" /> Tag
-              </button>
-              <button onClick={() => onAction('bulk-list')} className="bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-text-primary px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium">
-                <Users className="w-4 h-4" /> List
-              </button>
-              {selectedCount === 2 && (
-                <button onClick={() => onAction('merge')} className="bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-text-primary px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium">
-                  <GitMerge className="w-4 h-4" /> Merge
-                </button>
-              )}
-              <button onClick={() => onAction('bulk-delete')} className="bg-surface border border-danger-500/30 hover:border-danger-500 text-danger-500 hover:bg-danger-500/10 px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium">
-                <Trash className="w-4 h-4" /> Delete
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* Filter Attributes Button */}
-              <button className="bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-text-primary px-4 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium">
-                <Filter className="w-4 h-4" />
-                Filter Attributes
-              </button>
-              
-              {/* Saved Views Dropdown */}
-              <div className="relative" ref={viewsRef}>
-                <button 
-                  onClick={() => setShowSavedViews(!showSavedViews)}
-                  className="bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-text-primary px-4 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm font-medium"
-                >
-                  <Columns className="w-4 h-4" />
-                  View
-                </button>
-                {showSavedViews && (
-                  <div className="absolute right-0 top-full mt-2 w-64 bg-panel border border-border rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col">
-                    <div className="p-3 border-b border-border bg-surface/50 text-xs font-semibold text-white flex justify-between items-center">
-                      <span>Saved Views</span>
-                      {!isSavingView && (
-                        <button onClick={() => setIsSavingView(true)} className="flex items-center gap-1 text-primary-400 hover:text-primary-300">
-                          <Plus className="w-3.5 h-3.5" /> Save Current
-                        </button>
-                      )}
-                    </div>
-                    
-                    {isSavingView && (
-                      <div className="p-3 border-b border-border bg-surface flex items-center gap-2">
-                        <input 
-                          type="text" 
-                          autoFocus
-                          placeholder="Name this view..."
-                          value={newViewName}
-                          onChange={e => setNewViewName(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && handleSaveSubmit()}
-                          className="flex-1 bg-panel border border-primary-500 rounded px-2 py-1.5 text-xs text-white focus:outline-none"
-                        />
-                        <button onClick={handleSaveSubmit} className="p-1.5 bg-primary-500 text-white rounded hover:bg-primary-600">
-                          <Save className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => setIsSavingView(false)} className="p-1.5 text-text-muted hover:text-white">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
 
-                    <div className="p-1 flex flex-col max-h-60 overflow-y-auto">
-                      {savedViews.length === 0 ? (
-                        <div className="p-4 text-center text-xs text-text-muted italic">No saved views yet.</div>
-                      ) : (
-                        savedViews.map(view => {
-                          const isActive = JSON.stringify(visibleColumns) === JSON.stringify(view.columns)
-                          return (
-                            <div key={view.id} className="flex items-center justify-between group/view hover:bg-white/5 rounded-md px-2 py-1">
-                              <button 
-                                onClick={() => {
-                                  onApplyView(view)
-                                  setShowSavedViews(false)
-                                }}
-                                className="flex-1 flex items-center gap-2 py-1 text-left text-sm text-gray-300 truncate"
-                              >
-                                <Check className={cn("w-4 h-4 flex-none text-primary-500", isActive ? "opacity-100" : "opacity-0")} />
-                                <span className="truncate">{view.name}</span>
-                              </button>
-                              <button 
-                                onClick={() => onDeleteView(view.id)}
-                                className="opacity-0 group-hover/view:opacity-100 p-1 text-text-muted hover:text-danger-400 transition-opacity flex-none"
-                              >
-                                <Trash className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          )
-                        })
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Columns Config Dropdown */}
-              <div className="relative" ref={colRef}>
-                <button 
-                  onClick={() => setShowColumnConfig(!showColumnConfig)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-surface border border-border hover:border-text-secondary text-text-secondary hover:text-text-primary transition-colors"
-                >
-                  <Settings className="w-4 h-4" />
-                  Columns ({visibleColumns.length}/50)
-                </button>
-                {showColumnConfig && (
-                  <div className="absolute right-0 top-full mt-2 w-64 bg-panel border border-border rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[500px]">
-                    <div className="p-3 border-b border-border bg-surface/50 text-xs font-semibold text-white">Configure Columns</div>
-                    <div className="p-2 overflow-y-auto flex-1 flex flex-col gap-1">
-                      {allColumns.map(col => (
-                        <label key={col.key} className="flex items-center gap-2 p-2 hover:bg-white/5 rounded-md cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            className="w-4 h-4 rounded border-gray-600 bg-surface accent-primary-500"
-                            checked={visibleColumns.includes(col.key)}
-                            onChange={() => toggleColumn(col.key)}
-                            disabled={visibleColumns.length >= 50 && !visibleColumns.includes(col.key)}
-                          />
-                          <span className="text-sm text-gray-300">
-                            {col.label} {col.type === 'custom' && <span className="text-xs text-primary-500/70 ml-1">(Custom)</span>}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                    <div className="p-3 border-t border-border bg-surface/50">
-                      <button 
-                        onClick={() => setShowColumnConfig(false)}
-                        className="w-full py-1.5 bg-primary-500/20 text-primary-400 rounded-md text-xs font-medium hover:bg-primary-500/30 transition-colors"
-                      >
-                        Apply View
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+        {/* Batch Selection Action Bar */}
+        {selectedCount > 0 && (
+          <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4">
+            <span className="text-xs text-primary-300 font-semibold px-2.5 py-1 bg-primary-500/10 rounded-md border border-primary-500/30">
+              {selectedCount} selected
+            </span>
+            <button onClick={() => onAction('bulk-tag')} className="bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors">
+              <Tags className="w-3.5 h-3.5" /> Tag
+            </button>
+            <button onClick={() => onAction('bulk-list')} className="bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors">
+              <Users className="w-3.5 h-3.5" /> List
+            </button>
+            {selectedCount === 2 && (
+              <button onClick={() => onAction('merge')} className="bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors">
+                <GitMerge className="w-3.5 h-3.5" /> Merge
+              </button>
+            )}
+            <button onClick={() => onAction('bulk-delete')} className="bg-rose-500/10 border border-rose-500/30 hover:border-rose-500 text-rose-400 hover:bg-rose-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-colors">
+              <Trash className="w-3.5 h-3.5" /> Delete
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

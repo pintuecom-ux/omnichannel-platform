@@ -69,7 +69,7 @@ export function ContactsGrid({
   }
 
   const getAvatarGradient = (id: string) => {
-    const hash = id.length % 4 + 1
+    const hash = (id.length || 0) % 4 + 1
     return `avatar-gradient-${hash}`
   }
 
@@ -104,11 +104,11 @@ export function ContactsGrid({
     if (type === 'url' || type === 'image') inputType = 'url'
 
     return (
-      <div className="flex items-center gap-1 min-w-[120px]" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center gap-1 min-w-[140px]" onClick={e => e.stopPropagation()}>
         <input 
           type={inputType}
           autoFocus
-          className="w-full bg-panel border border-primary-500 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="w-full bg-slate-950 border border-primary-500 rounded px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary-500 shadow-inner"
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
           onKeyDown={(e) => {
@@ -119,10 +119,10 @@ export function ContactsGrid({
             }
           }}
         />
-        <button onClick={saveEditing} className="p-1 bg-primary-500 text-white rounded hover:bg-primary-600 transition-colors flex-none">
+        <button onClick={saveEditing} className="p-1 bg-primary-500 text-white rounded hover:bg-primary-600 transition-colors flex-none shadow">
           <Check className="w-3.5 h-3.5" />
         </button>
-        <button onClick={cancelEditing} className="p-1 bg-surface2 text-text-muted rounded hover:text-white transition-colors flex-none">
+        <button onClick={cancelEditing} className="p-1 bg-slate-800 text-slate-400 rounded hover:text-white transition-colors flex-none">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -149,53 +149,53 @@ export function ContactsGrid({
             {contact.name?.substring(0, 2).toUpperCase() || 'NA'}
           </div>
           <div className="min-w-0">
-            <div className="font-semibold text-white truncate text-sm">{contact.name || 'Unknown Contact'}</div>
-            <div className="text-[10px] text-text-muted truncate">Added {new Date(contact.created_at).toLocaleDateString()}</div>
+            <div className="font-semibold text-white truncate text-xs">{contact.name || 'Unknown Contact'}</div>
+            <div className="text-[10px] text-slate-400 truncate">Added {contact.created_at ? new Date(contact.created_at).toLocaleDateString() : 'Recently'}</div>
           </div>
         </div>
       )
     } else if (col.key === 'wa_opt_in_status') {
-      const isSubbed = val === 'subscribed'
+      const isSubbed = val === 'subscribed' || (contact.phone && val !== 'unsubscribed')
       displayContent = isSubbed ? (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
-          WhatsApp (Opt-in)
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          WhatsApp
         </span>
       ) : (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-surface text-text-secondary border border-border">
-          WhatsApp (Unknown)
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-400 border border-slate-700">
+          WhatsApp
         </span>
       )
     } else if (col.type === 'multiselect' || col.key === 'tags') {
       const tags = val || []
       displayContent = (
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 items-center">
           {tags.length > 0 ? (
             tags.slice(0, 2).map((tag: string) => (
-              <span key={tag} className="px-2 py-0.5 rounded text-[10px] bg-surface border border-border text-gray-300">{tag}</span>
+              <span key={tag} className="px-2 py-0.5 rounded text-[10px] bg-slate-800 border border-slate-700 text-slate-300 font-medium">{tag}</span>
             ))
           ) : (
-            <span className="text-text-muted italic text-[10px]">None</span>
+            <span className="text-slate-500 italic text-[10px]">None</span>
           )}
           {tags.length > 2 && (
-            <span className="px-2 py-0.5 rounded text-[10px] bg-surface border border-border text-text-muted">+{tags.length - 2}</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 border border-slate-700 text-slate-400">+{tags.length - 2}</span>
           )}
         </div>
       )
     } else if (col.type === 'date' || col.type === 'datetime') {
       displayContent = val ? new Date(val).toLocaleDateString() : '-'
     } else {
-      displayContent = val ? String(val) : <span className="text-text-muted opacity-50">-</span>
+      displayContent = val ? String(val) : <span className="text-slate-600 opacity-60">-</span>
     }
 
     return (
-      <div className="flex items-center justify-between group/cell relative min-h-[24px]">
-        <div className={cn(typeof val === 'number' ? 'text-primary-300 font-medium' : 'text-gray-300')}>
+      <div className="flex items-center justify-between group/cell relative min-h-[26px]">
+        <div className={cn("truncate pr-6 text-xs", typeof val === 'number' ? 'text-primary-300 font-medium' : 'text-slate-300')}>
           {displayContent}
         </div>
         <button 
           onClick={(e) => startEditing(contact, col.key, isCustom, e)}
-          className="opacity-0 group-hover/cell:opacity-100 p-1 text-text-muted hover:text-primary-400 transition-all absolute right-0 bg-panel/80 rounded"
+          className="opacity-0 group-hover/cell:opacity-100 p-1 text-slate-400 hover:text-primary-400 hover:bg-slate-800/80 rounded transition-all absolute right-0"
           title="Edit Cell"
         >
           <Edit2 className="w-3 h-3" />
@@ -207,17 +207,19 @@ export function ContactsGrid({
   const isFrozen = (key: string) => key === 'name'
 
   return (
-    <div className="flex-1 glass-panel rounded-xl shadow-2xl flex flex-col border border-border relative z-10 min-h-0">
+    <div className="flex-1 bg-slate-900/90 rounded-xl shadow-2xl flex flex-col border border-slate-800/80 relative z-10 min-h-0 overflow-hidden backdrop-blur-md">
       <div className="overflow-auto flex-1 w-full relative">
         <table className="w-full text-left border-collapse whitespace-nowrap min-w-max">
-          <thead className="bg-panel/95 sticky top-0 z-30 backdrop-blur-md shadow-sm">
+          <thead className="bg-slate-950/90 sticky top-0 z-30 backdrop-blur-md border-b border-slate-800">
             <tr>
-              <th className="py-3 px-5 w-12 border-b border-border sticky left-0 z-40 bg-panel">
+              {/* Checkbox Column - Frozen Left 0 */}
+              <th className="py-3 px-4 w-12 border-b border-slate-800 sticky left-0 z-40 bg-slate-950 border-r border-slate-800/60 shadow-[2px_0_8px_rgba(0,0,0,0.5)]">
                 <Checkbox 
                   checked={selectedSet.size === contacts.length && contacts.length > 0} 
                   onCheckedChange={handleSelectAll} 
                 />
               </th>
+
               {visibleColumns.map(colKey => {
                 const colDef = allColumns.find(c => c.key === colKey)
                 if (!colDef) return null
@@ -229,52 +231,54 @@ export function ContactsGrid({
                   <th 
                     key={colKey} 
                     className={cn(
-                      "py-3 px-5 text-xs font-semibold text-text-muted uppercase tracking-wider border-b border-border group relative",
-                      frozen ? "sticky left-[68px] z-40 bg-panel shadow-[4px_0_12px_rgba(0,0,0,0.1)] border-r" : ""
+                      "py-3 px-4 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-800 group relative select-none",
+                      frozen ? "sticky left-[48px] z-40 bg-slate-950 shadow-[4px_0_12px_rgba(0,0,0,0.6)] border-r border-slate-800" : ""
                     )}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="cursor-pointer hover:text-white transition-colors" onClick={() => onSort(colKey)}>
                         {colDef.label}
                       </span>
                       
-                      {/* Active Sorting Icon */}
-                      {isSortedHere ? (
-                        <button onClick={() => onSort(colKey)} className="text-primary-400">
-                          {sortConfig.direction === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
-                        </button>
-                      ) : (
-                        <button onClick={() => onSort(colKey)} className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-primary-400 transition-opacity">
-                          <ArrowUpDown className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-
-                      {/* Filter Icon & Popover */}
-                      <div className="relative flex items-center">
-                        <button 
-                          onClick={() => setActiveFilterCol(activeFilterCol === colKey ? null : colKey)} 
-                          className={cn("transition-opacity", isFilteredHere ? "opacity-100 text-primary-400" : "opacity-0 group-hover:opacity-100 text-text-muted hover:text-primary-400")}
-                        >
-                          <Filter className="w-3.5 h-3.5" />
-                        </button>
-                        
-                        {activeFilterCol === colKey && (
-                          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-panel border border-border rounded-lg shadow-xl p-2 z-50 flex items-center gap-1">
-                            <Search className="w-3.5 h-3.5 text-text-muted flex-none" />
-                            <input 
-                              ref={filterInputRef}
-                              type="text" 
-                              placeholder={`Filter ${colDef.label}...`}
-                              value={filterConfig[colKey] || ''}
-                              onChange={e => onFilter(colKey, e.target.value)}
-                              onKeyDown={e => e.key === 'Enter' && setActiveFilterCol(null)}
-                              className="flex-1 bg-transparent text-xs text-white border-none focus:outline-none focus:ring-0"
-                            />
-                            <button onClick={() => setActiveFilterCol(null)} className="p-1 text-text-muted hover:text-white flex-none">
-                              <Check className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                      <div className="flex items-center gap-1">
+                        {/* Active Sorting Icon */}
+                        {isSortedHere ? (
+                          <button onClick={() => onSort(colKey)} className="text-primary-400 p-0.5 bg-primary-500/10 rounded border border-primary-500/20">
+                            {sortConfig.direction === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+                          </button>
+                        ) : (
+                          <button onClick={() => onSort(colKey)} className="text-slate-500 hover:text-slate-200 transition-colors">
+                            <ArrowUpDown className="w-3 h-3" />
+                          </button>
                         )}
+
+                        {/* Filter Icon & Popover */}
+                        <div className="relative flex items-center">
+                          <button 
+                            onClick={() => setActiveFilterCol(activeFilterCol === colKey ? null : colKey)} 
+                            className={cn("p-0.5 rounded transition-colors", isFilteredHere ? "text-primary-400 bg-primary-500/10 border border-primary-500/20" : "text-slate-500 hover:text-slate-200")}
+                          >
+                            <Filter className="w-3 h-3" />
+                          </button>
+                          
+                          {activeFilterCol === colKey && (
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] p-2 z-50 flex items-center gap-1 text-xs">
+                              <Search className="w-3.5 h-3.5 text-slate-400 flex-none ml-1" />
+                              <input 
+                                ref={filterInputRef}
+                                type="text" 
+                                placeholder={`Filter ${colDef.label}...`}
+                                value={filterConfig[colKey] || ''}
+                                onChange={e => onFilter(colKey, e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && setActiveFilterCol(null)}
+                                className="flex-1 bg-transparent text-xs text-white border-none focus:outline-none focus:ring-0 placeholder:text-slate-500"
+                              />
+                              <button onClick={() => setActiveFilterCol(null)} className="p-1 text-slate-400 hover:text-white flex-none">
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </th>
@@ -282,22 +286,23 @@ export function ContactsGrid({
               })}
             </tr>
           </thead>
-          <tbody className="text-sm divide-y divide-border/50">
+          <tbody className="text-xs divide-y divide-slate-800/60">
             {contacts.length === 0 ? (
               <tr>
-                <td colSpan={visibleColumns.length + 1} className="h-48 text-center text-text-secondary">
-                  No contacts found.
+                <td colSpan={visibleColumns.length + 1} className="h-48 text-center text-slate-400 italic">
+                  No contacts found matching your view/filters.
                 </td>
               </tr>
             ) : (
               contacts.map((contact) => (
                 <tr 
                   key={contact.id} 
-                  className={`table-row-hover group cursor-pointer border-b border-white/5 ${selectedSet.has(contact.id) ? 'bg-primary-500/10' : ''}`}
+                  className={`group cursor-pointer hover:bg-slate-800/50 transition-colors ${selectedSet.has(contact.id) ? 'bg-primary-500/10' : ''}`}
                   onClick={() => handleRowClick(contact.id)}
                 >
+                  {/* Frozen Checkbox Column */}
                   <td 
-                    className="py-3 px-5 sticky left-0 z-20 bg-base border-r border-transparent group-hover:bg-surface transition-colors" 
+                    className="py-3 px-4 sticky left-0 z-20 bg-slate-900 group-hover:bg-slate-850 transition-colors border-r border-slate-800/60 shadow-[2px_0_8px_rgba(0,0,0,0.4)]" 
                     onClick={(e: React.MouseEvent) => e.stopPropagation()}
                   >
                     <Checkbox 
@@ -305,6 +310,8 @@ export function ContactsGrid({
                       onCheckedChange={(checked) => handleSelectRow(contact.id, checked as boolean)}
                     />
                   </td>
+
+                  {/* Columns */}
                   {visibleColumns.map(colKey => {
                     const colDef = allColumns.find(c => c.key === colKey)
                     if (!colDef) return null
@@ -313,8 +320,8 @@ export function ContactsGrid({
                       <td 
                         key={colKey} 
                         className={cn(
-                          "py-3 px-5 transition-colors",
-                          frozen ? "sticky left-[68px] z-20 bg-base shadow-[4px_0_12px_rgba(0,0,0,0.1)] border-r border-border group-hover:bg-surface" : ""
+                          "py-3 px-4 transition-colors",
+                          frozen ? "sticky left-[48px] z-20 bg-slate-900 shadow-[4px_0_12px_rgba(0,0,0,0.5)] border-r border-slate-800 group-hover:bg-slate-850" : ""
                         )}
                       >
                         {renderCellValue(contact, colDef)}
@@ -329,10 +336,10 @@ export function ContactsGrid({
       </div>
       
       {/* Pagination Footer */}
-      <div className="flex-none border-t border-border bg-surface px-6 py-4 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-10">
-        <span className="text-sm text-text-muted">Showing {contacts.length > 0 ? 1 : 0} to {contacts.length} of {contacts.length} contacts</span>
+      <div className="flex-none border-t border-slate-800 bg-slate-950 px-6 py-3 flex items-center justify-between text-xs z-10">
+        <span className="text-slate-400">Showing 1 to {contacts.length} of {contacts.length} contacts</span>
         <div className="flex items-center gap-2">
-          <button className="px-3 py-1 text-sm rounded-md bg-primary-500/20 text-primary-400 font-medium hover:bg-primary-500/30 transition-colors">1</button>
+          <button className="px-3 py-1 rounded-md bg-primary-500/20 text-primary-400 font-semibold border border-primary-500/30">1</button>
         </div>
       </div>
     </div>
