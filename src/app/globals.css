@@ -202,7 +202,7 @@ body {
   border-radius: 4px;
 }
 
-/* APP LAYOUT - DUAL SIDEBAR */
+/* APP LAYOUT */
 #app {
   display: flex;
   height: 100vh;
@@ -211,7 +211,31 @@ body {
   position: relative;
 }
 
-#global-sidebar {
+#content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: calc(100vw - 64px);
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#app.sidebar-expanded #content {
+  width: calc(100vw - 240px);
+}
+
+.page-inbox {
+  display: flex;
+  flex: 1;
+  flex-direction: row;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* SIDEBAR — Executive Docked Rail & Expanded Drawer */
+#sidebar {
   position: relative;
   height: 100vh;
   width: 64px;
@@ -220,34 +244,16 @@ body {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  z-index: 40; /* L1 */
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: visible;
+  z-index: 1000;
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.12);
 }
 
-#module-sidebar {
-  position: relative;
-  height: 100vh;
+#sidebar.expanded {
   width: 240px;
   min-width: 240px;
-  background: var(--bg-surface);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  z-index: 30; /* L2 */
-  transition: margin-left 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-#module-sidebar.collapsed {
-  margin-left: -240px;
-}
-
-#content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  background: var(--bg-base); /* L0 */
+  overflow: hidden;
 }
 
 .sidebar-logo {
