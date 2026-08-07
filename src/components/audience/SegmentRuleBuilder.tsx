@@ -22,6 +22,7 @@ interface SegmentRuleBuilderProps {
   onChange: (newSet: ConditionSet) => void
   isRoot?: boolean
   level?: number
+  customFields?: { value: string, label: string, type: string }[]
 }
 
 const FIELD_OPTIONS = [
@@ -67,7 +68,8 @@ const OPERATORS_BY_TYPE: Record<string, { value: string, label: string }[]> = {
   ]
 }
 
-export function SegmentRuleBuilder({ conditionSet, onChange, isRoot = true, level = 0 }: SegmentRuleBuilderProps) {
+export function SegmentRuleBuilder({ conditionSet, onChange, isRoot = true, level = 0, customFields = [] }: SegmentRuleBuilderProps) {
+  const ALL_FIELDS = [...FIELD_OPTIONS, ...customFields]
   
   const updateOperator = (op: 'AND' | 'OR') => {
     onChange({ ...conditionSet, operator: op })
@@ -180,7 +182,7 @@ export function SegmentRuleBuilder({ conditionSet, onChange, isRoot = true, leve
           } else {
             // It's a single Condition
             const condition = node as Condition
-            const fieldDef = FIELD_OPTIONS.find(f => f.value === condition.field)
+            const fieldDef = ALL_FIELDS.find(f => f.value === condition.field)
             const type = fieldDef ? fieldDef.type : 'string'
             const operators = OPERATORS_BY_TYPE[type] || OPERATORS_BY_TYPE.string
 
@@ -200,9 +202,9 @@ export function SegmentRuleBuilder({ conditionSet, onChange, isRoot = true, leve
                     <select 
                       className="appearance-none bg-base border border-border rounded-md pl-3 pr-8 py-1.5 text-sm text-white focus:border-primary-500 focus:ring-1 focus:ring-primary-500 outline-none w-40"
                       value={condition.field}
-                      onChange={(e) => updateNode(index, { ...condition, field: e.target.value, operator: OPERATORS_BY_TYPE[FIELD_OPTIONS.find(f => f.value === e.target.value)?.type || 'string'][0].value, value: '' })}
+                      onChange={(e) => updateNode(index, { ...condition, field: e.target.value, operator: OPERATORS_BY_TYPE[ALL_FIELDS.find(f => f.value === e.target.value)?.type || 'string'][0].value, value: '' })}
                     >
-                      {FIELD_OPTIONS.map(opt => (
+                      {ALL_FIELDS.map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>

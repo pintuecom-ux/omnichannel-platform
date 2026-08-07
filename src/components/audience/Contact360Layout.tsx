@@ -4,6 +4,7 @@ import React from 'react'
 import { Contact } from '@/types'
 import { ArrowLeft, Edit, MessageSquare, Megaphone, Plus, MoreHorizontal, MessageCircle, Mail, Sparkles, Zap, ArrowRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { SocialProfilesWidget } from './SocialProfilesWidget'
 
 interface Contact360LayoutProps {
   contact: Contact
@@ -143,6 +144,15 @@ export function Contact360Layout({ contact, children }: Contact360LayoutProps) {
               )}
             </div>
           </div>
+          
+          <SocialProfilesWidget 
+            contact={contact} 
+            onUpdate={async (data) => {
+              const { createClient } = await import('@/lib/supabase/client')
+              const supabase = createClient()
+              await supabase.from('contacts').update({ social_profiles: data }).eq('id', contact.id)
+            }} 
+          />
 
         </aside>
 

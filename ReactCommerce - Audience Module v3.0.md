@@ -1758,397 +1758,125 @@ Scrollbars MUST be easily grabbable on touch interfaces.
 
 # SECTION 4 — CONTACTS PAGE IMPLEMENTATION
 
-## 4.1 Page Purpose
+## 4.1 Page Responsibilities
+The Contacts page is the master directory and operational center of the Audience module. 
+
+**What it IS responsible for:**
+- Fast, macro-level traversal of the entire Contact database.
+- High-performance, virtualized data rendering.
+- Complex discovery via compound filters and global search.
+- Enterprise-grade bulk operations (Export, Delete, Merge, Enroll).
+- Customizing data density and column visibility.
+
+**What MUST NEVER appear here:**
+- Deep individual analytics or timeline events (reserved for Contact Detail).
+- Explicit rule logic builders (reserved for Segments).
+- Static list definitions (reserved for Lists).
+
+## 4.2 Page Design & Layout Matrix
+The Contacts page strictly adheres to the L0-L7 spatial layout matrix.
+
+**Page Header (L4)**
+- **Title**: `Contacts`.
+- **Subtitle**: Live contact count matching the current filters (e.g., `1,234 Total`).
+- **Actions**: `Create Contact` (Primary), `Import` (Secondary), `Export` (Secondary), `Refresh`.
+
+**Toolbar / Action Bar (L4)**
+- Sticky to the top of the grid.
+- **Search Bar**: Left-aligned, expandable.
+- **Filter Panel Toggle**: Opens the Advanced Filter side panel.
+- **Saved Views Dropdown**: Switches between Pinned, Workspace, and Personal views.
+- **Table Controls**: Density toggle, Column Manager.
+
+**Filter Panel (L5 - Drawer)**
+- Slides in from the right edge. Hosts the Compound Filter Builder.
+
+**Contact Grid (L4)**
+- The core virtualized Data Table occupying the remaining vertical viewport space.
+
+**Quick Preview (L5 - Drawer)**
+- Clicking a row MUST NOT trigger a full page reload. It opens an `L5` Side Panel for rapid inline editing and previewing. Full detail requires clicking "Expand" inside the drawer.
+
+## 4.3 Filtering & Search Experience
+
+**Global Search (Command Palette `Cmd+K`)**
+- Overlays the entire platform (L6). Instantly locates Contacts by fuzzy-matching Name, Email, Phone, or Company in < 150ms.
+
+**Field-Specific Grid Search**
+- Left-aligned in the Toolbar. Strictly debounced (300ms).
+- Persists to `localStorage` and URL query string `?q=...`.
+
+**Quick Filters & Filter Chips**
+- Active filters render as dismissible chips below the toolbar. E.g., `[Status is Active (x)]`.
+
+**Advanced Compound Filters**
+- Housed in the `L5` Filter Panel.
+- Supports nested `AND` / `OR` trees. E.g., `(Status = Active AND Lead Score > 50) OR (Company = Acme)`.
+- Supports relative date math (e.g., `Created before Past 7 Days`).
+
+**Saved Views**
+- Any complex filter state can be saved as a View.
+- **Personal Views**: Only visible to the creator.
+- **Workspace Views**: Visible to all tenant users.
+- **Pinned Views**: Up to 5 views rendered as horizontal tabs above the Toolbar for 1-click access.
+
+## 4.4 Enterprise Table Experience
+
+**Column Management**
+- **Pinned Columns**: Checkbox (Index 0), Avatar (Index 1), Primary Name (Index 2). These remain fixed while scrolling horizontally.
+- **Custom Columns**: Users can enable/disable any core or Custom Field column via the Column Manager popover.
+- **Resizing & Ordering**: Columns are drag-to-resize and drag-to-reorder. State persists to `localStorage`.
+
+**Sorting**
+- Clicking a column header sorts `ASC`. Clicking again sorts `DESC`.
+- **Multi-Sort**: Holding `Shift` while clicking additional headers enables compound sorting (e.g., Sort by `Company ASC`, then `Lead Score DESC`).
+
+**Row Selection & Density**
+- **Multi-Select**: Checkboxes per row. `Cmd+Click` selects ranges.
+- **Density**: Users can toggle between Compact (32px rows), Standard (40px rows), and Comfortable (48px rows).
+
+**Sticky Header**
+- Table headers and the Toolbar MUST remain pinned to the top of the viewport during vertical scroll.
+
+## 4.5 Enterprise Bulk Operations
+
+When rows are selected, the standard Toolbar is replaced by the **Bulk Action Bar**.
+
+**Supported Actions:**
+- **Add/Remove from List**: Assigns/unassigns static relationships.
+- **Export**: Triggers a CSV/XLSX export modal scoped to the selection.
+- **Bulk Delete**: Requires a strict confirmation modal typing "DELETE". Hard deletes records.
+- **Bulk Tag**: Appends contextual tags.
+- **Assign Owner**: Reassigns the `owner_id`.
+- **Update Fields**: Opens a modal to override a specific field for all selected rows.
+- **Start Campaign**: Pipes the selected cohort directly into the Campaign module.
+- **Add to Workflow**: Enrolls the cohort into an Automation sequence.
+- **Merge Contacts**: Selected exactly 2 rows. Opens a split-screen conflict resolution modal.
+
+**Bulk Select All Matching**
+- If the user selects all visible rows, a prompt appears: `Select all 50,000 matching contacts in this view?`. This sends a query payload rather than an array of UUIDs to prevent browser memory exhaustion.
+
+**Safety & Feedback**
+- **Permissions**: Bulk actions evaluate strict RBAC. Lacking `contact:delete` hides the Delete button.
+- **Undo**: Non-destructive actions (Tagging, Assigning) yield a Toast with a 4-second `Undo` button.
+- **Progress**: Operations affecting > 1,000 rows return a `202 Accepted` and spawn a background worker. A global progress indicator tracks completion.
+- **Error Handling**: Partial failures generate a downloadable CSV error report.
 
-**Why the Contacts page exists**  
-The Contacts page is the operational center of the Audience module. It provides the definitive, macro-level view of all known identities within the Workspace. 
+## 4.6 Performance & Scalability
 
-**How it fits into ReactCommerce**  
-It serves as the master directory. All other CRM and marketing functions are downstream from this page.
+**Massive Datasets**
+- The page is engineered to support millions of contacts without degradation.
 
-**Relationship with Campaigns**  
-Marketers use the Contacts page to dynamically build target lists by applying complex filters, saving them as Views, and piping those views directly into Campaign execution.
+**Virtualized Tables**
+- The DOM must NEVER render more than the visible rows plus a small buffer (e.g., 50 rows total), ensuring flat memory usage.
 
-**Relationship with Inbox**  
-Support agents use the Contacts page to locate individuals manually if automated matching fails, initiating outbound conversations directly from the row actions.
+**Server-Side Delegation**
+- **Search, Sort, Pagination**: The client performs zero heavy compute. All filtering, multi-sorting, and pagination (Keyset cursor-based) are executed server-side on dedicated read-replicas or search indexes.
 
-**Relationship with Orders**  
-Revenue teams filter the Contacts page by aggregated order metrics (e.g., LTV > $1000) to identify VIP cohorts.
-
-**Relationship with Analytics**  
-The underlying query engine powering the Contacts page is identical to the one powering Audience Analytics.
-
-**Relationship with Workflows**  
-Users can select bulk cohorts on this page and manually enroll them into Workflows.
-
-**Relationship with AI**  
-The AI utilizes the search and filter schemas defined on this page to answer natural language queries (e.g., "Show me all contacts in London").
-
-**Relationship with Reports**  
-Any Saved View created on the Contacts page can be exported directly as a scheduled Report.
-
-## 4.2 Page Layout
-
-The Contacts Page strictly adheres to the Global UI layout constraints. It occupies the entire viewport below the global application header.
-
-**Global Header**  
-Height: 56px. Fixed at the top. Contains tenant switcher, global search, and user profile.
-
-**Breadcrumbs**  
-Height: 24px. Located immediately below the Global Header. Aligned left. E.g., `Audience / Contacts`.
-
-**Page Header**  
-Height: 64px. Contains the H1 Title (`Contacts`), Subtitle/Record Count (`1,234 Total`), and primary mutation actions (Create, Import, Export). Flex container with `justify-content: space-between`.
-
-**Toolbar**  
-Height: 56px. Sticky. Sits below the Page Header. Contains Search (left aligned), and grouped right-aligned actions: Saved Views, Filters, Density, Column Selector.
-
-**Filter Bar (Active Filters)**  
-Height: 48px (when visible). Appears below the Toolbar ONLY if filters are active. Displays filter chips.
-
-**Bulk Actions**  
-Height: 56px. Replaces the Toolbar exactly when > 0 rows are selected.
-
-**Contacts Grid**  
-Occupies `flex-grow: 1`. Fills remaining vertical space down to the Footer. Utilizes the Enterprise Data Grid Framework. 
-
-**Pagination**  
-Height: 48px. Pinned to the bottom of the Contacts Grid.
-
-**Footer**  
-Not applicable for this module view (Pagination acts as the footer boundary).
-
-**Notifications**  
-Absolute positioned `bottom: 24px, right: 24px`. `z-index: 9999`.
-
-**Loading Overlays**  
-Absolute positioned over the Contacts Grid with a translucent white background (`rgba(255, 255, 255, 0.7)`).
-
-**Side Panels**  
-Slide in from the right edge. Width: `480px` on desktop, `100vw` on mobile. Overlays the grid with a backdrop blur. Used for Contact Creation.
-
-**Context Menus**  
-`z-index: 1000`. Triggered by ellipsis or right-click.
-
-**Drawers**  
-Mobile equivalent of Side Panels. Slide up from the bottom.
-
-**Sticky Elements**  
-Global Header, Page Header, Toolbar, Grid Header Row, and Pagination MUST remain sticky while scrolling the grid body.
-
-**Responsive Behaviour**  
-
-- **Desktop (>1024px)**: Full layout. Search input expanded. All toolbar icons have text labels.
-- **Laptop (768px - 1024px)**: Toolbar text labels hidden; icons only. Side Panels cover 50% of the screen.
-- **Tablet (480px - 768px)**: Toolbar elements collapse into an overflow menu except Search and Filters.
-- **Mobile (<480px)**: Grid converts to Card layout. Toolbar collapses to a single "Search & Filter" button. Pagination converts to infinite scroll or a simple "Load More" button to save screen real estate.
-- **Ultra-wide (>1440px)**: The grid spans the full width without arbitrary max-width constraints, maximizing visible columns.
-
-## 4.3 Header
-
-**Title**  
-Text: `Contacts`. Font: H1 scale, bold.
-
-**Subtitle / Live Contact Count**  
-Text: `[N] Total` or `[N] matching filters`. Font: body-small, subdued color. Updates instantly when filters change.
-
-**Refresh**  
-Icon: Circular arrow. Clicking invalidates the `SWR`/`React Query` cache and fetches fresh data.
-
-**Create Contact**  
-Button: Primary. Text: `Create Contact`. Triggers the Creation Side Panel.
-
-**Import**  
-Button: Secondary. Text: `Import`. Triggers a modal workflow.
-
-**Export**  
-Button: Secondary. Text: `Export`. Triggers an export configuration modal.
-
-**Settings**  
-Icon: Cog. Navigates to Audience Settings.
-
-**Overflow Menu**  
-On viewports < 768px, Import, Export, and Settings are moved inside a vertical ellipsis menu to save horizontal space.
-
-**Permissions & Disabled States**  
-- If user lacks `contact:create`, the Create button is hidden.
-- If user lacks `contact:import`, the Import button is disabled with tooltip "You do not have permission to import".
-- If system is offline, Create/Import/Export are disabled.
-
-**Hover States**  
-Buttons lighten by 10% on hover.
-
-**Keyboard Navigation**  
-`Tab` sequence: Refresh -> Export -> Import -> Create.
-
-**Loading**  
-If the total count is fetching, the Subtitle displays a 60px wide Skeleton pulse.
-
-## 4.4 Toolbar
-
-**Search**  
-Left-aligned. Minimum width 240px on desktop. Expands on focus. Contains a leading magnifier icon.
-
-**Saved Views**  
-Dropdown button. Displays the name of the active view (e.g., "All Contacts"). Clicking opens a popover to switch, save, or manage views.
-
-**Filters**  
-Button. Icon: Filter funnel. Text: `Filters`. If filters are active, displays a primary-colored dot indicator. Clicking opens the Advanced Filter Panel.
-
-**Density**  
-Icon button: Grid layout. Tooltip: `Density`. Cycles through Compact, Standard, Comfortable.
-
-**Column Selector**  
-Icon button: Columns. Tooltip: `Edit Columns`. Opens the column management popover.
-
-**Bulk Actions**  
-Only visible when rows are selected. Replaces the standard toolbar.
-
-**Responsive Behaviour**  
-When horizontal space is limited, Density and Column Selector move into a "More Actions" dropdown. Search input collapses to just an icon, expanding over the other buttons when clicked.
-
-## 4.5 Search
-
-**Search Behaviour**  
-Global fuzzy search executing across `first_name`, `last_name`, `email`, `phone`, and `company`.
-
-**Debounce**  
-Must be strictly debounced by 300ms. Typing "john" rapidly MUST only fire one API request.
-
-**Search Syntax**  
-- **Partial matching**: `joh` matches `John`.
-- **Exact matching**: Wrapping in quotes `"john.doe@email.com"` forces an exact match.
-- **Phone numbers**: Strips formatting before searching. `+1 555-0100` matches `15550100`.
-
-**Highlighting**  
-The search results MUST NOT inject HTML tags into the grid cells for highlighting to prevent XSS.
-
-**Recent Searches**  
-Focusing the empty search input opens a dropdown showing the 5 most recent queries.
-
-**Search Suggestions**  
-As the user types, suggest explicit filters (e.g., "Filter by Email: john@doe.com").
-
-**Search History**  
-Persisted to `localStorage` per user.
-
-**Keyboard Support**  
-- `/` or `Cmd+K` focuses the input.
-- `ArrowDown` navigates recent searches.
-- `Enter` executes the selected recent search.
-- `Escape` clears the input and blurs.
-
-**Clear Search**  
-An `X` icon appears when input has value. Clicking clears the input and restores the grid to its unfiltered state.
-
-**Performance**  
-Search requests MUST hit a dedicated search index (e.g., Postgres GIN, Elasticsearch) returning results in < 150ms.
-
-## 4.6 Saved Views
-
-**Personal Views**  
-Views created by the user, visible only to the user.
-
-**Workspace Views**  
-Views created by admins, visible to everyone in the workspace.
-
-**Default View**  
-"All Contacts". Cannot be deleted or modified. Always available.
-
-**Pinned Views**  
-Users can pin up to 5 views. Pinned views appear as horizontal tabs above the Toolbar for 1-click access.
-
-**Shared Views**  
-Users can generate a unique URL for a specific view state to share with colleagues.
-
-**Permissions**  
-Users require `audience:manage_views` to create Workspace Views.
-
-**Duplicate View**  
-Users can clone any view (including Workspace views) to create a personal variation.
-
-**Rename / Delete / Archive / Restore**  
-Available via an overflow menu next to the view name in the dropdown.
-
-**View Ordering**  
-The dropdown lists Pinned Views first, then Workspace Views, then Personal Views (alphabetical).
-
-**Persistence**  
-The active view ID is stored in the URL `?view=123`. If no view is specified, it defaults to the user's last active view (stored in user preferences backend), fallback to "All Contacts".
-
-**Versioning**  
-If an admin modifies a Workspace view, it updates for all users seamlessly.
-
-## 4.7 Enterprise Contacts Grid
-
-The Contacts page utilizes the Enterprise Data Grid Framework (Section 3) with specific configurations.
-
-**Grid Layout**  
-Fills all available space between Toolbar and Pagination.
-
-**Checkbox Column**  
-Always pinned to index 0.
-
-**Avatar Column**  
-Pinned to index 1. Renders the contact's initials or uploaded image.
-
-**Primary Column**  
-`Name` (Computed `first_name` + `last_name`). Pinned to index 2. Clicking the Name navigates to the Contact Details page.
-
-**Dynamic Columns**  
-Email, Phone, Status, Created Date, Last Activity, and all Custom Fields.
-
-**Row Height**  
-Defaults to Standard (40px).
-
-**Inline Badges**  
-The `Status` column MUST render as a colored pill (e.g., Green for Active, Gray for Inactive).
-
-**Overflow Handling**  
-Cells truncate with ellipses. Hovering for 500ms shows a tooltip.
-
-**Pagination**  
-Uses Keyset Pagination. Displays "Previous" and "Next" buttons. Page size selector (25, 50, 100).
-
-**Performance**  
-Must virtualize DOM nodes. 100,000 contacts MUST NOT render more than ~50 DOM rows.
-
-**Action Column**  
-Pinned to the far right. Contains an overflow menu (`...`) for Edit, Archive, Delete.
-
-## 4.8 Filters
-
-Triggered via the Toolbar "Filters" button. Opens a sliding right-hand Panel.
-
-**Operators by Datatype**  
-- **Text**: `is`, `is not`, `contains`, `does not contain`, `is empty`, `is not empty`.
-- **Number**: `=`, `!=`, `>`, `<`, `>=`, `<=`, `between`, `is empty`.
-- **Date**: `is exactly`, `before`, `after`, `between`, `relative (today, past 7 days, etc)`.
-- **Boolean**: `is true`, `is false`.
-- **Enum/Select**: `is any of`, `is none of`.
-
-**Nested Filters**  
-The UI MUST support a tree structure. E.g., `(Status = Active AND Lead Score > 50) OR (Company = Acme)`.
-
-**Filter Chips**  
-Active filters appear as dismissible chips below the toolbar. E.g., `[Status is Active (x)]`.
-
-**Performance**  
-Filter application instantly updates the URL and triggers a debounced API request.
-
-**Persistence**  
-Filters are fully serialized into the URL query string.
-
-## 4.9 Bulk Operations
-
-Triggered when the master checkbox or individual row checkboxes are selected.
-
-**Selection**  
-User can click "Select all 5,000 matching contacts".
-
-**Bulk Edit**  
-Opens a modal. User selects a Field, then specifies the New Value.
-
-**Bulk Delete / Bulk Archive**  
-Requires typing "DELETE" in a confirmation modal.
-
-**Bulk Assign**  
-Updates the `owner_id` for selected contacts.
-
-**Bulk Tags / Lists / Campaigns**  
-Appends relationships without wiping existing ones.
-
-**Background Processing**  
-If > 1,000 records are selected, the API MUST return a `202 Accepted` and process via a background worker queue.
-
-**Partial Failures**  
-Generates a downloadable CSV error report for the rows that failed validation.
-
-## 4.10 Page States
-
-**Loading**  
-Initial load renders exactly 15 Skeleton rows.
-
-**Refreshing**  
-Toolbar progress bar animates. Existing data dims to 70% opacity.
-
-**Empty**  
-Workspace has 0 contacts: Shows "Welcome to ReactCommerce Audience" illustration + "Create Contact" primary CTA.
-
-**No Search Results**  
-Shows empty illustration + "No contacts match your search." + "Clear Search" button.
-
-**API Failure**  
-Shows critical error illustration + "We couldn't load your contacts." + "Retry" button.
-
-**Partial Data**  
-If Redis fails, loads from Postgres directly. Shows a subtle toast: "Experiencing degraded performance."
-
-**Offline**  
-Shows red banner at the top: "You are offline. Reconnecting..." Mutations are disabled.
-
-## 4.11 Keyboard Shortcuts
-
-- `?`: Open keyboard shortcuts cheat sheet.
-- `/` or `Cmd+K`: Focus global search.
-- `Cmd+Shift+F`: Open filter panel.
-- `Cmd+A`: Select all visible rows (when focus is in the grid).
-- `Escape`: Close panels, modals, clear search, or deselect all rows.
-- `R`: Refresh grid data (when focus is outside inputs).
-- `C`: Open Create Contact panel.
-
-## 4.12 Accessibility
-
-**WCAG Compliance**  
-Strict adherence to WCAG 2.1 AA.
-
-**ARIA**  
-The grid implements `role="grid"`. Checkboxes have `aria-label="Select row"`.
-
-**Tab Order**  
-Logical flow: Header -> Toolbar -> Grid Headers -> Grid Body -> Pagination.
-
-**Keyboard-only Operation**  
-Every action MUST be achievable without a mouse.
-
-## 4.13 Performance Requirements
-
-**First Paint**  
-Application shell renders in < 500ms.
-
-**Interactive**  
-Grid is fully interactive and hydrated in < 1.5s.
-
-**Scroll FPS**  
-Grid maintains 60 FPS during rapid vertical scrolling.
-
-**Search Latency**  
-API returns search results in < 150ms.
-
-**Memory**  
-The page MUST NOT exceed 150MB of RAM usage regardless of dataset size.
-
-## 4.14 Design Decisions
-
-**Why a Right-Hand Panel for Filters?**  
-*Alternative:* Inline dropdowns.  
-*Reasoning:* Complex nested AND/OR logic requires significant horizontal space. A side panel prevents obscuring the grid data while the user builds the query, allowing them to see live updates.
-
-**Why "Select All Matching" instead of loading IDs?**  
-*Problem:* Selecting 100,000 rows and sending an array of 100,000 UUIDs crashes browsers.  
-*Reasoning:* The client sends `{ selectAll: true, query: { status: 'active' } }`. The backend executes the bulk action using the identical SQL WHERE clause, completely bypassing memory limits.
-
-## 4.15 Acceptance Criteria
-
-- [ ] Page renders correctly on Desktop, Tablet, and Mobile.
-- [ ] Grid virtualizes rows correctly (check DOM node count).
-- [ ] Search is debounced at exactly 300ms.
-- [ ] Keyboard shortcuts execute correctly.
-- [ ] Bulk actions on > 1,000 rows delegate to background workers and do not block the UI.
-- [ ] URL perfectly serializes the active View, Filters, Sort, and Page.
-- [ ] Refreshing the browser preserves the exact state via the URL.
-- [ ] Empty states render correctly for 0 total contacts vs 0 search results.
-- [ ] Accessibility audit (Axe) reports zero violations.
+**Loading & Empty States**
+- **Initial Load**: Renders a Skeleton Grid matching the exact layout to prevent layout shift.
+- **Empty State**: 0 Total Contacts shows a localized setup illustration.
+- **No Search Results**: Shows an empty illustration with a primary `Clear Search` action.
 
 ---
 
@@ -3171,3 +2899,66 @@ ReactCommerce uses a keyboard-first Command Palette. Persistent search input box
 - [ ] The CSS layout enforces the 8-tier Z-Index hierarchy.
 - [ ] Navigating between primary modules correctly swaps the ModuleSidebar context.
 - [ ] The Command Palette triggers seamlessly via `Cmd+K` from any screen.
+
+---
+
+# SECTION 9 — AUDIENCE INFORMATION ARCHITECTURE
+
+This section defines the structural foundation of the Audience module, strictly bounding the responsibilities, routing, and entity relationships of the core identity pages.
+
+## 9.1 Information Architecture & Routing Hierarchy
+
+The Audience Module operates as the central source of truth for identity. Its routing hierarchy prioritizes speed and context preservation.
+
+- **Default Landing Page**: `/audience` SHALL instantly redirect to `/contacts`. There is no standalone "Audience Dashboard" page. The Data Grid is the dashboard.
+- `/contacts`: The Master Audience Directory.
+- `/contacts/:id`: The 360° Contact Detail record.
+- `/lists`: The directory of static, manually curated Contact lists.
+- `/segments`: The directory of dynamic, rules-based Contact segments.
+
+## 9.2 Page Responsibilities
+
+The separation of concerns between these four pages is absolute.
+
+### 1. Contacts (`/contacts`)
+- **Responsibility**: Fast, bulk traversal and filtering of the entire database.
+- **Constraints**: MUST NOT render deep individual Contact analytics. MUST NOT require full page reloads to edit a single row.
+- **Features**: Houses the Enterprise Data Grid. Provides entry points for bulk operations (Export, Add to List, Delete). 
+
+### 2. Contact Detail (`/contacts/:id`)
+- **Responsibility**: The canonical, 360° view of a single entity.
+- **Constraints**: MUST NOT be cluttered with configuration settings. 
+- **Features**: Displays the complete activity timeline, custom field metadata, and explicit membership across Lists and Segments. Serves as the deep-dive interface for support or sales agents.
+
+### 3. Lists (`/lists`)
+- **Responsibility**: The management of static groupings.
+- **Ownership**: The user owns the list definition; the user explicitly curates the members.
+- **Constraints**: Lists DO NOT have rules. They are dumb containers.
+- **Interaction**: Contacts are manually added or removed.
+
+### 4. Segments (`/segments`)
+- **Responsibility**: The management of dynamic, rules-based groupings.
+- **Ownership**: The query engine owns the membership.
+- **Constraints**: Users CANNOT manually add or remove a Contact from a Segment.
+- **Interaction**: Contacts qualify or disqualify in real-time based on their attributes matching the Segment's JSON Logic rules.
+
+## 9.3 User Flows & Context Preservation
+
+Navigation between Audience entities MUST utilize the Z-Index layout matrix to prevent users from losing their place.
+
+- **Contact → Detail**: Clicking a row in the `/contacts` Data Grid MUST open an `L5` Side Panel Drawer. Clicking "Expand" in that drawer redirects to the full `/contacts/:id` page.
+- **Detail → Lists / Segments**: A Contact Detail page contains a "Memberships" tab. Clicking a List or Segment from here opens an `L5` Side Panel previewing the definition. 
+- **Lists / Segments → Contacts**: Viewing a List or Segment displays a Data Grid of qualified Contacts. Clicking a Contact opens the `L5` Side Panel Drawer.
+
+## 9.4 Entity Relationships
+
+- **Contact ↔ Lists (Static Relationship)**: Many-to-Many. Defined by explicit join table rows (`contact_lists`).
+- **Contact ↔ Segments (Dynamic Relationship)**: Many-to-Many. Evaluated at runtime or cached via background workers based on attributes.
+- **Lists ↔ Segments**: A Segment MAY use a List as a filtering criteria (e.g., "Contact is IN List A AND Contact.status == Active"). A List CANNOT use a Segment (as Lists are purely manual).
+
+## 9.5 Future Readiness
+
+This architecture guarantees forward compatibility with:
+- **Massive Scale**: By separating Lists (static) from Segments (dynamic), the backend can aggressively cache Lists while isolating expensive Segment queries to dedicated read-replicas.
+- **Custom Objects (Companies, Deals)**: Future entities will adopt this exact same `/entity` -> `/entity/:id` pattern, utilizing the identical Enterprise Data Grid.
+- **Automations**: Segment qualification triggers will naturally hook into the Workflow engine without redefining identity logic.

@@ -1,10 +1,12 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { Contact } from '@/types'
 import { Activity, Clock, MessageCircle, BarChart3, Settings, Edit2, Check, X, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CONTACT_FIELD_GROUPS as FIELD_GROUPS } from '@/lib/audience-constants'
+import { OmnichannelTimeline } from './OmnichannelTimeline'
 
 interface Contact360MainWorkspaceProps {
   contact: Contact
@@ -17,11 +19,37 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
   const [editingField, setEditingField] = useState<string | null>(null)
   const [editValue, setEditValue] = useState<any>('')
   
-  // Local state to simulate updates
   const [localContact, setLocalContact] = useState<Contact & Record<string, any>>({
     ...contact,
     custom_fields: contact.custom_fields || {}
   })
+
+  const [combinedGroups, setCombinedGroups] = useState<any[]>(FIELD_GROUPS)
+
+  useEffect(() => {
+    loadDynamicGroups()
+  }, [])
+
+  async function loadDynamicGroups() {
+    const supabase = createClient()
+    const { data: groups } = await supabase.from('field_groups').select('*').eq('entity_type', 'contact').order('order_index')
+    const { data: fields } = await supabase.from('custom_field_definitions').select('*').eq('entity_type', 'contact').order('created_at')
+
+    if (groups && fields) {
+      const dynamicGroups = groups.map(g => ({
+        id: g.id,
+        label: g.name,
+        fields: fields.filter(f => f.group_id === g.id).map(f => ({
+          key: f.key,
+          label: f.label,
+          type: f.field_type,
+          isCustom: true
+        }))
+      })).filter(g => g.fields.length > 0)
+
+      setCombinedGroups([...FIELD_GROUPS, ...dynamicGroups])
+    }
+  }
 
   // Custom Field Creation Modal State
   const [showAddCustomField, setShowAddCustomField] = useState(false)
@@ -36,15 +64,21 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
     }
   }
 
-  const handleSaveField = (key: string, isCustom = false) => {
+  const handleSaveField = async (key: string, isCustom = false) => {
+    const supabase = createClient()
+    let updatedContact = { ...localContact }
+    
     if (isCustom) {
-      setLocalContact(prev => ({ 
-        ...prev, 
-        custom_fields: { ...(prev.custom_fields || {}), [key]: editValue } 
-      }))
+      updatedContact.custom_fields = { ...(localContact.custom_fields || {}), [key]: editValue }
+      const { error } = await supabase.from('contacts').update({ custom_fields: updatedContact.custom_fields }).eq('id', contact.id)
+      if (error) { alert('Failed to update custom field'); return }
     } else {
-      setLocalContact(prev => ({ ...prev, [key]: editValue }))
+      updatedContact = { ...localContact, [key]: editValue }
+      const { error } = await supabase.from('contacts').update({ [key]: editValue }).eq('id', contact.id)
+      if (error) { alert('Failed to update field'); return }
     }
+    
+    setLocalContact(updatedContact)
     setEditingField(null)
   }
 
@@ -230,14 +264,14 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
         {/* FIELDS TAB (The exhaustive list of all fields) */}
         {activeTab === 'fields' && (
           <div className="max-w-5xl mx-auto space-y-6 pb-20">
-            {FIELD_GROUPS.map(group => (
+            {combinedGroups.map(group => (
               <div key={group.id} className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
                 <div className="bg-panel/50 px-6 py-4 border-b border-border">
                   <h3 className="font-semibold text-white">{group.label}</h3>
                 </div>
                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-                  {group.fields.map(field => {
-                    const value = localContact[field.key]
+                  {group.fields.map((field: any) => {
+                    const value = field.isCustom ? localContact.custom_fields?.[field.key] : localContact[field.key]
                     const isEditing = editingField === field.key
                     const isReadOnly = field.readOnly
 
@@ -247,8 +281,8 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
                         
                         {isEditing && !isReadOnly ? (
                           <div className="flex items-start gap-2">
-                            {renderEditInput(field)}
-                            <button onClick={() => handleSaveField(field.key)} className="p-1.5 mt-0.5 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors">
+                            {renderEditInput(field, field.isCustom)}
+                            <button onClick={() => handleSaveField(field.key, field.isCustom)} className="p-1.5 mt-0.5 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors">
                               <Check className="w-4 h-4" />
                             </button>
                             <button onClick={handleCancelEdit} className="p-1.5 mt-0.5 bg-surface2 text-text-muted rounded-md hover:text-white transition-colors">
@@ -262,7 +296,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
                             </div>
                             {!isReadOnly && (
                               <button 
-                                onClick={() => handleEditClick(field.key, value)}
+                                onClick={() => handleEditClick(field.key, value, field.isCustom)}
                                 className="opacity-0 group-hover/field:opacity-100 p-1 mt-0.5 text-text-muted hover:text-primary-400 transition-all flex-none"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
@@ -388,12 +422,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
 
         {/* TIMELINE TAB */}
         {activeTab === 'timeline' && (
-          <div className="h-full flex items-center justify-center text-text-secondary bg-surface border border-border rounded-lg min-h-[300px]">
-            <div className="text-center flex flex-col items-center gap-3">
-              <Clock className="h-10 w-10 text-text-secondary opacity-50" />
-              <p>Full Unified Event Timeline goes here.</p>
-            </div>
-          </div>
+          <OmnichannelTimeline contactId={contact.id} />
         )}
 
         {/* CONVERSATIONS TAB */}

@@ -127,12 +127,17 @@ export function ContactsClientWrapper({ initialContacts, initialSavedViews = [] 
     }
   }
 
-  const handleUpdateContact = (id: string, key: string, value: any, isCustom: boolean) => {
+  const handleUpdateContact = async (id: string, key: string, value: any, isCustom: boolean) => {
     setContacts(prev => prev.map(c => {
       if (c.id === id) {
         if (isCustom) {
-          return { ...c, custom_fields: { ...(c.custom_fields || {}), [key]: value } }
+          const newCustomFields = { ...(c.custom_fields || {}), [key]: value }
+          // Fire and forget Supabase update
+          supabase.from('contacts').update({ custom_fields: newCustomFields }).eq('id', id).then()
+          return { ...c, custom_fields: newCustomFields }
         }
+        // Fire and forget Supabase update
+        supabase.from('contacts').update({ [key]: value }).eq('id', id).then()
         return { ...c, [key]: value }
       }
       return c

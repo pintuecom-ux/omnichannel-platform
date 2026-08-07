@@ -64,7 +64,6 @@ export function ContactsToolbar({
   const toggleColumn = (colKey: string) => {
     setVisibleColumns(prev => {
       if (prev.includes(colKey)) return prev.filter(k => k !== colKey)
-      if (prev.length >= 50) return prev
       return [...prev, colKey]
     })
   }
