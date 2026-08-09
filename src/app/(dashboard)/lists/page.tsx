@@ -173,7 +173,7 @@ export default function ListsPage() {
           <ModalHeader>
             <ModalTitle>{modal.mode === 'new' ? 'Create New List' : 'Edit List'}</ModalTitle>
           </ModalHeader>
-          <div className="flex flex-col gap-4 py-4">
+          <div className="flex flex-col gap-4 py-4 px-[15px]">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">List Name</label>
               <input 
