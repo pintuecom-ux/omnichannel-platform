@@ -226,7 +226,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
                 <h3 className="font-semibold text-white">Recent Activity</h3>
               </div>
               <div className="flex flex-col gap-4 relative before:absolute before:inset-0 before:ml-[15px] before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
-                <div className="relative flex items-start gap-4">
+                <div className="tempo_field_group relative flex items-start gap-4">
                   <div className="flex items-center justify-center w-8 h-8 rounded-full border border-white/10 bg-surface shadow shrink-0 z-10">
                     <div className="w-2.5 h-2.5 rounded-full bg-blue-400"></div>
                   </div>

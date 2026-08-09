@@ -66,7 +66,7 @@ export function OmnichannelTimeline({ contactId }: { contactId: string }) {
       
       <div className="relative pl-6 before:absolute before:inset-0 before:ml-[11px] before:w-px before:bg-border space-y-6">
         {events.map(event => (
-          <div key={event.id} className="relative flex items-start gap-4">
+          <div key={event.id} className="tempo_field_group relative flex items-start gap-4">
             <div className="absolute -left-[30px] w-6 h-6 rounded-full bg-panel border border-border flex items-center justify-center shadow-md">
               {getIcon(event.type)}
             </div>
