@@ -7,6 +7,7 @@ import { Activity, Clock, MessageCircle, BarChart3, Settings, Edit2, Check, X, P
 import { cn } from '@/lib/utils'
 import { CONTACT_FIELD_GROUPS as FIELD_GROUPS } from '@/lib/audience-constants'
 import { OmnichannelTimeline } from './OmnichannelTimeline'
+import { SocialProfilesWidget } from './SocialProfilesWidget'
 
 interface Contact360MainWorkspaceProps {
   contact: Contact
@@ -257,6 +258,15 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
                   <div className="text-2xl font-semibold text-white">{localContact.churn_risk ? `${localContact.churn_risk}%` : '-'}</div>
                 </div>
               </div>
+              
+              <SocialProfilesWidget 
+                contact={contact} 
+                onUpdate={async (data) => {
+                  const { createClient } = await import('@/lib/supabase/client')
+                  const supabase = createClient()
+                  await supabase.from('contacts').update({ social_profiles: data }).eq('id', contact.id)
+                }} 
+              />
             </div>
           </div>
         )}
