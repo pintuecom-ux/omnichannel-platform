@@ -275,7 +275,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
         {activeTab === 'fields' && (
           <div className="max-w-5xl mx-auto space-y-6 pb-20">
             {combinedGroups.map(group => (
-              <div key={group.id} className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden mb-5">
+              <div key={group.id} className="tempo_field_group bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
                 <div className="bg-panel/50 px-6 py-4 border-b border-border">
                   <h3 className="font-semibold text-white">{group.label}</h3>
                 </div>
