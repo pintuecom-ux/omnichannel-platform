@@ -3483,3 +3483,7 @@ textarea.form-input {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
+
+.tempo_header button {
+    margin-right: 30px;
+}

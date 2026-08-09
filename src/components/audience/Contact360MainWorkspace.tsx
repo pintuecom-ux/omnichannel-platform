@@ -184,7 +184,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
       
       {/* Sticky Tab Header */}
       <div className="flex-none border-b border-border bg-base px-6 pt-6 sticky top-0 z-10 shrink-0">
-        <div className="flex space-x-8 overflow-x-auto no-scrollbar">
+        <div className="tempo_header flex space-x-8 overflow-x-auto no-scrollbar">
           <button 
             onClick={() => setActiveTab('overview')}
             className={cn("pb-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap", activeTab === 'overview' ? "border-primary-500 text-primary-400" : "border-transparent text-gray-400 hover:text-white")}
@@ -217,7 +217,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
         
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-2 gap-6 h-full items-start">
+          <div className="flex flex-col gap-6 h-full items-stretch">
             <div className="bg-surface border border-border rounded-xl p-6 shadow-sm">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 rounded-lg bg-blue-500/10">
@@ -275,7 +275,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
         {activeTab === 'fields' && (
           <div className="max-w-5xl mx-auto space-y-6 pb-20">
             {combinedGroups.map(group => (
-              <div key={group.id} className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
+              <div key={group.id} className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden mb-5">
                 <div className="bg-panel/50 px-6 py-4 border-b border-border">
                   <h3 className="font-semibold text-white">{group.label}</h3>
                 </div>
