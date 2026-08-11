@@ -126,13 +126,13 @@ let orderIdx = 0;
 for (const group of CONTACT_FIELD_GROUPS) {
   sql += `
         -- Group: ${group.label}
-        INSERT INTO public.field_groups (workspace_id, entity_type, name, order_index)
-        VALUES (ws_id, 'contact', '${group.label}', ${orderIdx})
-        ON CONFLICT (workspace_id, entity_type, name) DO UPDATE SET order_index = EXCLUDED.order_index
+        INSERT INTO public.field_groups (workspace_id, name, order_index)
+        VALUES (ws_id, '${group.label}', ${orderIdx})
+        ON CONFLICT (workspace_id, name) DO UPDATE SET order_index = EXCLUDED.order_index
         RETURNING id INTO grp_id;
 
         IF grp_id IS NULL THEN
-            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND entity_type = 'contact' AND name = '${group.label}';
+            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND name = '${group.label}';
         END IF;
 `;
 

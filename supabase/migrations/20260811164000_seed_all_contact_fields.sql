@@ -8,13 +8,13 @@ BEGIN
     FOR ws_id IN SELECT id FROM public.workspaces LOOP
 
         -- Group: Personal Information
-        INSERT INTO public.field_groups (workspace_id, entity_type, name, order_index)
-        VALUES (ws_id, 'contact', 'Personal Information', 0)
-        ON CONFLICT (workspace_id, entity_type, name) DO UPDATE SET order_index = EXCLUDED.order_index
+        INSERT INTO public.field_groups (workspace_id, name, order_index)
+        VALUES (ws_id, 'Personal Information', 0)
+        ON CONFLICT (workspace_id, name) DO UPDATE SET order_index = EXCLUDED.order_index
         RETURNING id INTO grp_id;
 
         IF grp_id IS NULL THEN
-            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND entity_type = 'contact' AND name = 'Personal Information';
+            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND name = 'Personal Information';
         END IF;
 
         INSERT INTO public.custom_field_definitions (workspace_id, entity_type, key, label, field_type, group_id, is_system, is_quick_add, is_required)
@@ -43,13 +43,13 @@ BEGIN
         SET group_id = EXCLUDED.group_id, label = EXCLUDED.label, is_system = EXCLUDED.is_system;
 
         -- Group: Communication
-        INSERT INTO public.field_groups (workspace_id, entity_type, name, order_index)
-        VALUES (ws_id, 'contact', 'Communication', 1)
-        ON CONFLICT (workspace_id, entity_type, name) DO UPDATE SET order_index = EXCLUDED.order_index
+        INSERT INTO public.field_groups (workspace_id, name, order_index)
+        VALUES (ws_id, 'Communication', 1)
+        ON CONFLICT (workspace_id, name) DO UPDATE SET order_index = EXCLUDED.order_index
         RETURNING id INTO grp_id;
 
         IF grp_id IS NULL THEN
-            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND entity_type = 'contact' AND name = 'Communication';
+            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND name = 'Communication';
         END IF;
 
         INSERT INTO public.custom_field_definitions (workspace_id, entity_type, key, label, field_type, group_id, is_system, is_quick_add, is_required)
@@ -83,13 +83,13 @@ BEGIN
         SET group_id = EXCLUDED.group_id, label = EXCLUDED.label, is_system = EXCLUDED.is_system;
 
         -- Group: Social Profiles
-        INSERT INTO public.field_groups (workspace_id, entity_type, name, order_index)
-        VALUES (ws_id, 'contact', 'Social Profiles', 2)
-        ON CONFLICT (workspace_id, entity_type, name) DO UPDATE SET order_index = EXCLUDED.order_index
+        INSERT INTO public.field_groups (workspace_id, name, order_index)
+        VALUES (ws_id, 'Social Profiles', 2)
+        ON CONFLICT (workspace_id, name) DO UPDATE SET order_index = EXCLUDED.order_index
         RETURNING id INTO grp_id;
 
         IF grp_id IS NULL THEN
-            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND entity_type = 'contact' AND name = 'Social Profiles';
+            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND name = 'Social Profiles';
         END IF;
 
         INSERT INTO public.custom_field_definitions (workspace_id, entity_type, key, label, field_type, group_id, is_system, is_quick_add, is_required)
@@ -108,13 +108,13 @@ BEGIN
         SET group_id = EXCLUDED.group_id, label = EXCLUDED.label, is_system = EXCLUDED.is_system;
 
         -- Group: Business
-        INSERT INTO public.field_groups (workspace_id, entity_type, name, order_index)
-        VALUES (ws_id, 'contact', 'Business', 3)
-        ON CONFLICT (workspace_id, entity_type, name) DO UPDATE SET order_index = EXCLUDED.order_index
+        INSERT INTO public.field_groups (workspace_id, name, order_index)
+        VALUES (ws_id, 'Business', 3)
+        ON CONFLICT (workspace_id, name) DO UPDATE SET order_index = EXCLUDED.order_index
         RETURNING id INTO grp_id;
 
         IF grp_id IS NULL THEN
-            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND entity_type = 'contact' AND name = 'Business';
+            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND name = 'Business';
         END IF;
 
         INSERT INTO public.custom_field_definitions (workspace_id, entity_type, key, label, field_type, group_id, is_system, is_quick_add, is_required)
@@ -138,13 +138,13 @@ BEGIN
         SET group_id = EXCLUDED.group_id, label = EXCLUDED.label, is_system = EXCLUDED.is_system;
 
         -- Group: Location
-        INSERT INTO public.field_groups (workspace_id, entity_type, name, order_index)
-        VALUES (ws_id, 'contact', 'Location', 4)
-        ON CONFLICT (workspace_id, entity_type, name) DO UPDATE SET order_index = EXCLUDED.order_index
+        INSERT INTO public.field_groups (workspace_id, name, order_index)
+        VALUES (ws_id, 'Location', 4)
+        ON CONFLICT (workspace_id, name) DO UPDATE SET order_index = EXCLUDED.order_index
         RETURNING id INTO grp_id;
 
         IF grp_id IS NULL THEN
-            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND entity_type = 'contact' AND name = 'Location';
+            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND name = 'Location';
         END IF;
 
         INSERT INTO public.custom_field_definitions (workspace_id, entity_type, key, label, field_type, group_id, is_system, is_quick_add, is_required)
@@ -188,13 +188,13 @@ BEGIN
         SET group_id = EXCLUDED.group_id, label = EXCLUDED.label, is_system = EXCLUDED.is_system;
 
         -- Group: CRM & Ownership
-        INSERT INTO public.field_groups (workspace_id, entity_type, name, order_index)
-        VALUES (ws_id, 'contact', 'CRM & Ownership', 5)
-        ON CONFLICT (workspace_id, entity_type, name) DO UPDATE SET order_index = EXCLUDED.order_index
+        INSERT INTO public.field_groups (workspace_id, name, order_index)
+        VALUES (ws_id, 'CRM & Ownership', 5)
+        ON CONFLICT (workspace_id, name) DO UPDATE SET order_index = EXCLUDED.order_index
         RETURNING id INTO grp_id;
 
         IF grp_id IS NULL THEN
-            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND entity_type = 'contact' AND name = 'CRM & Ownership';
+            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND name = 'CRM & Ownership';
         END IF;
 
         INSERT INTO public.custom_field_definitions (workspace_id, entity_type, key, label, field_type, group_id, is_system, is_quick_add, is_required)
@@ -233,13 +233,13 @@ BEGIN
         SET group_id = EXCLUDED.group_id, label = EXCLUDED.label, is_system = EXCLUDED.is_system;
 
         -- Group: Marketing & Source
-        INSERT INTO public.field_groups (workspace_id, entity_type, name, order_index)
-        VALUES (ws_id, 'contact', 'Marketing & Source', 6)
-        ON CONFLICT (workspace_id, entity_type, name) DO UPDATE SET order_index = EXCLUDED.order_index
+        INSERT INTO public.field_groups (workspace_id, name, order_index)
+        VALUES (ws_id, 'Marketing & Source', 6)
+        ON CONFLICT (workspace_id, name) DO UPDATE SET order_index = EXCLUDED.order_index
         RETURNING id INTO grp_id;
 
         IF grp_id IS NULL THEN
-            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND entity_type = 'contact' AND name = 'Marketing & Source';
+            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND name = 'Marketing & Source';
         END IF;
 
         INSERT INTO public.custom_field_definitions (workspace_id, entity_type, key, label, field_type, group_id, is_system, is_quick_add, is_required)
@@ -288,13 +288,13 @@ BEGIN
         SET group_id = EXCLUDED.group_id, label = EXCLUDED.label, is_system = EXCLUDED.is_system;
 
         -- Group: Activity & Metrics (System)
-        INSERT INTO public.field_groups (workspace_id, entity_type, name, order_index)
-        VALUES (ws_id, 'contact', 'Activity & Metrics (System)', 7)
-        ON CONFLICT (workspace_id, entity_type, name) DO UPDATE SET order_index = EXCLUDED.order_index
+        INSERT INTO public.field_groups (workspace_id, name, order_index)
+        VALUES (ws_id, 'Activity & Metrics (System)', 7)
+        ON CONFLICT (workspace_id, name) DO UPDATE SET order_index = EXCLUDED.order_index
         RETURNING id INTO grp_id;
 
         IF grp_id IS NULL THEN
-            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND entity_type = 'contact' AND name = 'Activity & Metrics (System)';
+            SELECT id INTO grp_id FROM public.field_groups WHERE workspace_id = ws_id AND name = 'Activity & Metrics (System)';
         END IF;
 
         INSERT INTO public.custom_field_definitions (workspace_id, entity_type, key, label, field_type, group_id, is_system, is_quick_add, is_required)

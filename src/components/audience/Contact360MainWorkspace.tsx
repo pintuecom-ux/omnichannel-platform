@@ -32,7 +32,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
 
   async function loadDynamicConfig() {
     const supabase = createClient()
-    const { data: groups } = await supabase.from('field_groups').select('*').eq('entity_type', 'contact').order('order_index')
+    const { data: groups } = await supabase.from('field_groups').select('*').order('order_index')
     const { data: fields } = await supabase.from('custom_field_definitions').select('*').eq('entity_type', 'contact').order('created_at')
 
     if (groups && fields) {
