@@ -570,7 +570,7 @@ function CommentReplyInput({ conversation, replyingTo, onClearReply, onSent }: C
         body:    JSON.stringify({
           conversation_id: conversation.id,
           type:            'comment_reply',
-          comment_id:      replyingTo.id,
+          comment_id:      replyingTo.external_id,
           body:            text.trim(),
         }),
       })

@@ -405,6 +405,16 @@ export async function POST(req: NextRequest) {
       } else if (type === 'comment_reply') {
         externalId   = (await fb.replyToComment(comment_id, body))?.id
         contentType2 = 'comment'
+      } else if (type === 'reaction') {
+        if (!recipientId) {
+          return NextResponse.json({ error: 'Contact has no Facebook recipient ID' }, { status: 400 })
+        }
+        if (!reaction_message_id) {
+          return NextResponse.json({ error: 'reaction_message_id required' }, { status: 400 })
+        }
+        externalId   = (await fb.sendReaction(recipientId, reaction_message_id, reaction_emoji ?? ''))?.message_id
+        messageBody  = `[Reaction: ${reaction_emoji || 'removed'}]`
+        contentType2 = 'reaction'
       } else {
         return NextResponse.json({ error: `Unsupported Facebook type: ${type}` }, { status: 400 })
       }
