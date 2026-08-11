@@ -5,7 +5,6 @@ import { Contact, SavedView } from '@/types'
 import { ContactsGrid } from './ContactsGrid'
 import { ContactsToolbar } from './ContactsToolbar'
 import { CreateContactModal } from './CreateContactModal'
-import { ALL_CONTACT_FIELDS } from '@/lib/audience-constants'
 import { createClient } from '@/lib/supabase/client'
 
 interface Props {
@@ -24,6 +23,14 @@ export function ContactsClientWrapper({ initialContacts, initialSavedViews = [] 
   const [visibleColumns, setVisibleColumns] = useState<string[]>(['name', 'phone', 'email', 'wa_opt_in_status', 'tags'])
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null)
   const [filterConfig, setFilterConfig] = useState<Record<string, string>>({})
+  const [dbFields, setDbFields] = useState<any[]>([])
+
+  // Load custom field definitions
+  React.useEffect(() => {
+    supabase.from('custom_field_definitions').select('*').eq('entity_type', 'contact').order('created_at').then(({ data }) => {
+      if (data) setDbFields(data)
+    })
+  }, [])
 
   // Determine Workspace ID safely
   const workspaceId = contacts.length > 0 ? contacts[0].workspace_id : undefined
@@ -62,10 +69,18 @@ export function ContactsClientWrapper({ initialContacts, initialSavedViews = [] 
 
   // Combine standard fields and extracted custom fields
   const allAvailableColumns = useMemo(() => {
-    const standardCols = ALL_CONTACT_FIELDS.map(f => ({ key: f.key, label: f.label, type: f.type }))
-    const customCols = customFieldKeys.map(k => ({ key: k, label: k, type: 'custom' }))
+    const standardCols = dbFields.map(f => ({ key: f.key, label: f.label, type: f.field_type }))
+    
+    const definedKeys = new Set(dbFields.map(f => f.key))
+    const customCols = customFieldKeys.filter(k => !definedKeys.has(k)).map(k => ({ key: k, label: k, type: 'custom' }))
+    
+    // Add default name if it doesn't exist in db fields
+    if (!definedKeys.has('name')) {
+      standardCols.unshift({ key: 'name', label: 'Full Name', type: 'text' })
+    }
+    
     return [...standardCols, ...customCols]
-  }, [customFieldKeys])
+  }, [dbFields, customFieldKeys])
 
   // Processing Engine: Filter -> Sort
   const processedContacts = useMemo(() => {
