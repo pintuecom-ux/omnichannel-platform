@@ -14,29 +14,35 @@ interface CreateContactModalProps {
 export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateContactModalProps) {
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
-  const [customFieldDefs, setCustomFieldDefs] = useState<any[]>([])
+  const [fieldDefs, setFieldDefs] = useState<any[]>([])
   const [showAllFields, setShowAllFields] = useState(false)
-  
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    phone: '',
-    email: '',
-    waOptIn: true
-  })
-
-  const [customData, setCustomData] = useState<Record<string, any>>({})
+  const [fieldData, setFieldData] = useState<Record<string, any>>({})
 
   useEffect(() => {
     if (open) {
-      loadCustomFields()
+      loadFields()
     }
   }, [open])
 
-  async function loadCustomFields() {
-    const { data } = await supabase.from('custom_field_definitions').select('*').eq('entity_type', 'contact')
-    if (data) {
-      setCustomFieldDefs(data)
+  async function loadFields() {
+    // Fetch ALL definitions (both system and custom)
+    const { data } = await supabase.from('custom_field_definitions').select('*').eq('entity_type', 'contact').order('created_at', { ascending: true })
+    if (data && data.length > 0) {
+      setFieldDefs(data)
+      
+      // Initialize defaults
+      const initData: Record<string, any> = {}
+      data.forEach(f => {
+        if (f.field_type === 'boolean') {
+          initData[f.key] = false
+        } else {
+          initData[f.key] = ''
+        }
+      })
+      // Specific default for WA Opt-in
+      if ('wa_opt_in_status' in initData) initData['wa_opt_in_status'] = true
+      
+      setFieldData(initData)
     }
   }
 
@@ -49,32 +55,48 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
       const { data: p } = await supabase.from('profiles').select('workspace_id').eq('id', session.user.id).single()
       if (!p) throw new Error('No workspace found')
 
-      const name = [formData.firstName, formData.lastName].filter(Boolean).join(' ') || 'Unknown Contact'
-
-      // Validation for mandatory custom fields could go here
-
-      const { error } = await supabase.from('contacts').insert({
+      const sysFields = fieldDefs.filter(f => f.is_system).map(f => f.key)
+      const contactRow: any = {
         workspace_id: p.workspace_id,
-        name: name,
-        phone: formData.phone || null, // Null if empty for unique constraints
-        email: formData.email || null, // Null if empty for unique constraints
         source: 'manual',
-        wa_opt_in_status: formData.waOptIn ? 'subscribed' : 'none',
-        custom_fields: customData
-      })
+        custom_fields: {}
+      }
+      
+      for (const [k, v] of Object.entries(fieldData)) {
+        if (sysFields.includes(k)) {
+          contactRow[k] = v
+        } else {
+          contactRow.custom_fields[k] = v
+        }
+      }
+
+      contactRow.name = [contactRow.first_name, contactRow.last_name].filter(Boolean).join(' ') || 'Unknown Contact'
+      
+      if (contactRow.wa_opt_in_status === true) {
+         contactRow.wa_opt_in_status = 'subscribed'
+      } else if (contactRow.wa_opt_in_status === false) {
+         contactRow.wa_opt_in_status = 'none'
+      }
+
+      if (!contactRow.phone) contactRow.phone = null
+      if (!contactRow.email) contactRow.email = null
+
+      const { error } = await supabase.from('contacts').insert(contactRow)
 
       if (error) throw error
 
       onSuccess?.()
       onOpenChange(false)
-      setFormData({ firstName: '', lastName: '', phone: '', email: '', waOptIn: true })
-      setCustomData({})
+      setFieldData({})
     } catch (err: any) {
       alert(err.message || 'Failed to create contact')
     } finally {
       setSaving(false)
     }
   }
+
+  // Determine which fields to show
+  const visibleFields = fieldDefs.filter(f => showAllFields || f.is_quick_add)
 
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
@@ -88,7 +110,7 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
           </div>
           <div className="flex items-center gap-2">
             <Link 
-              href="/settings/contacts/fields"
+              href="/contacts/form-settings"
               onClick={() => onOpenChange(false)}
               className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-primary-400 bg-primary-500/10 rounded-md hover:bg-primary-500/20 transition-colors mr-2"
             >
@@ -105,98 +127,54 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
         </ModalHeader>
 
         <div className="p-6 flex flex-col gap-5 max-h-[60vh] overflow-y-auto">
-          <div className="flex gap-4">
-            <div className="flex-1 flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">First Name</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                placeholder="Jane"
-                value={formData.firstName}
-                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-              />
+          {fieldDefs.length === 0 ? (
+            <div className="text-sm text-text-muted text-center py-8">
+              Loading form configuration...
             </div>
-            <div className="flex-1 flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">Last Name</label>
-              <input 
-                type="text" 
-                className="form-input" 
-                placeholder="Doe"
-                value={formData.lastName}
-                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">Phone (Mobile Number)</label>
-            <input 
-              type="tel" 
-              className="form-input" 
-              placeholder="+1234567890"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">Email Address</label>
-            <input 
-              type="email" 
-              className="form-input" 
-              placeholder="jane@example.com"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            />
-          </div>
-
-          {customFieldDefs.filter(f => showAllFields || f.is_quick_add).length > 0 && (
+          ) : (
             <>
-              <hr className="border-border my-2" />
-              <h4 className="text-sm font-semibold text-white">{showAllFields ? 'All Custom Fields' : 'Quick Add Fields'}</h4>
-              {customFieldDefs.filter(f => showAllFields || f.is_quick_add).map(field => (
+              {visibleFields.filter(f => f.field_type !== 'boolean').map(field => (
                 <div key={field.key} className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">
                     {field.label} {field.is_required && <span className="text-red-400">*</span>}
                   </label>
                   <input 
-                    type={field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : 'text'}
+                    type={field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : field.key === 'phone' ? 'tel' : field.key === 'email' ? 'email' : 'text'}
                     className="form-input"
-                    value={customData[field.key] || ''}
-                    onChange={(e) => setCustomData({ ...customData, [field.key]: e.target.value })}
+                    value={fieldData[field.key] || ''}
+                    onChange={(e) => setFieldData({ ...fieldData, [field.key]: e.target.value })}
                   />
                 </div>
               ))}
+
+              {visibleFields.filter(f => f.field_type === 'boolean').map(field => (
+                <label key={field.key} className="flex items-center gap-3 p-3 bg-surface border border-border rounded-lg cursor-pointer hover:bg-surface2 transition-colors mt-2">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 rounded border-gray-600 bg-panel focus:ring-primary-500 focus:ring-offset-panel text-primary-500" 
+                    checked={!!fieldData[field.key]}
+                    onChange={(e) => setFieldData({ ...fieldData, [field.key]: e.target.checked })}
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-white">{field.label}</span>
+                  </div>
+                </label>
+              ))}
+
+              <div className="flex justify-center mt-2 mb-2">
+                <button 
+                  onClick={() => setShowAllFields(!showAllFields)}
+                  className="text-xs font-medium text-primary-400 hover:text-primary-300 flex items-center gap-1.5 px-3 py-1.5 bg-primary-500/5 hover:bg-primary-500/10 rounded-full transition-colors"
+                >
+                  {showAllFields ? (
+                    <><ChevronUp className="w-3.5 h-3.5" /> Show Quick Add only</>
+                  ) : (
+                    <><ChevronDown className="w-3.5 h-3.5" /> Show all fields</>
+                  )}
+                </button>
+              </div>
             </>
           )}
-
-          {(customFieldDefs.length > 0) && (
-            <div className="flex justify-center mt-2 mb-2">
-              <button 
-                onClick={() => setShowAllFields(!showAllFields)}
-                className="text-xs font-medium text-primary-400 hover:text-primary-300 flex items-center gap-1.5 px-3 py-1.5 bg-primary-500/5 hover:bg-primary-500/10 rounded-full transition-colors"
-              >
-                {showAllFields ? (
-                  <><ChevronUp className="w-3.5 h-3.5" /> Show less fields</>
-                ) : (
-                  <><ChevronDown className="w-3.5 h-3.5" /> Show all fields</>
-                )}
-              </button>
-            </div>
-          )}
-
-          <label className="flex items-center gap-3 p-3 bg-surface border border-border rounded-lg cursor-pointer hover:bg-surface2 transition-colors mt-2">
-            <input 
-              type="checkbox" 
-              className="w-4 h-4 rounded border-gray-600 bg-panel focus:ring-primary-500 focus:ring-offset-panel text-primary-500" 
-              checked={formData.waOptIn}
-              onChange={(e) => setFormData({ ...formData, waOptIn: e.target.checked })}
-            />
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-white">WhatsApp Opt-in</span>
-              <span className="text-xs text-text-muted">Contact has agreed to receive WhatsApp messages</span>
-            </div>
-          </label>
         </div>
 
         <ModalFooter className="px-6 py-4 border-t border-border bg-panel/50 flex justify-end gap-3 rounded-b-lg">
@@ -208,7 +186,7 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
           </button>
           <button 
             onClick={handleSave}
-            disabled={saving || (!formData.phone && !formData.email && !formData.firstName)}
+            disabled={saving || (!fieldData.phone && !fieldData.email && !fieldData.first_name)}
             className="px-6 py-2 bg-primary-500 hover:bg-primary-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-all shadow-[0_0_15px_rgba(14,165,233,0.3)] hover:shadow-[0_0_20px_rgba(14,165,233,0.5)] flex items-center gap-2"
           >
             {saving ? 'Creating...' : 'Create Contact'}
