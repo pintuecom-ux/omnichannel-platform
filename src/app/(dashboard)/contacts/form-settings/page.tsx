@@ -130,32 +130,48 @@ export default function FormSettingsPage() {
     loadData()
   }
 
-  // Update global sequential order indices
-  async function updateGlobalOrders(newFieldsList: CustomField[]) {
-    // Flatten list according to group order
-    const orderedAll: CustomField[] = []
+  // Re-order group fields and update global indices across DB and UI
+  async function applyGroupReorder(groupId: string | null, newGroupFields: CustomField[]) {
+    // 1. Build full ordered list of all fields across all groups
+    const fullOrderedList: CustomField[] = []
+
     groups.forEach(g => {
-      const gFields = newFieldsList.filter(f => f.group_id === g.id)
-      orderedAll.push(...gFields)
-    })
-    const unassigned = newFieldsList.filter(f => !f.group_id || !groups.some(g => g.id === f.group_id))
-    orderedAll.push(...unassigned)
-
-    const updatesToDB: { id: string; order_index: number }[] = []
-    const updatedState = newFieldsList.map(f => {
-      const globalIdx = orderedAll.findIndex(item => item.id === f.id)
-      if (globalIdx !== -1 && f.order_index !== globalIdx) {
-        updatesToDB.push({ id: f.id, order_index: globalIdx })
-        return { ...f, order_index: globalIdx }
+      if (g.id === groupId) {
+        fullOrderedList.push(...newGroupFields)
+      } else {
+        const gFields = fields
+          .filter(f => f.group_id === g.id)
+          .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+        fullOrderedList.push(...gFields)
       }
-      return f
     })
 
-    setFields(updatedState)
+    // Unassigned fields
+    if (groupId === null) {
+      fullOrderedList.push(...newGroupFields)
+    } else {
+      const unassigned = fields
+        .filter(f => !f.group_id || !groups.some(g => g.id === f.group_id))
+        .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+      fullOrderedList.push(...unassigned)
+    }
 
-    if (updatesToDB.length > 0) {
+    // 2. Assign sequential order_index 0, 1, 2, ... N-1
+    const dbUpdates: { id: string; order_index: number }[] = []
+    const updatedFieldsState = fullOrderedList.map((f, index) => {
+      if (f.order_index !== index) {
+        dbUpdates.push({ id: f.id, order_index: index })
+      }
+      return { ...f, order_index: index }
+    })
+
+    // Optimistic UI update
+    setFields(updatedFieldsState)
+
+    // 3. Persist updated indices to Supabase
+    if (dbUpdates.length > 0) {
       await Promise.all(
-        updatesToDB.map(u => 
+        dbUpdates.map(u => 
           supabase.from('custom_field_definitions').update({ order_index: u.order_index }).eq('id', u.id)
         )
       )
@@ -170,47 +186,31 @@ export default function FormSettingsPage() {
     const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
     if (targetIndex < 0 || targetIndex >= groupFields.length) return
 
-    const targetField = groupFields[targetIndex]
-    
-    const newFieldsList = [...fields]
-    const idxA = newFieldsList.findIndex(f => f.id === field.id)
-    const idxB = newFieldsList.findIndex(f => f.id === targetField.id)
-    
-    if (idxA !== -1 && idxB !== -1) {
-      const tempOrder = newFieldsList[idxA].order_index
-      newFieldsList[idxA] = { ...newFieldsList[idxA], order_index: newFieldsList[idxB].order_index }
-      newFieldsList[idxB] = { ...newFieldsList[idxB], order_index: tempOrder }
-      
-      if (newFieldsList[idxA].order_index === newFieldsList[idxB].order_index) {
-        newFieldsList[idxA] = { ...newFieldsList[idxA], order_index: targetIndex }
-        newFieldsList[idxB] = { ...newFieldsList[idxB], order_index: currentIndex }
-      }
-      
-      await updateGlobalOrders(newFieldsList)
-    }
+    const newGroupFields = [...groupFields]
+    const [movedItem] = newGroupFields.splice(currentIndex, 1)
+    newGroupFields.splice(targetIndex, 0, movedItem)
+
+    await applyGroupReorder(field.group_id, newGroupFields)
   }
 
   // Drag and drop handler
   async function handleDrop(targetField: CustomField, groupFields: CustomField[]) {
     if (!draggedFieldId || draggedFieldId === targetField.id) return
 
-    const draggedField = fields.find(f => f.id === draggedFieldId)
-    if (!draggedField) return
+    const currentIndex = groupFields.findIndex(f => f.id === draggedFieldId)
+    const targetIndex = groupFields.findIndex(f => f.id === targetField.id)
+    
+    if (currentIndex === -1 || targetIndex === -1) return
 
-    const filteredGroup = groupFields.filter(f => f.id !== draggedFieldId)
-    const targetIdx = filteredGroup.findIndex(f => f.id === targetField.id)
-    filteredGroup.splice(targetIdx, 0, draggedField)
-
-    const newFieldsList = fields.map(f => {
-      const gMatch = filteredGroup.find(gItem => gItem.id === f.id)
-      return gMatch || f
-    })
+    const newGroupFields = [...groupFields]
+    const [movedItem] = newGroupFields.splice(currentIndex, 1)
+    newGroupFields.splice(targetIndex, 0, movedItem)
 
     setDraggedFieldId(null)
-    await updateGlobalOrders(newFieldsList)
+    await applyGroupReorder(targetField.group_id, newGroupFields)
   }
 
-  // Group fields
+  // Group fields for rendering
   const groupedFields: { group: FieldGroup | null; fields: CustomField[] }[] = []
 
   groups.forEach(g => {
@@ -394,10 +394,19 @@ export default function FormSettingsPage() {
                               <tr 
                                 key={field.id} 
                                 draggable
-                                onDragStart={() => setDraggedFieldId(field.id)}
-                                onDragOver={(e) => e.preventDefault()}
-                                onDrop={() => handleDrop(field, groupFields)}
-                                className={`hover:bg-white/[0.03] transition-colors group ${draggedFieldId === field.id ? 'opacity-40' : ''}`}
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData('text/plain', field.id)
+                                  setDraggedFieldId(field.id)
+                                }}
+                                onDragOver={(e) => {
+                                  e.preventDefault()
+                                  e.dataTransfer.dropEffect = 'move'
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault()
+                                  handleDrop(field, groupFields)
+                                }}
+                                className={`hover:bg-white/[0.03] transition-colors group ${draggedFieldId === field.id ? 'opacity-40 bg-white/5' : ''}`}
                               >
                                 {/* 3 vertical line / Grip Icon */}
                                 <td className="px-3 py-4 text-text-muted hover:text-white cursor-grab active:cursor-grabbing text-center">
