@@ -15,6 +15,7 @@ type CustomField = {
   field_type: string
   group_id: string | null
   is_required: boolean
+  is_quick_add: boolean
 }
 
 export default function CustomFieldsPage() {
@@ -29,7 +30,8 @@ export default function CustomFieldsPage() {
     key: '',
     field_type: 'text',
     group_id: '',
-    is_required: false
+    is_required: false,
+    is_quick_add: false
   })
 
   useEffect(() => {
@@ -72,11 +74,12 @@ export default function CustomFieldsPage() {
         label: newField.label,
         field_type: newField.field_type,
         group_id: newField.group_id || null,
-        is_required: newField.is_required
+        is_required: newField.is_required,
+        is_quick_add: newField.is_quick_add
       })
 
     if (!error) {
-      setNewField({ label: '', key: '', field_type: 'text', group_id: '', is_required: false })
+      setNewField({ label: '', key: '', field_type: 'text', group_id: '', is_required: false, is_quick_add: false })
       loadData()
     } else {
       alert(`Error creating field: ${error.message}`)
@@ -140,14 +143,25 @@ export default function CustomFieldsPage() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <input 
-              type="checkbox" 
-              id="is_required" 
-              checked={newField.is_required} 
-              onChange={e => setNewField({ ...newField, is_required: e.target.checked })} 
-            />
-            <label htmlFor="is_required" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Make this field mandatory</label>
+          <div style={{ display: 'flex', gap: 24, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input 
+                type="checkbox" 
+                id="is_required" 
+                checked={newField.is_required} 
+                onChange={e => setNewField({ ...newField, is_required: e.target.checked })} 
+              />
+              <label htmlFor="is_required" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Make this field mandatory</label>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input 
+                type="checkbox" 
+                id="is_quick_add" 
+                checked={newField.is_quick_add} 
+                onChange={e => setNewField({ ...newField, is_quick_add: e.target.checked })} 
+              />
+              <label htmlFor="is_quick_add" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Show in Quick Add</label>
+            </div>
           </div>
 
           <button className="btn btn-primary" onClick={handleAddField} disabled={saving || !newField.label || !newField.key}>
@@ -170,6 +184,7 @@ export default function CustomFieldsPage() {
                 <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: 600 }}>Key</th>
                 <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: 600 }}>Type</th>
                 <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: 600 }}>Group</th>
+                <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: 600 }}>Quick Add</th>
                 <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 600 }}>Actions</th>
               </tr>
             </thead>
@@ -183,6 +198,9 @@ export default function CustomFieldsPage() {
                   </td>
                   <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>
                     {groups.find(g => g.id === field.group_id)?.name || 'Uncategorized'}
+                  </td>
+                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                    {field.is_quick_add ? <span style={{ color: 'var(--primary)' }}><i className="fa-solid fa-check" /></span> : <span style={{ color: 'var(--text-muted)' }}>-</span>}
                   </td>
                   <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                     <button className="icon-btn" onClick={() => handleDelete(field.id)} style={{ color: '#e84040' }}>

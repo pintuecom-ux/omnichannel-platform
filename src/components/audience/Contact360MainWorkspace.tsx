@@ -26,6 +26,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
   })
 
   const [combinedGroups, setCombinedGroups] = useState<any[]>(FIELD_GROUPS)
+  const [allCustomFields, setAllCustomFields] = useState<any[]>([])
 
   useEffect(() => {
     loadDynamicGroups()
@@ -49,6 +50,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
       })).filter(g => g.fields.length > 0)
 
       setCombinedGroups([...FIELD_GROUPS, ...dynamicGroups])
+      setAllCustomFields(fields)
     }
   }
 
@@ -87,15 +89,25 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
     setEditingField(null)
   }
 
-  const handleAddCustomField = () => {
+  const handleAddCustomField = async () => {
     if (!newCustomField.system_name) return
-    setLocalContact(prev => ({
-      ...prev,
-      custom_fields: {
-        ...(prev.custom_fields || {}),
-        [newCustomField.system_name]: '' // Initialize empty
-      }
-    }))
+    const supabase = createClient()
+    const { error } = await supabase.from('custom_field_definitions').insert({
+      workspace_id: contact.workspace_id,
+      entity_type: 'contact',
+      key: newCustomField.system_name,
+      label: newCustomField.name || newCustomField.system_name,
+      field_type: newCustomField.type.toLowerCase(),
+      is_quick_add: false
+    })
+    
+    if (error) {
+      alert(`Failed to create custom field: ${error.message}`)
+      return
+    }
+
+    await loadDynamicGroups()
+    
     setShowAddCustomField(false)
     setNewCustomField({ name: '', system_name: '', type: 'Text' })
   }
@@ -379,17 +391,17 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
                   </div>
                 )}
 
-                {localContact.custom_fields && Object.keys(localContact.custom_fields).length > 0 ? (
+                {allCustomFields.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-                    {Object.entries(localContact.custom_fields).map(([key, val]) => {
+                    {allCustomFields.map((field) => {
+                      const key = field.key
+                      const val = localContact.custom_fields?.[key]
                       const isEditing = editingField === key
-                      // We don't have the type metadata stored cleanly in this raw JSONB mock, so we guess text/paragraph
-                      // A real app would join with `custom_field_definitions`
-                      const fieldType = String(val).length > 50 ? 'paragraph' : 'string'
+                      const fieldType = field.field_type || 'string'
 
                       return (
                         <div key={key} className="flex flex-col gap-1.5 group/field">
-                          <label className="text-xs font-medium text-text-muted uppercase tracking-wide">{key}</label>
+                          <label className="text-xs font-medium text-text-muted uppercase tracking-wide">{field.label}</label>
                           
                           {isEditing ? (
                             <div className="flex items-start gap-2">
@@ -419,11 +431,7 @@ export function Contact360MainWorkspace({ contact }: Contact360MainWorkspaceProp
                     })}
                   </div>
                 ) : (
-                  !showAddCustomField && (
-                    <div className="text-center py-10 text-sm text-text-secondary italic bg-panel rounded-lg border border-border">
-                      No custom fields found for this contact.
-                    </div>
-                  )
+                  <div className="text-sm text-text-muted italic bg-surface p-4 rounded-lg border border-border">No custom fields defined.</div>
                 )}
               </div>
             </div>

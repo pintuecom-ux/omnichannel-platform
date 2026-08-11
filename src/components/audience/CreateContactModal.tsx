@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react'
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalFooter } from '@/components/ui/Modal'
 import { createClient } from '@/lib/supabase/client'
-import { UserPlus, X } from 'lucide-react'
+import { UserPlus, X, Settings2, ChevronDown, ChevronUp } from 'lucide-react'
+import Link from 'next/link'
 
 interface CreateContactModalProps {
   open: boolean
@@ -14,6 +15,7 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
   const [customFieldDefs, setCustomFieldDefs] = useState<any[]>([])
+  const [showAllFields, setShowAllFields] = useState(false)
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -84,12 +86,22 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
             </div>
             <ModalTitle>Add New Contact</ModalTitle>
           </div>
-          <button 
-            onClick={() => onOpenChange(false)}
-            className="p-1.5 rounded-lg text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Link 
+              href="/settings/contacts/fields"
+              onClick={() => onOpenChange(false)}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-primary-400 bg-primary-500/10 rounded-md hover:bg-primary-500/20 transition-colors mr-2"
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              Manage Fields
+            </Link>
+            <button 
+              onClick={() => onOpenChange(false)}
+              className="p-1.5 rounded-lg text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </ModalHeader>
 
         <div className="p-6 flex flex-col gap-5 max-h-[60vh] overflow-y-auto">
@@ -138,11 +150,11 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
             />
           </div>
 
-          {customFieldDefs.length > 0 && (
+          {customFieldDefs.filter(f => showAllFields || f.is_quick_add).length > 0 && (
             <>
               <hr className="border-border my-2" />
-              <h4 className="text-sm font-semibold text-white">Custom Fields</h4>
-              {customFieldDefs.map(field => (
+              <h4 className="text-sm font-semibold text-white">{showAllFields ? 'All Custom Fields' : 'Quick Add Fields'}</h4>
+              {customFieldDefs.filter(f => showAllFields || f.is_quick_add).map(field => (
                 <div key={field.key} className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">
                     {field.label} {field.is_required && <span className="text-red-400">*</span>}
@@ -156,6 +168,21 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
                 </div>
               ))}
             </>
+          )}
+
+          {(customFieldDefs.length > 0) && (
+            <div className="flex justify-center mt-2 mb-2">
+              <button 
+                onClick={() => setShowAllFields(!showAllFields)}
+                className="text-xs font-medium text-primary-400 hover:text-primary-300 flex items-center gap-1.5 px-3 py-1.5 bg-primary-500/5 hover:bg-primary-500/10 rounded-full transition-colors"
+              >
+                {showAllFields ? (
+                  <><ChevronUp className="w-3.5 h-3.5" /> Show less fields</>
+                ) : (
+                  <><ChevronDown className="w-3.5 h-3.5" /> Show all fields</>
+                )}
+              </button>
+            </div>
           )}
 
           <label className="flex items-center gap-3 p-3 bg-surface border border-border rounded-lg cursor-pointer hover:bg-surface2 transition-colors mt-2">
