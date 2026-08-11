@@ -270,19 +270,61 @@ async function processFBComment(ev: any) {
     .or(`facebook_scoped_id.eq.${data.from?.id},facebook_id.eq.${data.from?.id}`)
     .maybeSingle()
 
-  if (!contact && data.from?.id) {
-    const { data: c } = await admin
-      .from('contacts')
-      .insert({
-        workspace_id: channel.workspace_id,
-        facebook_scoped_id: data.from.id,
-        facebook_id: data.from.id,
-        name: data.from?.name || 'Facebook User',
-      })
-      .select()
-      .single()
-    contact = c
+  if (data.from?.id) {
+    let name = data.from?.name || 'Facebook User'
+    let avatarUrl: string | null = null
+
+    const isGenericName = !contact || contact.name === data.from.id || contact.name === 'Facebook User' || /^\d+$/.test(contact.name.trim())
+    const isMissingAvatar = !contact?.avatar_url
+
+    if (!contact || isGenericName || isMissingAvatar) {
+      if (channel.access_token) {
+        try {
+          console.log(`[FB Comment] Fetching Meta profile for commenter=${data.from.id}...`)
+          const fb = new FacebookClient(channel.access_token, pageId)
+          const profile = await fb.getUserProfile(data.from.id)
+
+          if (profile) {
+            name = (profile.name && profile.name !== data.from.id) ? profile.name : (contact?.name || name)
+            avatarUrl = profile.profile_pic || contact?.avatar_url || null
+          }
+        } catch (err: any) {
+          console.warn('[FB Comment] Profile fetch failed (non-critical):', err?.message)
+        }
+      }
+    }
+
+    if (!contact) {
+      const { data: c } = await admin
+        .from('contacts')
+        .insert({
+          workspace_id: channel.workspace_id,
+          facebook_scoped_id: data.from.id,
+          facebook_id: data.from.id,
+          name: name,
+          avatar_url: avatarUrl,
+        })
+        .select()
+        .single()
+      contact = c
+    } else if (isGenericName || isMissingAvatar) {
+      const updates: any = {}
+      if (isGenericName && name !== contact.name) updates.name = name
+      if (isMissingAvatar && avatarUrl) updates.avatar_url = avatarUrl
+
+      if (Object.keys(updates).length > 0) {
+        const { data: updatedContact } = await admin
+          .from('contacts')
+          .update(updates)
+          .eq('id', contact.id)
+          .select()
+          .single()
+        if (updatedContact) contact = updatedContact
+        console.log(`[FB Comment] ✅ Backfilled avatar DP / profile for contact ${contact.id}`)
+      }
+    }
   }
+
   if (!contact) return
 
   // Comment threads are grouped by post — one conversation per post

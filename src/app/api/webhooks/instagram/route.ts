@@ -439,19 +439,68 @@ async function processIGComment(ev: any) {
   if (contactErr) console.error('[IG Comment] Contact lookup error:', contactErr.message)
 
   if (!contact) {
+    let name = data.from?.name || data.from?.username || 'IG User'
+    let username = data.from?.username ?? null
+    let avatarUrl: string | null = null
+
+    if (channel.access_token) {
+      try {
+        console.log(`[IG Comment] Fetching Meta profile for commenter=${commenterId}...`)
+        const igToken = channel.meta?.page_access_token || channel.access_token
+        const ig = new InstagramClient(igToken, channel.external_id)
+        const profile = await ig.getUserProfile(commenterId)
+        if (profile) {
+          name = profile.name || profile.username || name
+          avatarUrl = profile.profile_pic ?? null
+          username = profile.username ?? username
+        }
+      } catch (err: any) {
+        console.warn('[IG Comment] Profile fetch failed (non-critical):', err?.message)
+      }
+    }
+
     const { data: c, error: insertErr } = await admin
       .from('contacts')
       .insert({
         workspace_id: channel.workspace_id,
         instagram_scoped_id: commenterId,
-        instagram_username: data.from?.username ?? null,
-        name: data.from?.name || data.from?.username || 'IG User',
+        instagram_username: username,
+        name: name,
+        avatar_url: avatarUrl,
         meta: { identity_source: 'instagram_comment' },
       })
       .select()
       .single()
     if (insertErr) console.error('[IG Comment] ❌ Contact insert error:', insertErr.message)
     contact = c
+  } else if (!contact.avatar_url || !contact.instagram_username || contact.name === commenterId || contact.name === 'IG User') {
+    if (channel.access_token) {
+      try {
+        console.log(`[IG Comment] Backfilling Meta profile for commenter=${commenterId}...`)
+        const igToken = channel.meta?.page_access_token || channel.access_token
+        const ig = new InstagramClient(igToken, channel.external_id)
+        const profile = await ig.getUserProfile(commenterId)
+        if (profile?.profile_pic || profile?.name || profile?.username) {
+          const updates: any = {}
+          if (profile.profile_pic) updates.avatar_url = profile.profile_pic
+          if (profile.name && (contact.name === commenterId || contact.name === 'IG User')) updates.name = profile.name
+          if (profile.username) updates.instagram_username = profile.username
+          
+          if (Object.keys(updates).length > 0) {
+            const { data: updatedC } = await admin
+              .from('contacts')
+              .update(updates)
+              .eq('id', contact.id)
+              .select()
+              .single()
+            if (updatedC) contact = updatedC
+            console.log(`[IG Comment] ✅ Backfilled avatar DP / profile for contact ${contact.id}`)
+          }
+        }
+      } catch (err: any) {
+        console.warn('[IG Comment] Contact DP backfill non-critical error:', err?.message)
+      }
+    }
   }
   if (!contact) { console.error('[IG Comment] ❌ No contact — aborting'); return }
   console.log(`[IG Comment] Contact: ${contact.id} (${contact.name})`)
