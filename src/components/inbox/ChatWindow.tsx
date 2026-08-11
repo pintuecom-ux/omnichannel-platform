@@ -544,7 +544,7 @@ function NoteInput({ conversationId, onSaved }: { conversationId: string; onSave
 
 interface CommentReplyInputProps {
   conversation: Conversation
-  replyingTo: { id: string; body: string } | null
+  replyingTo: { id: string; body: string; external_id?: string | null } | null
   onClearReply: () => void
   onSent: () => void
 }
