@@ -130,6 +130,38 @@ export default function FormSettingsPage() {
     loadData()
   }
 
+  // Update global sequential order indices
+  async function updateGlobalOrders(newFieldsList: CustomField[]) {
+    // Flatten list according to group order
+    const orderedAll: CustomField[] = []
+    groups.forEach(g => {
+      const gFields = newFieldsList.filter(f => f.group_id === g.id)
+      orderedAll.push(...gFields)
+    })
+    const unassigned = newFieldsList.filter(f => !f.group_id || !groups.some(g => g.id === f.group_id))
+    orderedAll.push(...unassigned)
+
+    const updatesToDB: { id: string; order_index: number }[] = []
+    const updatedState = newFieldsList.map(f => {
+      const globalIdx = orderedAll.findIndex(item => item.id === f.id)
+      if (globalIdx !== -1 && f.order_index !== globalIdx) {
+        updatesToDB.push({ id: f.id, order_index: globalIdx })
+        return { ...f, order_index: globalIdx }
+      }
+      return f
+    })
+
+    setFields(updatedState)
+
+    if (updatesToDB.length > 0) {
+      await Promise.all(
+        updatesToDB.map(u => 
+          supabase.from('custom_field_definitions').update({ order_index: u.order_index }).eq('id', u.id)
+        )
+      )
+    }
+  }
+
   // Move field up/down within group
   async function moveField(field: CustomField, groupFields: CustomField[], direction: 'up' | 'down') {
     const currentIndex = groupFields.findIndex(f => f.id === field.id)
@@ -140,23 +172,22 @@ export default function FormSettingsPage() {
 
     const targetField = groupFields[targetIndex]
     
-    // Swap order_index
-    const newFieldOrder = targetField.order_index ?? targetIndex
-    const newTargetOrder = field.order_index ?? currentIndex
-
-    // Optimistic local state update
-    const updatedFields = fields.map(f => {
-      if (f.id === field.id) return { ...f, order_index: newFieldOrder }
-      if (f.id === targetField.id) return { ...f, order_index: newTargetOrder }
-      return f
-    })
-    setFields(updatedFields)
-
-    // DB Updates
-    await Promise.all([
-      supabase.from('custom_field_definitions').update({ order_index: newFieldOrder }).eq('id', field.id),
-      supabase.from('custom_field_definitions').update({ order_index: newTargetOrder }).eq('id', targetField.id)
-    ])
+    const newFieldsList = [...fields]
+    const idxA = newFieldsList.findIndex(f => f.id === field.id)
+    const idxB = newFieldsList.findIndex(f => f.id === targetField.id)
+    
+    if (idxA !== -1 && idxB !== -1) {
+      const tempOrder = newFieldsList[idxA].order_index
+      newFieldsList[idxA] = { ...newFieldsList[idxA], order_index: newFieldsList[idxB].order_index }
+      newFieldsList[idxB] = { ...newFieldsList[idxB], order_index: tempOrder }
+      
+      if (newFieldsList[idxA].order_index === newFieldsList[idxB].order_index) {
+        newFieldsList[idxA] = { ...newFieldsList[idxA], order_index: targetIndex }
+        newFieldsList[idxB] = { ...newFieldsList[idxB], order_index: currentIndex }
+      }
+      
+      await updateGlobalOrders(newFieldsList)
+    }
   }
 
   // Drag and drop handler
@@ -166,28 +197,17 @@ export default function FormSettingsPage() {
     const draggedField = fields.find(f => f.id === draggedFieldId)
     if (!draggedField) return
 
-    // Reorder groupFields array
     const filteredGroup = groupFields.filter(f => f.id !== draggedFieldId)
     const targetIdx = filteredGroup.findIndex(f => f.id === targetField.id)
     filteredGroup.splice(targetIdx, 0, draggedField)
 
-    // Assign new order_index based on new array order
-    const updates = filteredGroup.map((f, idx) => ({ id: f.id, order_index: idx }))
-
-    // Optimistic update
-    setFields(fields.map(f => {
-      const match = updates.find(u => u.id === f.id)
-      return match ? { ...f, order_index: match.order_index } : f
-    }))
+    const newFieldsList = fields.map(f => {
+      const gMatch = filteredGroup.find(gItem => gItem.id === f.id)
+      return gMatch || f
+    })
 
     setDraggedFieldId(null)
-
-    // Persist to DB
-    await Promise.all(
-      updates.map(u => 
-        supabase.from('custom_field_definitions').update({ order_index: u.order_index }).eq('id', u.id)
-      )
-    )
+    await updateGlobalOrders(newFieldsList)
   }
 
   // Group fields
@@ -209,7 +229,7 @@ export default function FormSettingsPage() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-base overflow-hidden">
+    <div className="flex flex-col h-full bg-base overflow-hidden w-full">
       {/* Header */}
       <div className="flex-none px-8 py-6 border-b border-white/10 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -229,12 +249,12 @@ export default function FormSettingsPage() {
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-5xl mx-auto space-y-8">
+      {/* Content - Full Page Width */}
+      <div className="flex-1 overflow-y-auto p-8 w-full">
+        <div className="w-full space-y-8">
           
           {/* Create Field Section */}
-          <div className="bg-surface rounded-xl border border-white/10 p-6">
+          <div className="bg-surface rounded-xl border border-white/10 p-6 w-full">
             <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-6">
               <Plus className="w-4 h-4 text-primary-400" />
               Create Custom Field
@@ -321,11 +341,11 @@ export default function FormSettingsPage() {
             </button>
           </div>
 
-          {/* Fields List Section - Grouped */}
-          <div className="space-y-6">
+          {/* Fields List Section - Grouped Full Width */}
+          <div className="space-y-6 w-full">
             <div className="flex justify-between items-center px-1">
               <h2 className="text-lg font-bold text-white">Configured Fields ({fields.length})</h2>
-              <span className="text-xs text-text-muted">Drag ≡ handle or use ↑ ↓ buttons to re-order fields within groups</span>
+              <span className="text-xs text-text-muted">Drag ≡ handle or use ↑ ↓ buttons to re-order fields. Changes take effect on Quick Add & Contact Details views.</span>
             </div>
 
             {loading ? (
@@ -342,7 +362,7 @@ export default function FormSettingsPage() {
                 const groupName = group ? group.name : 'Other / Unassigned Fields'
 
                 return (
-                  <div key={group ? group.id : 'unassigned'} className="bg-surface rounded-xl border border-white/10 overflow-hidden shadow-sm">
+                  <div key={group ? group.id : 'unassigned'} className="bg-surface rounded-xl border border-white/10 overflow-hidden shadow-sm w-full">
                     {/* Group Header */}
                     <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-panel/70">
                       <div className="flex items-center gap-2">
@@ -352,7 +372,7 @@ export default function FormSettingsPage() {
                       </div>
                     </div>
                     
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto w-full">
                       <table className="w-full text-left text-sm whitespace-nowrap">
                         <thead>
                           <tr className="border-b border-white/10 bg-base/50 text-text-muted">

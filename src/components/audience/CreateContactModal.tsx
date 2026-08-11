@@ -143,8 +143,10 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
     )
   }
 
-  // Quick Add View fields
-  const quickAddFields = fieldDefs.filter(f => f.is_quick_add)
+  // Quick Add View fields - strictly sorted by global order_index
+  const quickAddFields = fieldDefs
+    .filter(f => f.is_quick_add)
+    .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
 
   // Grouped Fields for Full View
   const groupedFields: { group: any; fields: any[] }[] = []
