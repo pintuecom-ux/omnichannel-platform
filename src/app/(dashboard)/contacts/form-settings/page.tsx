@@ -1,12 +1,14 @@
 'use client'
+
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Settings2, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, Settings2, Trash2, GripVertical, ChevronUp, ChevronDown, FolderPlus } from 'lucide-react'
 
 type FieldGroup = {
   id: string
   name: string
+  order_index?: number
 }
 
 type CustomField = {
@@ -17,7 +19,9 @@ type CustomField = {
   group_id: string | null
   is_required: boolean
   is_quick_add: boolean
+  is_unique: boolean
   is_system: boolean
+  order_index: number
 }
 
 export default function FormSettingsPage() {
@@ -34,8 +38,12 @@ export default function FormSettingsPage() {
     field_type: 'text',
     group_id: '',
     is_required: false,
-    is_quick_add: false
+    is_quick_add: false,
+    is_unique: false
   })
+
+  // Drag and Drop state
+  const [draggedFieldId, setDraggedFieldId] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -44,8 +52,16 @@ export default function FormSettingsPage() {
   async function loadData() {
     setLoading(true)
     const [fieldsRes, groupsRes] = await Promise.all([
-      supabase.from('custom_field_definitions').select('*').eq('entity_type', 'contact').order('created_at', { ascending: true }),
-      supabase.from('field_groups').select('id, name').order('order_index', { ascending: true })
+      supabase
+        .from('custom_field_definitions')
+        .select('*')
+        .eq('entity_type', 'contact')
+        .order('order_index', { ascending: true })
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('field_groups')
+        .select('id, name, order_index')
+        .order('order_index', { ascending: true })
     ])
     
     if (fieldsRes.data) setFields(fieldsRes.data)
@@ -79,11 +95,13 @@ export default function FormSettingsPage() {
         group_id: newField.group_id || null,
         is_required: newField.is_required,
         is_quick_add: newField.is_quick_add,
-        is_system: false
+        is_unique: newField.is_unique,
+        is_system: false,
+        order_index: fields.length
       })
 
     if (!error) {
-      setNewField({ label: '', key: '', field_type: 'text', group_id: '', is_required: false, is_quick_add: false })
+      setNewField({ label: '', key: '', field_type: 'text', group_id: '', is_required: false, is_quick_add: false, is_unique: false })
       loadData()
     } else {
       alert(`Error creating field: ${error.message}`)
@@ -101,7 +119,6 @@ export default function FormSettingsPage() {
     if (error) {
       alert(`Failed to update field: ${error.message}`)
     } else {
-      // Optimistic update
       setFields(fields.map(f => f.id === id ? { ...f, ...updates } : f))
     }
     setUpdatingId(null)
@@ -111,6 +128,84 @@ export default function FormSettingsPage() {
     if (!confirm('Are you sure you want to delete this custom field? Associated data might be lost.')) return
     await supabase.from('custom_field_definitions').delete().eq('id', id)
     loadData()
+  }
+
+  // Move field up/down within group
+  async function moveField(field: CustomField, groupFields: CustomField[], direction: 'up' | 'down') {
+    const currentIndex = groupFields.findIndex(f => f.id === field.id)
+    if (currentIndex === -1) return
+    
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+    if (targetIndex < 0 || targetIndex >= groupFields.length) return
+
+    const targetField = groupFields[targetIndex]
+    
+    // Swap order_index
+    const newFieldOrder = targetField.order_index ?? targetIndex
+    const newTargetOrder = field.order_index ?? currentIndex
+
+    // Optimistic local state update
+    const updatedFields = fields.map(f => {
+      if (f.id === field.id) return { ...f, order_index: newFieldOrder }
+      if (f.id === targetField.id) return { ...f, order_index: newTargetOrder }
+      return f
+    })
+    setFields(updatedFields)
+
+    // DB Updates
+    await Promise.all([
+      supabase.from('custom_field_definitions').update({ order_index: newFieldOrder }).eq('id', field.id),
+      supabase.from('custom_field_definitions').update({ order_index: newTargetOrder }).eq('id', targetField.id)
+    ])
+  }
+
+  // Drag and drop handler
+  async function handleDrop(targetField: CustomField, groupFields: CustomField[]) {
+    if (!draggedFieldId || draggedFieldId === targetField.id) return
+
+    const draggedField = fields.find(f => f.id === draggedFieldId)
+    if (!draggedField) return
+
+    // Reorder groupFields array
+    const filteredGroup = groupFields.filter(f => f.id !== draggedFieldId)
+    const targetIdx = filteredGroup.findIndex(f => f.id === targetField.id)
+    filteredGroup.splice(targetIdx, 0, draggedField)
+
+    // Assign new order_index based on new array order
+    const updates = filteredGroup.map((f, idx) => ({ id: f.id, order_index: idx }))
+
+    // Optimistic update
+    setFields(fields.map(f => {
+      const match = updates.find(u => u.id === f.id)
+      return match ? { ...f, order_index: match.order_index } : f
+    }))
+
+    setDraggedFieldId(null)
+
+    // Persist to DB
+    await Promise.all(
+      updates.map(u => 
+        supabase.from('custom_field_definitions').update({ order_index: u.order_index }).eq('id', u.id)
+      )
+    )
+  }
+
+  // Group fields
+  const groupedFields: { group: FieldGroup | null; fields: CustomField[] }[] = []
+
+  groups.forEach(g => {
+    const gFields = fields
+      .filter(f => f.group_id === g.id)
+      .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+    groupedFields.push({ group: g, fields: gFields })
+  })
+
+  const unassigned = fields
+    .filter(f => !f.group_id || !groups.some(g => g.id === f.group_id))
+    .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+
+  if (unassigned.length > 0) {
+    groupedFields.push({ group: null, fields: unassigned })
   }
 
   return (
@@ -129,14 +224,14 @@ export default function FormSettingsPage() {
               <Settings2 className="w-5 h-5 text-primary-400" />
               Contact Form Configuration
             </h1>
-            <p className="text-sm text-text-muted mt-1">Manage which fields appear when creating or editing a contact</p>
+            <p className="text-sm text-text-muted mt-1">Manage, group, and re-order fields for contact creation and details view</p>
           </div>
         </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-4xl mx-auto space-y-8">
+        <div className="max-w-5xl mx-auto space-y-8">
           
           {/* Create Field Section */}
           <div className="bg-surface rounded-xl border border-white/10 p-6">
@@ -196,7 +291,7 @@ export default function FormSettingsPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-8 mb-6 bg-panel p-4 rounded-lg border border-white/5">
+            <div className="flex flex-wrap items-center gap-8 mb-6 bg-panel p-4 rounded-lg border border-white/5">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input 
                   type="checkbox" 
@@ -226,82 +321,173 @@ export default function FormSettingsPage() {
             </button>
           </div>
 
-          {/* Fields List Section */}
-          <div className="bg-surface rounded-xl border border-white/10 overflow-hidden">
-            <div className="px-6 py-5 border-b border-white/10 flex justify-between items-center bg-panel">
-              <h2 className="text-base font-semibold text-white">Configured Fields</h2>
-              <span className="text-xs text-text-muted">{fields.length} total fields</span>
+          {/* Fields List Section - Grouped */}
+          <div className="space-y-6">
+            <div className="flex justify-between items-center px-1">
+              <h2 className="text-lg font-bold text-white">Configured Fields ({fields.length})</h2>
+              <span className="text-xs text-text-muted">Drag ≡ handle or use ↑ ↓ buttons to re-order fields within groups</span>
             </div>
-            
+
             {loading ? (
-              <div className="p-12 text-center text-text-muted">Loading fields...</div>
+              <div className="p-12 text-center text-text-muted bg-surface rounded-xl border border-white/10">Loading fields...</div>
             ) : fields.length === 0 ? (
-              <div className="p-12 text-center text-text-muted flex flex-col items-center gap-2">
+              <div className="p-12 text-center text-text-muted bg-surface rounded-xl border border-white/10 flex flex-col items-center gap-2">
                 <Settings2 className="w-8 h-8 opacity-20" />
                 <p>No fields configured yet.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm whitespace-nowrap">
-                  <thead>
-                    <tr className="border-b border-white/10 bg-base/50 text-text-muted">
-                      <th className="px-6 py-3 font-semibold uppercase text-xs tracking-wider">Field Label</th>
-                      <th className="px-6 py-3 font-semibold uppercase text-xs tracking-wider">Type / Key</th>
-                      <th className="px-6 py-3 font-semibold uppercase text-xs tracking-wider text-center">Mandatory</th>
-                      <th className="px-6 py-3 font-semibold uppercase text-xs tracking-wider text-center">Quick Add</th>
-                      <th className="px-6 py-3 font-semibold uppercase text-xs tracking-wider text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {fields.map(field => (
-                      <tr key={field.id} className="hover:bg-white/[0.02] transition-colors group">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-white">{field.label}</span>
-                            {field.is_system && (
-                              <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 rounded">System</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-col">
-                            <span className="text-text-secondary capitalize">{field.field_type}</span>
-                            <span className="text-xs text-text-muted font-mono">{field.key}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <input 
-                            type="checkbox" 
-                            className="w-4 h-4 rounded border-gray-600 bg-surface focus:ring-primary-500 text-primary-500 cursor-pointer disabled:opacity-50"
-                            checked={field.is_required}
-                            disabled={updatingId === field.id}
-                            onChange={(e) => handleUpdateToggle(field.id, { is_required: e.target.checked })}
-                          />
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <input 
-                            type="checkbox" 
-                            className="w-4 h-4 rounded border-gray-600 bg-surface focus:ring-primary-500 text-primary-500 cursor-pointer disabled:opacity-50"
-                            checked={field.is_quick_add}
-                            disabled={updatingId === field.id}
-                            onChange={(e) => handleUpdateToggle(field.id, { is_quick_add: e.target.checked })}
-                          />
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button 
-                            className="p-2 text-text-muted hover:text-red-400 hover:bg-red-400/10 rounded-md transition-colors disabled:opacity-30 disabled:hover:text-text-muted disabled:hover:bg-transparent"
-                            onClick={() => handleDelete(field.id)}
-                            disabled={field.is_system}
-                            title={field.is_system ? "System fields cannot be deleted" : "Delete field"}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              groupedFields.map(({ group, fields: groupFields }) => {
+                if (groupFields.length === 0) return null
+
+                const groupName = group ? group.name : 'Other / Unassigned Fields'
+
+                return (
+                  <div key={group ? group.id : 'unassigned'} className="bg-surface rounded-xl border border-white/10 overflow-hidden shadow-sm">
+                    {/* Group Header */}
+                    <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-panel/70">
+                      <div className="flex items-center gap-2">
+                        <FolderPlus className="w-4 h-4 text-primary-400" />
+                        <h3 className="font-semibold text-white">{groupName}</h3>
+                        <span className="text-xs text-text-muted font-normal">({groupFields.length} fields)</span>
+                      </div>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead>
+                          <tr className="border-b border-white/10 bg-base/50 text-text-muted">
+                            <th className="w-10 px-3 py-3"></th>
+                            <th className="px-6 py-3 font-semibold uppercase text-xs tracking-wider">Field Label</th>
+                            <th className="px-6 py-3 font-semibold uppercase text-xs tracking-wider">Type / Key</th>
+                            <th className="px-4 py-3 font-semibold uppercase text-xs tracking-wider text-center">Group</th>
+                            <th className="px-4 py-3 font-semibold uppercase text-xs tracking-wider text-center">Unique Field</th>
+                            <th className="px-4 py-3 font-semibold uppercase text-xs tracking-wider text-center">Mandatory</th>
+                            <th className="px-4 py-3 font-semibold uppercase text-xs tracking-wider text-center">Quick Add</th>
+                            <th className="px-6 py-3 font-semibold uppercase text-xs tracking-wider text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {groupFields.map((field, idx) => {
+                            const isUniqueAllowed = field.key === 'phone' || field.key === 'email'
+
+                            return (
+                              <tr 
+                                key={field.id} 
+                                draggable
+                                onDragStart={() => setDraggedFieldId(field.id)}
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={() => handleDrop(field, groupFields)}
+                                className={`hover:bg-white/[0.03] transition-colors group ${draggedFieldId === field.id ? 'opacity-40' : ''}`}
+                              >
+                                {/* 3 vertical line / Grip Icon */}
+                                <td className="px-3 py-4 text-text-muted hover:text-white cursor-grab active:cursor-grabbing text-center">
+                                  <GripVertical className="w-4 h-4 mx-auto opacity-40 group-hover:opacity-100 transition-opacity" />
+                                </td>
+
+                                {/* Field Label */}
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-white">{field.label}</span>
+                                    {field.is_system && (
+                                      <span className="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">System</span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* Type / Key */}
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-col">
+                                    <span className="text-text-secondary capitalize">{field.field_type}</span>
+                                    <span className="text-xs text-text-muted font-mono">{field.key}</span>
+                                  </div>
+                                </td>
+
+                                {/* Group Selector */}
+                                <td className="px-4 py-4 text-center">
+                                  <select 
+                                    className="bg-panel border border-white/10 text-xs text-text-secondary rounded px-2 py-1 focus:outline-none focus:border-primary-500"
+                                    value={field.group_id || ''}
+                                    onChange={(e) => handleUpdateToggle(field.id, { group_id: e.target.value || null })}
+                                  >
+                                    <option value="">None</option>
+                                    {groups.map(g => (
+                                      <option key={g.id} value={g.id}>{g.name}</option>
+                                    ))}
+                                  </select>
+                                </td>
+
+                                {/* UNIQUE (Mobile Number & Email ID only) */}
+                                <td className="px-4 py-4 text-center">
+                                  <input 
+                                    type="checkbox" 
+                                    title={isUniqueAllowed ? "Set as Unique Identifier" : "Unique check only supported for Mobile Number & Email ID"}
+                                    className="w-4 h-4 rounded border-gray-600 bg-surface focus:ring-primary-500 text-primary-500 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed"
+                                    checked={!!field.is_unique}
+                                    disabled={!isUniqueAllowed || updatingId === field.id}
+                                    onChange={(e) => handleUpdateToggle(field.id, { is_unique: e.target.checked })}
+                                  />
+                                </td>
+
+                                {/* MANDATORY */}
+                                <td className="px-4 py-4 text-center">
+                                  <input 
+                                    type="checkbox" 
+                                    className="w-4 h-4 rounded border-gray-600 bg-surface focus:ring-primary-500 text-primary-500 cursor-pointer disabled:opacity-50"
+                                    checked={field.is_required}
+                                    disabled={updatingId === field.id}
+                                    onChange={(e) => handleUpdateToggle(field.id, { is_required: e.target.checked })}
+                                  />
+                                </td>
+
+                                {/* QUICK ADD */}
+                                <td className="px-4 py-4 text-center">
+                                  <input 
+                                    type="checkbox" 
+                                    className="w-4 h-4 rounded border-gray-600 bg-surface focus:ring-primary-500 text-primary-500 cursor-pointer disabled:opacity-50"
+                                    checked={field.is_quick_add}
+                                    disabled={updatingId === field.id}
+                                    onChange={(e) => handleUpdateToggle(field.id, { is_quick_add: e.target.checked })}
+                                  />
+                                </td>
+
+                                {/* ACTIONS (Up, Down, Delete) */}
+                                <td className="px-6 py-4 text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <button
+                                      onClick={() => moveField(field, groupFields, 'up')}
+                                      disabled={idx === 0}
+                                      className="p-1.5 text-text-muted hover:text-white hover:bg-white/10 rounded transition-colors disabled:opacity-20"
+                                      title="Move Up"
+                                    >
+                                      <ChevronUp className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => moveField(field, groupFields, 'down')}
+                                      disabled={idx === groupFields.length - 1}
+                                      className="p-1.5 text-text-muted hover:text-white hover:bg-white/10 rounded transition-colors disabled:opacity-20"
+                                      title="Move Down"
+                                    >
+                                      <ChevronDown className="w-4 h-4" />
+                                    </button>
+                                    <button 
+                                      className="p-1.5 text-text-muted hover:text-red-400 hover:bg-red-400/10 rounded transition-colors disabled:opacity-30 disabled:hover:text-text-muted disabled:hover:bg-transparent"
+                                      onClick={() => handleDelete(field.id)}
+                                      disabled={field.is_system}
+                                      title={field.is_system ? "System fields cannot be deleted" : "Delete field"}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })
             )}
           </div>
 

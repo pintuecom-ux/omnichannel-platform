@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalFooter } from '@/components/ui/Modal'
 import { createClient } from '@/lib/supabase/client'
-import { UserPlus, X, Settings2, ChevronDown, ChevronUp } from 'lucide-react'
+import { UserPlus, X, Settings2, ChevronDown, ChevronUp, FolderPlus } from 'lucide-react'
 import Link from 'next/link'
 
 interface CreateContactModalProps {
@@ -15,6 +15,7 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
   const [fieldDefs, setFieldDefs] = useState<any[]>([])
+  const [groups, setGroups] = useState<any[]>([])
   const [showAllFields, setShowAllFields] = useState(false)
   const [fieldData, setFieldData] = useState<Record<string, any>>({})
 
@@ -25,14 +26,25 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
   }, [open])
 
   async function loadFields() {
-    // Fetch ALL definitions (both system and custom)
-    const { data } = await supabase.from('custom_field_definitions').select('*').eq('entity_type', 'contact').order('created_at', { ascending: true })
-    if (data && data.length > 0) {
-      setFieldDefs(data)
+    const [fieldsRes, groupsRes] = await Promise.all([
+      supabase
+        .from('custom_field_definitions')
+        .select('*')
+        .eq('entity_type', 'contact')
+        .order('order_index', { ascending: true })
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('field_groups')
+        .select('id, name, order_index')
+        .order('order_index', { ascending: true })
+    ])
+
+    if (fieldsRes.data) {
+      setFieldDefs(fieldsRes.data)
       
       // Initialize defaults
       const initData: Record<string, any> = {}
-      data.forEach(f => {
+      fieldsRes.data.forEach(f => {
         if (f.field_type === 'boolean') {
           initData[f.key] = false
         } else {
@@ -43,6 +55,10 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
       if ('wa_opt_in_status' in initData) initData['wa_opt_in_status'] = true
       
       setFieldData(initData)
+    }
+
+    if (groupsRes.data) {
+      setGroups(groupsRes.data)
     }
   }
 
@@ -95,12 +111,57 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
     }
   }
 
-  // Determine which fields to show
-  const visibleFields = fieldDefs.filter(f => showAllFields || f.is_quick_add)
+  const renderFieldInput = (field: any) => {
+    if (field.field_type === 'boolean') {
+      return (
+        <label key={field.key} className="flex items-center gap-3 p-3 bg-surface border border-border rounded-lg cursor-pointer hover:bg-surface2 transition-colors">
+          <input 
+            type="checkbox" 
+            className="w-4 h-4 rounded border-gray-600 bg-panel focus:ring-primary-500 text-primary-500" 
+            checked={!!fieldData[field.key]}
+            onChange={(e) => setFieldData({ ...fieldData, [field.key]: e.target.checked })}
+          />
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-white">{field.label}</span>
+          </div>
+        </label>
+      )
+    }
+
+    return (
+      <div key={field.key} className="flex flex-col gap-1.5">
+        <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+          {field.label} {field.is_required && <span className="text-red-400">*</span>}
+        </label>
+        <input 
+          type={field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : field.key === 'phone' ? 'tel' : field.key === 'email' ? 'email' : 'text'}
+          className="form-input bg-panel border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:border-primary-500 outline-none w-full"
+          value={fieldData[field.key] || ''}
+          onChange={(e) => setFieldData({ ...fieldData, [field.key]: e.target.value })}
+        />
+      </div>
+    )
+  }
+
+  // Quick Add View fields
+  const quickAddFields = fieldDefs.filter(f => f.is_quick_add)
+
+  // Grouped Fields for Full View
+  const groupedFields: { group: any; fields: any[] }[] = []
+  groups.forEach(g => {
+    const gFields = fieldDefs.filter(f => f.group_id === g.id)
+    if (gFields.length > 0) {
+      groupedFields.push({ group: g, fields: gFields })
+    }
+  })
+  const unassigned = fieldDefs.filter(f => !f.group_id || !groups.some(g => g.id === f.group_id))
+  if (unassigned.length > 0) {
+    groupedFields.push({ group: { id: 'other', name: 'Other Fields' }, fields: unassigned })
+  }
 
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
-      <ModalContent className="max-w-lg p-0">
+      <ModalContent className="max-w-2xl p-0">
         <ModalHeader className="px-6 py-5 border-b border-white/10 flex items-center justify-between bg-transparent">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary-500/10 text-primary-400">
@@ -126,54 +187,53 @@ export function CreateContactModal({ open, onOpenChange, onSuccess }: CreateCont
           </div>
         </ModalHeader>
 
-        <div className="p-6 flex flex-col gap-5 max-h-[60vh] overflow-y-auto">
+        <div className="p-6 flex flex-col gap-6 max-h-[65vh] overflow-y-auto">
           {fieldDefs.length === 0 ? (
             <div className="text-sm text-text-muted text-center py-8">
               Loading form configuration...
             </div>
+          ) : !showAllFields ? (
+            /* Quick Add View - Unchanged Simple Grid */
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {quickAddFields.filter(f => f.field_type !== 'boolean').map(field => renderFieldInput(field))}
+              </div>
+
+              {quickAddFields.filter(f => f.field_type === 'boolean').map(field => renderFieldInput(field))}
+
+              <div className="flex justify-center pt-2">
+                <button 
+                  onClick={() => setShowAllFields(true)}
+                  className="text-xs font-medium text-primary-400 hover:text-primary-300 flex items-center gap-1.5 px-4 py-2 bg-primary-500/10 hover:bg-primary-500/20 rounded-full transition-colors"
+                >
+                  <ChevronDown className="w-4 h-4" /> Show all fields (Grouped)
+                </button>
+              </div>
+            </div>
           ) : (
-            <>
-              {visibleFields.filter(f => f.field_type !== 'boolean').map(field => (
-                <div key={field.key} className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">
-                    {field.label} {field.is_required && <span className="text-red-400">*</span>}
-                  </label>
-                  <input 
-                    type={field.field_type === 'number' ? 'number' : field.field_type === 'date' ? 'date' : field.key === 'phone' ? 'tel' : field.key === 'email' ? 'email' : 'text'}
-                    className="form-input"
-                    value={fieldData[field.key] || ''}
-                    onChange={(e) => setFieldData({ ...fieldData, [field.key]: e.target.value })}
-                  />
+            /* Full View - Grouped like Contact Details Page */
+            <div className="space-y-6">
+              {groupedFields.map(({ group, fields: groupFields }) => (
+                <div key={group.id} className="bg-surface border border-white/10 rounded-xl overflow-hidden shadow-sm">
+                  <div className="bg-panel/70 px-5 py-3 border-b border-white/10 flex items-center gap-2">
+                    <FolderPlus className="w-4 h-4 text-primary-400" />
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-white">{group.name}</h4>
+                  </div>
+                  <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {groupFields.map(field => renderFieldInput(field))}
+                  </div>
                 </div>
               ))}
 
-              {visibleFields.filter(f => f.field_type === 'boolean').map(field => (
-                <label key={field.key} className="flex items-center gap-3 p-3 bg-surface border border-border rounded-lg cursor-pointer hover:bg-surface2 transition-colors mt-2">
-                  <input 
-                    type="checkbox" 
-                    className="w-4 h-4 rounded border-gray-600 bg-panel focus:ring-primary-500 focus:ring-offset-panel text-primary-500" 
-                    checked={!!fieldData[field.key]}
-                    onChange={(e) => setFieldData({ ...fieldData, [field.key]: e.target.checked })}
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-white">{field.label}</span>
-                  </div>
-                </label>
-              ))}
-
-              <div className="flex justify-center mt-2 mb-2">
+              <div className="flex justify-center pt-2">
                 <button 
-                  onClick={() => setShowAllFields(!showAllFields)}
-                  className="text-xs font-medium text-primary-400 hover:text-primary-300 flex items-center gap-1.5 px-3 py-1.5 bg-primary-500/5 hover:bg-primary-500/10 rounded-full transition-colors"
+                  onClick={() => setShowAllFields(false)}
+                  className="text-xs font-medium text-primary-400 hover:text-primary-300 flex items-center gap-1.5 px-4 py-2 bg-primary-500/10 hover:bg-primary-500/20 rounded-full transition-colors"
                 >
-                  {showAllFields ? (
-                    <><ChevronUp className="w-3.5 h-3.5" /> Show Quick Add only</>
-                  ) : (
-                    <><ChevronDown className="w-3.5 h-3.5" /> Show all fields</>
-                  )}
+                  <ChevronUp className="w-4 h-4" /> Show Quick Add only
                 </button>
               </div>
-            </>
+            </div>
           )}
         </div>
 
