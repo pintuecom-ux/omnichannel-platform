@@ -44,7 +44,7 @@ export default function ChatWindow() {
   const [commentUi, setCommentUi] = useState<{
     conversationId: string | null
     activeTab: 'messages' | 'notes' | 'comments'
-    replyingTo: { id: string; body: string } | null
+    replyingTo: { id: string; body: string; external_id?: string | null } | null
   }>({
     conversationId: null,
     activeTab: 'messages',
